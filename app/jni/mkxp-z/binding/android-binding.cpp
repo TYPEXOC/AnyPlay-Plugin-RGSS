@@ -31,10 +31,10 @@ RB_METHOD(androidDeviceInfo)
 	jstring strJProduct = (jstring)env->GetStaticObjectField(cls, fIDProduct);
 	const char *strCProduct = env->GetStringUTFChars(strJProduct, 0);
 
-	rb_hash_aset(hash, ID2SYM(rb_intern("brand")), rb_str_new_cstr(strCBrand));
-	rb_hash_aset(hash, ID2SYM(rb_intern("manufacturer")), rb_str_new_cstr(strCManufacturer));
-	rb_hash_aset(hash, ID2SYM(rb_intern("model")), rb_str_new_cstr(strCModel));
-	rb_hash_aset(hash, ID2SYM(rb_intern("product")), rb_str_new_cstr(strCProduct));
+	rb_hash_aset(hash, ID2SYM(rb_intern("brand")), rb_utf8_str_new_cstr(strCBrand));
+	rb_hash_aset(hash, ID2SYM(rb_intern("manufacturer")), rb_utf8_str_new_cstr(strCManufacturer));
+	rb_hash_aset(hash, ID2SYM(rb_intern("model")), rb_utf8_str_new_cstr(strCModel));
+	rb_hash_aset(hash, ID2SYM(rb_intern("product")), rb_utf8_str_new_cstr(strCProduct));
 
 	env->ReleaseStringUTFChars(strJBrand, strCBrand);
 	env->ReleaseStringUTFChars(strJManufacturer, strCManufacturer);
