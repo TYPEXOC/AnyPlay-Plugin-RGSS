@@ -61,8 +61,8 @@ jobs:
 
       # Ruby's 1.8.7 and 1.9.3 cross-build helpers validate their host Ruby
       # version against the target source tree. Keep the same host/target split
-      # as MTool; those old host interpreters only run generators, so omit
-      # optional extensions and avoid requiring obsolete OpenSSL packages.
+      # as MTool. RubyGems 2.0 for Ruby 1.9 also needs the OpenSSL extension;
+      # the RVM Ubuntu PPA above supplies the compatible legacy OpenSSL headers.
       - name: Set up legacy Ruby build hosts
         shell: bash
         run: |
@@ -81,7 +81,7 @@ jobs:
             fi
           }
           install_host_ruby 1.8.7-p374
-          install_host_ruby 1.9.3-p551 --rubygems 2.0.17 --autolibs=disable --with-out-ext=openssl,readline,gdbm,dbm
+          install_host_ruby 1.9.3-p551 --rubygems 2.0.17 --autolibs=disable
           rvm use 1.8.7-p374 && ruby -v
           rvm use 1.9.3-p551 && ruby -v
 
