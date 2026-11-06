@@ -141,8 +141,8 @@ CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 # runtimes are still built as Ruby 1.8.7 / 1.9.3; installing matching host VMs
 # through RVM requires libssl1.0-dev, which Ubuntu 22.04 no longer provides.
 SHELL := /bin/bash
-# The host Ruby handles Ruby 1.8 install scripts; suppress gem startup to avoid loading Ruby 1.8 rbconfig.
-RUBY_187_ENV := export RUBYOPT="--disable-gems"
+# Ruby 1.8 common.mk resets RUBYOPT; pass this make variable through to host Ruby helpers.
+RUBY_187_MAKE_ARGS := RUBYOPT=--disable-gems
 RUBY_193_ENV := true && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
@@ -240,7 +240,7 @@ ruby/configure: ruby/configure.ac
 ruby187: init openssl $(LIBDIR)/libruby187.so
 
 $(LIBDIR)/libruby187.so: ruby187/Makefile
-	cd ruby187; $(RUBY_187_ENV) && make -j$(NPROC); $(RUBY_187_ENV) && make install
+	cd ruby187; make -j$(NPROC) $(RUBY_187_MAKE_ARGS); make install $(RUBY_187_MAKE_ARGS)
 	cd $(LIBDIR); ln -sf libruby.so.1.8.7 libruby187.so
 
 ruby187/Makefile: ruby187/configure
@@ -255,7 +255,7 @@ ruby187/Makefile: ruby187/configure
 	$(RUBY_CONFIGURE_ARGS) --program-suffix=187
 
 ruby187/configure: ruby187/configure.in
-	cd ruby187; $(RUBY_187_ENV) && autoreconf -i
+	cd ruby187; autoreconf -i
 
 # -------------------- Ruby 1.9.3 --------------------
 ruby193: init openssl $(LIBDIR)/libruby193.so
