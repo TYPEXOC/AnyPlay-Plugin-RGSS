@@ -128,8 +128,8 @@ class TynRuntimeUi(
     }
 
     private fun openCheats() {
-        val controller = cheats ?: return
-        val menu = cheatMenu ?: TyranorCheatPanel(activity, root, controller, primaryColor, onPrimaryColor).also { cheatMenu = it }
+        val cheatController = cheats ?: return
+        val menu = cheatMenu ?: TyranorCheatPanel(activity, root, cheatController, primaryColor, onPrimaryColor).also { cheatMenu = it }
         controller.releaseAllKeys()
         menu.show()
     }
