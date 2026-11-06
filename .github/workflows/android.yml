@@ -66,8 +66,16 @@ jobs:
           curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -
           curl -sSL https://get.rvm.io | bash -s stable --autolibs=disable --ignore-dotfiles
           source "$HOME/.rvm/scripts/rvm"
-          rvm install 1.8.7 --autolibs=disable --with-out-ext=openssl,readline,gdbm,dbm
-          rvm install 1.9.3 --autolibs=disable --with-out-ext=openssl,readline,gdbm,dbm
+          install_host_ruby() {
+            if ! rvm install "$@"; then
+              echo "--- RVM logs for Ruby $1 ---"
+              find "$HOME/.rvm/log" -type f \( -name make.log -o -name configure.log \) -print \
+                -exec tail -n 160 {} \;
+              return 1
+            fi
+          }
+          install_host_ruby 1.8.7 --autolibs=disable --with-out-ext=openssl,readline,gdbm,dbm
+          install_host_ruby 1.9.3 --autolibs=disable --with-out-ext=openssl,readline,gdbm,dbm
           rvm use 1.8.7 && ruby -v
           rvm use 1.9.3 && ruby -v
 
