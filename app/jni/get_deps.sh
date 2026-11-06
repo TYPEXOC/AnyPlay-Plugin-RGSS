@@ -108,6 +108,10 @@ if [[ ! -d "bison-2.7.1" ]]; then
   tar -xzf bison-2.7.1.tar.gz
   rm -f bison-2.7.1.tar.gz
 fi
+# Patch bundled gnulib for glibc 2.28+, where _IO_ftrylockfile is no longer exposed.
+cd bison-2.7.1
+apply_patch_once ../patches/bison-2.7.1-glibc-2.28.patch
+cd ..
 
 # Ruby 3.1.3 (patched for mkxp-z)
 if [[ ! -d "ruby" ]]; then
