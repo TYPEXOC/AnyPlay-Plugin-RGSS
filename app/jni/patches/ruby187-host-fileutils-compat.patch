@@ -1,0 +1,11 @@
+diff --git a/lib/fileutils.rb b/lib/fileutils.rb
+--- a/lib/fileutils.rb
++++ b/lib/fileutils.rb
+@@ -1443 +1443 @@
+-  METHODS = singleton_methods() - %w( private_module_function
++  METHODS = singleton_methods().map { |name| name.to_s } - %w( private_module_function
+       commands options have_option? options_of collect_method )
+   #
+   # This module has all methods of FileUtils module, but it outputs messages
+   # before acting.  This equates to passing the <tt>:verbose</tt> flag to
+   # methods in FileUtils.
