@@ -12,6 +12,8 @@ The TYN module uses its own APK process. It declares translation support to Tyra
 2. Install it and allow "Install unknown apps" for your browser or file manager if Android asks.
 3. In Tyranor Next, enable the module under **妙妙工具 → 引擎模块管理**, scan your games, then launch a detected RGSS game.
 
+The APK also appears in Android's app drawer as **TYN RGSS**. Opening it shows the runtime version, usage note, and source link; game launches still come from Tyranor Next.
+
 New versions install over the old one. Nothing needs to be uninstalled.
 
 ## 📦What it includes

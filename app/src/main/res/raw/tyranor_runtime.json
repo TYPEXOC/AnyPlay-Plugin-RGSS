@@ -1,8 +1,11 @@
 {
   "protocol": 1,
-  "label": "TYN RGSS Runtime",
+  "label": "TYN RGSS",
   "capabilities": [
     "translation"
+  ],
+  "overrideEngines": [
+    "RPGMAKER"
   ],
   "scan": {
     "match": "any",

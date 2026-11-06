@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Tyranor RGSS ランタイム</string>
+    <string name="app_name">TYN RGSS</string>
+    <string name="runtime_info_version">バージョン：%1$s</string>
+    <string name="runtime_info_message">これは TYN の RGSS ランタイムモジュールです。XP、VX、VX Ace のゲームは TYN のゲームライブラリから起動してください。このモジュール単体では起動しないでください。</string>
+    <string name="runtime_info_source">GPL v2 のオープンソースプロジェクト mkxp-z をベースにしています\nhttps://github.com/TYPEXOC/AnyPlay-Plugin-RGSS</string>
     <string name="tyn_runtime_loading">ゲームを起動中…</string>
     <string name="tyn_runtime_cheat_button">チート</string>
     <string name="tyn_runtime_close_title">ゲームを終了しますか？</string>
