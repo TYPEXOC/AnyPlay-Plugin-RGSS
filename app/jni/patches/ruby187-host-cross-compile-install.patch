@@ -1,0 +1,12 @@
+diff --git a/instruby.rb b/instruby.rb
+--- a/instruby.rb
++++ b/instruby.rb
+@@ -231,4 +231,6 @@
+-  install ruby_install_name+exeext, bindir, :mode => $prog_mode
++  ruby_binary = ruby_install_name+exeext
++  install ruby_binary, bindir, :mode => $prog_mode if File.file?(ruby_binary)
+   if rubyw_install_name and !rubyw_install_name.empty?
+-    install rubyw_install_name+exeext, bindir, :mode => $prog_mode
++    rubyw_binary = rubyw_install_name+exeext
++    install rubyw_binary, bindir, :mode => $prog_mode if File.file?(rubyw_binary)
+   end

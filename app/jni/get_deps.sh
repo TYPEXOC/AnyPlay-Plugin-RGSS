@@ -132,6 +132,7 @@ apply_patch_once ../patches/ruby187-host-ruby-compat.patch
 apply_patch_once ../patches/ruby187-host-fileutils-compat.patch
 # Ruby 1.8's build helpers also rely on nil paths and implicit Proc.new blocks.
 apply_patch_once ../patches/ruby187-host-build-tools-compat.patch
+apply_patch_once ../patches/ruby187-host-cross-compile-install.patch
 cd ..
 
 # Ruby 1.9.3

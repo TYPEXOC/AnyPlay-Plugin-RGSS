@@ -1,12 +1,23 @@
 diff --git a/lib/mkmf.rb b/lib/mkmf.rb
 --- a/lib/mkmf.rb
 +++ b/lib/mkmf.rb
-@@ -1166 +1166 @@
+@@ -1164,5 +1164,6 @@
+   idirs = idir ? Array === idir ? idir : idir.split(File::PATH_SEPARATOR) : []
++  idirs.compact!
+   if defaults
 -    idirs.concat(defaults.collect {|dir| dir + "/include"})
 +    idirs.concat(defaults.compact.collect {|dir| dir + "/include"})
-@@ -1179 +1179 @@
+     idir = ([idir] + idirs).compact.join(File::PATH_SEPARATOR)
+   end
+@@ -1177,6 +1178,7 @@
+   ldirs = ldir ? Array === ldir ? ldir : ldir.split(File::PATH_SEPARATOR) : []
++  ldirs.compact!
+   if defaults
 -    ldirs.concat(defaults.collect {|dir| dir + "/lib"})
 +    ldirs.concat(defaults.compact.collect {|dir| dir + "/lib"})
+     ldir = ([ldir] + ldirs).compact.join(File::PATH_SEPARATOR)
+   end
+   $LIBPATH = ldirs | $LIBPATH
 diff --git a/lib/optparse.rb b/lib/optparse.rb
 --- a/lib/optparse.rb
 +++ b/lib/optparse.rb
