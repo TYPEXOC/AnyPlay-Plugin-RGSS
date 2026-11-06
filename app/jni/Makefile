@@ -2,6 +2,10 @@ NDK       := ${ANDROID_NDK_HOME}
 TOOLCHAIN := $(NDK)/toolchains/llvm/prebuilt/${ARCH}
 NPROC     := $(shell nproc)
 
+# OpenSSL's Android config requires both variables to detect modern NDK clang.
+export ANDROID_NDK_ROOT := $(NDK)
+export PATH := $(TOOLCHAIN)/bin:$(PATH)
+
 # Android platform API version to build:
 # (Default: 21 - Android 5.0 Lollipop)
 # See https://apilevels.com/ for Android API versions.
