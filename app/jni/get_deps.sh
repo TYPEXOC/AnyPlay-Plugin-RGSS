@@ -122,6 +122,8 @@ if [[ ! -d "ruby187" ]]; then
 fi
 cd ruby187
 apply_patch_once ../patches/ruby187-remove-inline.patch
+# Ruby 1.8's config generator uses TRUE, removed from the CI host Ruby.
+apply_patch_once ../patches/ruby187-host-ruby-compat.patch
 cd ..
 
 # Ruby 1.9.3

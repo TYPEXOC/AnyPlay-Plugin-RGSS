@@ -278,13 +278,21 @@ ruby193/configure: ruby193/configure.in
 	cd ruby193; $(RUBY_193_ENV) && autoreconf -i
 
 # -------------------- Bison 2.x --------------------
+# Bison is a host build tool used while generating Ruby sources. Do not let the
+# Android target toolchain leak into its configure or build environment.
+BISON_HOST_ENV := env -u HOST -u TARGET -u ABI -u CC -u CXX -u AS -u LD -u AR \
+	-u NM -u RANLIB -u STRIP -u OBJCOPY -u OBJDUMP -u CPPFLAGS -u CFLAGS \
+	-u CXXFLAGS -u LDFLAGS -u CLANG_FLAGS -u PKG_CONFIG_LIBDIR
+
 bison: init $(BUILD_PREFIX)/bin/bison
 
 $(BUILD_PREFIX)/bin/bison: bison-2.7.1/Makefile
-	cd bison-2.7.1; make -j$(NPROC); make install
+	cd bison-2.7.1; $(BISON_HOST_ENV) make -j$(NPROC) && $(BISON_HOST_ENV) make install
 
 bison-2.7.1/Makefile: bison-2.7.1/configure
-	cd bison-2.7.1; ./configure --prefix="$(BUILD_PREFIX)" --disable-nls
+	cd bison-2.7.1; $(BISON_HOST_ENV) ./configure \
+		--build=x86_64-pc-linux-gnu --host=x86_64-pc-linux-gnu \
+		--prefix="$(BUILD_PREFIX)" --disable-nls
 
 
 init:
