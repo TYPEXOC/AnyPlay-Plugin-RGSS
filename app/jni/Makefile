@@ -141,9 +141,10 @@ CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 # runtimes are still built as Ruby 1.8.7 / 1.9.3; installing matching host VMs
 # through RVM requires libssl1.0-dev, which Ubuntu 22.04 no longer provides.
 SHELL := /bin/bash
-# Use host Ruby without gems and load host rbconfig before the Ruby 1.8 fake.rb prelude.
-RUBY_187_MAKE_ARGS := 'MINIRUBY=ruby --disable-gems -rrbconfig'
+# Preserve Ruby 1.8's cross-build fake.rb setup while preloading the host rbconfig.
+RUBY_187_MAKE_ARGS := 'MINIRUBY=ruby --disable-gems -rrbconfig -I. -rfake'
 RUBY_193_ENV := true && \
+	export RUBYOPT=- && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
 RUBY_31_ENV := true
