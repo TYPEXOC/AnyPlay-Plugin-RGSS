@@ -45,7 +45,8 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y \
             build-essential cmake curl gpg xxd \
-            ruby-full autoconf automake libtool pkg-config \
+            autoconf automake libtool pkg-config \
+            libgdbm-dev libncurses5-dev libreadline-dev zlib1g-dev \
             python3 git unzip
 
       # ── 4. Ruby  ──────────────────────────────────────
@@ -53,6 +54,20 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ env.RUBY_VERSION }}
+
+      # Ruby's 1.8.7 and 1.9.3 cross-build helpers validate their host Ruby
+      # version against the target source tree. Keep the same host/target split
+      # as MTool; those old host interpreters only run generators, so omit
+      # optional extensions and avoid requiring obsolete OpenSSL packages.
+      - name: Set up legacy Ruby build hosts
+        shell: bash
+        run: |
+          curl -sSL https://get.rvm.io | bash -s stable --autolibs=disable --ignore-dotfiles
+          source "$HOME/.rvm/scripts/rvm"
+          rvm install 1.8.7 --autolibs=disable --with-out-ext=openssl,readline,gdbm,dbm
+          rvm install 1.9.3 --autolibs=disable --with-out-ext=openssl,readline,gdbm,dbm
+          rvm use 1.8.7 && ruby -v
+          rvm use 1.9.3 && ruby -v
 
       # ── 5. Android SDK ────────────────────────────────────────────────────────
       - name: Set up Android SDK

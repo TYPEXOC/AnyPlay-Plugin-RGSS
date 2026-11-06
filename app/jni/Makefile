@@ -137,14 +137,12 @@ RUBY_CONFIGURE_ARGS := \
 CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
 CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 
-# Use the workflow-provided Ruby 3.1.3 for build helpers. The Android target
-# runtimes are still built as Ruby 1.8.7 / 1.9.3; installing matching host VMs
-# through RVM requires libssl1.0-dev, which Ubuntu 22.04 no longer provides.
+# The legacy Ruby build tools require a host interpreter matching their
+# source version. The Android target runtimes are cross-compiled separately.
 SHELL := /bin/bash
-# Preserve Ruby 1.8's cross-build fake.rb setup while preloading the host rbconfig.
-RUBY_187_MAKE_ARGS := 'MINIRUBY=ruby --disable-gems -rrbconfig -I. -rfake'
-RUBY_193_ENV := true && \
-	export RUBYOPT=- && \
+RVM_SCRIPT := source $(HOME)/.rvm/scripts/rvm
+RUBY_187_ENV := $(RVM_SCRIPT) && rvm use 1.8.7
+RUBY_193_ENV := $(RVM_SCRIPT) && rvm use 1.9.3 && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
 RUBY_31_ENV := true
@@ -241,11 +239,11 @@ ruby/configure: ruby/configure.ac
 ruby187: init openssl $(LIBDIR)/libruby187.so
 
 $(LIBDIR)/libruby187.so: ruby187/Makefile
-	cd ruby187; make -j$(NPROC) $(RUBY_187_MAKE_ARGS); make install $(RUBY_187_MAKE_ARGS)
+	cd ruby187; $(RUBY_187_ENV) && make -j$(NPROC); $(RUBY_187_ENV) && make install
 	cd $(LIBDIR); ln -sf libruby.so.1.8.7 libruby187.so
 
 ruby187/Makefile: ruby187/configure
-	cd ruby187; DLDFLAGS="-Wl,-soname,libruby187.so" \
+	cd ruby187; $(RUBY_187_ENV) && DLDFLAGS="-Wl,-soname,libruby187.so" \
 	CC="$(CC)" CXX="$(CXX)" AS="$(AS)" LD="$(LD)" AR="$(AR)" NM="$(NM)" \
 	RANLIB="$(RANLIB)" STRIP="$(STRIP)" OBJCOPY="$(OBJCOPY)" OBJDUMP="$(OBJDUMP)" \
 	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" CLANG_FLAGS="$(CLANG_FLAGS)" \
@@ -256,7 +254,7 @@ ruby187/Makefile: ruby187/configure
 	$(RUBY_CONFIGURE_ARGS) --program-suffix=187
 
 ruby187/configure: ruby187/configure.in
-	cd ruby187; autoreconf -i
+	cd ruby187; $(RUBY_187_ENV) && autoreconf -i
 
 # -------------------- Ruby 1.9.3 --------------------
 ruby193: init openssl $(LIBDIR)/libruby193.so
@@ -266,7 +264,7 @@ $(LIBDIR)/libruby193.so: ruby193/Makefile
 	cd $(LIBDIR); ln -sf libruby.so.1.9.1 libruby193.so
 
 ruby193/Makefile: ruby193/configure
-	cd ruby193; DLDFLAGS="-Wl,-soname,libruby193.so" \
+	cd ruby193; $(RUBY_193_ENV) && DLDFLAGS="-Wl,-soname,libruby193.so" \
 	CC="$(CC)" CXX="$(CXX)" AS="$(AS)" LD="$(LD)" AR="$(AR)" NM="$(NM)" \
 	RANLIB="$(RANLIB)" STRIP="$(STRIP)" OBJCOPY="$(OBJCOPY)" OBJDUMP="$(OBJDUMP)" \
 	CFLAGS="$(CFLAGS) -U_FORTIFY_SOURCE" LDFLAGS="$(LDFLAGS)" CLANG_FLAGS="$(CLANG_FLAGS)" \
