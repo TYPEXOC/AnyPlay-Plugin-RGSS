@@ -132,6 +132,7 @@ apply_patch_once ../patches/ruby187-host-ruby-compat.patch
 apply_patch_once ../patches/ruby187-host-fileutils-compat.patch
 # Ruby 1.8's build helpers also rely on nil paths and implicit Proc.new blocks.
 apply_patch_once ../patches/ruby187-host-build-tools-compat.patch
+apply_patch_once ../patches/ruby187-host-mkmf-array-compat.patch
 apply_patch_once ../patches/ruby187-host-cross-compile-install.patch
 cd ..
 
@@ -141,6 +142,8 @@ if [[ ! -d "ruby193" ]]; then
   git clone $GIT_ARGS -b ruby_1_9_3 https://github.com/ruby/ruby ruby193
 fi
 cd ruby193
+# Ruby 1.9.3's mkconfig generator still uses TRUE under modern host Ruby.
+apply_patch_once ../patches/ruby193-host-ruby-compat.patch
 apply_patch_once ../patches/ruby193files/GH-488.patch
 apply_patch_once ../patches/ruby193files/CVE-2015-1855-p484.patch
 apply_patch_once ../patches/ruby193files/update-autoconf.patch

@@ -1,0 +1,7 @@
+diff --git a/lib/mkmf.rb b/lib/mkmf.rb
+--- a/lib/mkmf.rb
++++ b/lib/mkmf.rb
+@@ -1765,2 +1765,3 @@
+ $make = with_config("make-prog", ENV["MAKE"] || "make")
++$make = $make.join(" ") if Array === $make
+ make, = Shellwords.shellwords($make)

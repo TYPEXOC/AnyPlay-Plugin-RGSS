@@ -1,0 +1,6 @@
+diff --git a/tool/mkconfig.rb b/tool/mkconfig.rb
+--- a/tool/mkconfig.rb
++++ b/tool/mkconfig.rb
+@@ -26 +26 @@
+-fast = {'prefix'=>TRUE, 'ruby_install_name'=>TRUE, 'INSTALL'=>TRUE, 'EXEEXT'=>TRUE}
++fast = {'prefix'=>true, 'ruby_install_name'=>true, 'INSTALL'=>true, 'EXEEXT'=>true}
