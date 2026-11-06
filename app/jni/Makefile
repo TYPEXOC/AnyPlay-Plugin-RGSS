@@ -141,8 +141,8 @@ CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 # source version. The Android target runtimes are cross-compiled separately.
 SHELL := /bin/bash
 RVM_SCRIPT := source $(HOME)/.rvm/scripts/rvm
-RUBY_187_ENV := $(RVM_SCRIPT) && rvm use 1.8.7
-RUBY_193_ENV := $(RVM_SCRIPT) && rvm use 1.9.3 && \
+RUBY_187_ENV := $(RVM_SCRIPT) && rvm use 1.8.7-p374
+RUBY_193_ENV := $(RVM_SCRIPT) && rvm use 1.9.3-p551 && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
 RUBY_31_ENV := true
