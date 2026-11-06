@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">TYN RGSS</string>
     <string name="runtime_info_version">Version: %1$s</string>
-    <string name="runtime_info_message">This is TYN's RGSS runtime module. Start XP, VX, or VX Ace games from the TYN game library; do not launch this module by itself.</string>
+    <string name="runtime_info_message">This is TYN\'s RGSS runtime module. Start XP, VX, or VX Ace games from the TYN game library; do not launch this module by itself.</string>
     <string name="runtime_info_source">Based on mkxp-z, an open-source GPL v2 project\nhttps://github.com/TYPEXOC/AnyPlay-Plugin-RGSS</string>
     <string name="tyn_runtime_loading">Starting game…</string>
     <string name="tyn_runtime_cheat_button">Cheats</string>
