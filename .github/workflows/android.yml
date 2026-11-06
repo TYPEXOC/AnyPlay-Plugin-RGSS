@@ -133,6 +133,9 @@ jobs:
           make -j$(nproc)
           # Asegurar mapeo de carpetas por si acaso
           if [ -d "build-arm64-v8a" ] && [ ! -d "build-arm64" ]; then ln -s build-arm64-v8a build-arm64; fi
+          test -f build-arm64-v8a/lib/libruby.so
+          test -f build-arm64-v8a/lib/libruby187.so
+          test -f build-arm64-v8a/lib/libruby193.so
 
       # ── 8b. Compile native deps (armeabi-v7a, 32-bit phones) ─────────────────
       # AnyPlay: added so the APK also runs on 32-bit ARM phones.
@@ -151,6 +154,9 @@ jobs:
           make -j$(nproc)
           ls -la build-armeabi-v7a/lib | head -30
           test -f build-armeabi-v7a/lib/libopenal.so
+          test -f build-armeabi-v7a/lib/libruby.so
+          test -f build-armeabi-v7a/lib/libruby187.so
+          test -f build-armeabi-v7a/lib/libruby193.so
           test -d build-arm64-v8a/lib
 
       # ── 9. Make Gradle wrapper executable ────────────────────────────────────
@@ -199,6 +205,17 @@ jobs:
           if [ -z "$APK" ]; then APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1); fi
           cp "$APK" Tyranor-RGSS-Runtime.apk
           echo "APK_PATH=Tyranor-RGSS-Runtime.apk" >> "$GITHUB_ENV"
+
+      - name: Verify Ruby runtimes in APK
+        run: |
+          for abi in arm64-v8a armeabi-v7a; do
+            for library in libruby.so libruby187.so libruby193.so; do
+              unzip -Z1 "$APK_PATH" | grep -Fxq "lib/$abi/$library" || {
+                echo "Missing lib/$abi/$library from APK"
+                exit 1
+              }
+            done
+          done
 
       # ── 13. Upload APK as artifact (always) ───────────────────────────────────
       - name: Upload APK artifact

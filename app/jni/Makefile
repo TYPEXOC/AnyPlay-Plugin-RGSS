@@ -230,7 +230,7 @@ ruby: init openssl $(LIBDIR)/libruby.so.3.1.0
 
 $(LIBDIR)/libruby.so.3.1.0: ruby/Makefile
 	cd ruby; $(RUBY_31_ENV) && make -j$(NPROC); $(RUBY_31_ENV) && make install
-	cd $(LIBDIR); ln -sf libruby.so.3.1.3 libruby313.so
+	cd $(LIBDIR); ln -sf libruby.so.3.1.3 libruby.so; ln -sf libruby.so.3.1.3 libruby313.so
 
 ruby/Makefile: ruby/configure
 	cd ruby; DLDFLAGS="-Wl,-soname,libruby.so" \

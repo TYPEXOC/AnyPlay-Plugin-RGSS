@@ -23,6 +23,6 @@ else ifeq ($(TARGET_ARCH_ABI), x86_64)
 	LOCAL_EXPORT_C_INCLUDES += $(LOCAL_BUILD_PATH)/include/ruby-3.1.0/x86_64-linux-android-android
 endif
 
-LOCAL_SRC_FILES := $(LOCAL_BUILD_PATH)/lib/libruby313.so
+LOCAL_SRC_FILES := $(LOCAL_BUILD_PATH)/lib/libruby.so
 
 include $(PREBUILT_SHARED_LIBRARY)
