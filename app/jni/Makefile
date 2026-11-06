@@ -133,14 +133,15 @@ RUBY_CONFIGURE_ARGS := \
 CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
 CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 
-# Cross-build each legacy VM with a matching host Ruby, following the MTool mkxp-z layout.
+# Use the workflow-provided Ruby 3.1.3 for build helpers. The Android target
+# runtimes are still built as Ruby 1.8.7 / 1.9.3; installing matching host VMs
+# through RVM requires libssl1.0-dev, which Ubuntu 22.04 no longer provides.
 SHELL := /bin/bash
-RVM_SCRIPT := source $(HOME)/.rvm/scripts/rvm
-RUBY_187_ENV := $(RVM_SCRIPT) && rvm use 1.8.7
-RUBY_193_ENV := $(RVM_SCRIPT) && rvm use 1.9.3 && \
+RUBY_187_ENV := true
+RUBY_193_ENV := true && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
-RUBY_31_ENV := $(RVM_SCRIPT) && rvm use 3.1.3
+RUBY_31_ENV := true
 
 # Ruby 1.8.7 and 1.9.3 do not recognize Android triples; use the matching CPU family.
 ifeq ($(ABI), armeabi-v7a)
