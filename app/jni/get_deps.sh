@@ -130,6 +130,8 @@ apply_patch_once ../patches/ruby187-remove-inline.patch
 apply_patch_once ../patches/ruby187-host-ruby-compat.patch
 # Ruby 1.8 expects singleton method names as strings; Ruby 3 returns symbols.
 apply_patch_once ../patches/ruby187-host-fileutils-compat.patch
+# Ruby 1.8's build helpers also rely on nil paths and implicit Proc.new blocks.
+apply_patch_once ../patches/ruby187-host-build-tools-compat.patch
 cd ..
 
 # Ruby 1.9.3

@@ -1,0 +1,19 @@
+diff --git a/lib/mkmf.rb b/lib/mkmf.rb
+--- a/lib/mkmf.rb
++++ b/lib/mkmf.rb
+@@ -1166 +1166 @@
+-    idirs.concat(defaults.collect {|dir| dir + "/include"})
++    idirs.concat(defaults.compact.collect {|dir| dir + "/include"})
+@@ -1179 +1179 @@
+-    ldirs.concat(defaults.collect {|dir| dir + "/lib"})
++    ldirs.concat(defaults.compact.collect {|dir| dir + "/lib"})
+diff --git a/lib/optparse.rb b/lib/optparse.rb
+--- a/lib/optparse.rb
++++ b/lib/optparse.rb
+@@ -313,4 +313,5 @@
+-                   desc = ([] if short or long), block = Proc.new)
++                   desc = ([] if short or long), block = nil, &given_block)
+       raise if Array === pattern
+       @pattern, @conv, @short, @long, @arg, @desc, @block =
+         pattern, conv, short, long, arg, desc, block
++      @block ||= given_block
