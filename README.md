@@ -4,7 +4,7 @@ An installable runtime module for **Tyranor Next** that runs **RPG Maker XP, VX 
 
 The runtime is based on [mkxp-z](https://github.com/mkxp-z/mkxp-z) and the Android port [BookerRues9/mkxp-z-android-reworked](https://github.com/BookerRues9/mkxp-z-android-reworked), adapted from [AnyPlay-Plugin-RGSS](https://github.com/001-lovely-singh/AnyPlay-Plugin-RGSS).
 
-The TYN module uses its own APK process. It includes a TYN virtual pad and editor, a TYN cheat panel, and a Ruby translation bridge that loads the selected JSON table at runtime and checks for updates while the game is running. The bridge and generated table are kept in the module's private session directory; the game folder is not patched with plugin or translation files.
+The TYN module uses its own APK process. It declares translation support to Tyranor Next, and includes a TYN virtual pad and editor, a TYN cheat panel, and a Ruby translation bridge that loads the selected JSON table at runtime and checks for updates while the game is running. The bridge and generated table are kept in the module's private session directory; the game folder is not patched with plugin or translation files.
 
 ## 📥 Install
 

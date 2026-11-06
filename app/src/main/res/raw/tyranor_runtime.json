@@ -1,6 +1,9 @@
 {
   "protocol": 1,
   "label": "TYN RGSS Runtime",
+  "capabilities": [
+    "translation"
+  ],
   "scan": {
     "match": "any",
     "markers": [

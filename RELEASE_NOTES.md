@@ -12,6 +12,7 @@ New versions install over the old one.
 - Old Ruby 1.8 games: more scripts are repaired automatically at start-up (`return` inside procs, old `when x:` syntax, byte/character differences, missing old methods, and more).
 - TYN-owned virtual pad/editor and cheat panel are connected to the RGSS process.
 - The selected TYN translation table loads at runtime and can be hot-reloaded without adding files to the game directory.
+- Tyranor Next exposes the translation-file picker for games handled by this module.
 - Audio scripts written for newer mkxp-z (extra position argument, `bgm_position`) no longer cause errors.
 - New problem report: `AnyPlayLog.txt` in the game folder (created only when needed, fresh on every start). Attach it when you report a problem.
 - Frame-speed summary in that report, with the busiest script lines, to find slow spots.
