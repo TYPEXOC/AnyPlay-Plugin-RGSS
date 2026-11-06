@@ -123,7 +123,7 @@ OPENAL_CONFIGURE_ARGS := \
 	-DALSOFT_UTILS=OFF
 
 # Ruby configure arguments to build
-RUBY_CONFIGURE_ARGS := \
+RUBY_BASE_CONFIGURE_ARGS := \
 	--prefix="$(RUBY_PREFIX)" \
 	--enable-shared \
 	--enable-static \
@@ -131,8 +131,11 @@ RUBY_CONFIGURE_ARGS := \
 	--disable-install-doc \
 	--disable-rubygems \
 	--with-static-linked-ext \
-	--with-out-ext=readline,dbm,gdbm,win32,win32ole,fiddle \
 	--without-gmp
+RUBY_CONFIGURE_ARGS := $(RUBY_BASE_CONFIGURE_ARGS) \
+	--with-out-ext=readline,dbm,gdbm,win32,win32ole,fiddle
+RUBY_193_CONFIGURE_ARGS := $(RUBY_BASE_CONFIGURE_ARGS) \
+	--with-out-ext=readline,dbm,gdbm,win32,win32ole,fiddle,ripper
 
 CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
 CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
@@ -163,7 +166,7 @@ else ifeq ($(ABI), x86_64)
 	HOST_193 := x86_64-linux-gnu
 endif
 
-.PHONY: all init clean cpufeatures pixman iconv openal openssl ruby ruby187 ruby193 bison clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-bison
+.PHONY: all init clean cpufeatures pixman iconv openal openssl ruby ruby187 ruby193 bison clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-ruby-artifacts clean-bison
 
 default: all
 
@@ -273,7 +276,7 @@ ruby193/Makefile: ruby193/configure $(BUILD_PREFIX)/bin/bison
 	./configure --host=$(HOST_193) --prefix="$(BUILD_PREFIX)" \
 	--includedir="$(BUILD_PREFIX)/include/ruby-1.9.3" --with-baseruby=ruby \
 	ac_cv_header_pwd_h=no ac_cv_header_langinfo_h=no \
-	$(RUBY_CONFIGURE_ARGS) --program-suffix=193
+	$(RUBY_193_CONFIGURE_ARGS) --program-suffix=193
 
 ruby193/configure: ruby193/configure.in
 	cd ruby193; $(RUBY_193_ENV) && autoreconf -i
@@ -320,9 +323,14 @@ clean-ruby187:
 clean-ruby193:
 	-cd ruby193; make clean; rm Makefile; rm configure
 
+# Ruby builds write ABI-specific object archives into their source trees. Remove
+# leftovers before switching from arm64-v8a to armeabi-v7a.
+clean-ruby-artifacts:
+	-find ruby ruby187 ruby193 -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.bundle' \) -delete
+
 clean-bison:
 	-cd bison-2.7.1; make clean
 
-clean: clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-bison
+clean: clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-ruby-artifacts clean-bison
 
 all: pixman iconv openal openssl ruby ruby187 ruby193 bison
