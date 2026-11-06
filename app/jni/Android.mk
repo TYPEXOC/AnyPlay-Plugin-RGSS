@@ -15,6 +15,10 @@ include $(L_PATH)/uchardet.mk
 include $(L_PATH)/libiconv.mk
 include $(L_PATH)/openssl.mk
 include $(L_PATH)/ruby.mk
+include $(L_PATH)/ruby187.mk
+include $(L_PATH)/ruby193.mk
 
 # Include main library
 include $(L_PATH)/mkxp-z.mk
+include $(L_PATH)/mkxp-z-187.mk
+include $(L_PATH)/mkxp-z-193.mk

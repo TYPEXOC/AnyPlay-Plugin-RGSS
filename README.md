@@ -22,6 +22,7 @@ New versions install over the old one. Nothing needs to be uninstalled.
 - TYN's configurable on-screen pad and pad-layout editor; virtual keys are sent to SDL in the runtime process.
 - TYN cheat panel backed by Ruby-side RGSS control code for supported XP / VX / VX Ace games and Pokémon Essentials variants.
 - Runtime loading of the translation file selected in Tyranor Next, with polling-based hot reload. The module reads the JSON through a temporary content URI grant and does not copy the bridge into the game folder.
+- Three separately built Ruby VMs: 1.8.7, 1.9.3, and 3.1.3. Tyranor Next selects the configured global default or per-game override and loads the matching Ruby and mkxp-z native libraries. This is independent of the detected RGSS1/2/3 game generation.
 - Fixes for old scripts. Many games were written for Ruby 1.8; the plugin repairs the common problems automatically when the game starts, so the game does not need to be edited.
 - `AnyPlayLog.txt`, a problem report written into the game folder (see below).
 
@@ -42,6 +43,7 @@ The release is signed with a key that is kept in the repository secrets (`ANYPLA
 - mkxp-z and its contributors.
 - [BookerRues9](https://github.com/BookerRues9) for the Android port this project started from.
 - [001-lovely-singh](https://github.com/001-lovely-singh/AnyPlay-Plugin-RGSS) for the AnyPlay RGSS base adapted by this module branch.
+- [zths/mkxp-z-android-mtool](https://github.com/zths/mkxp-z-android-mtool) for the three-Ruby build layout and legacy Ruby compatibility patches adapted by this branch.
 - Ruby, SDL2, OpenAL Soft and the other libraries bundled in the build keep their own licenses.
 
 This project is licensed under the **GNU General Public License v2** (see [`app/jni/mkxp-z/COPYING`](app/jni/mkxp-z/COPYING)). The complete source of every release is this repository, at the release's tag.

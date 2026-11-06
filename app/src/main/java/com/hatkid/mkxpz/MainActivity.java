@@ -75,8 +75,19 @@ public class MainActivity extends SDLActivity
     private static final String TYN_EXTRA_PAD_ENABLED = "com.tyranor.runtime.extra.PAD_ENABLED";
     private static final String TYN_EXTRA_PAD_PROFILE_URI = "com.tyranor.runtime.extra.PAD_PROFILE_URI";
     private static final String TYN_EXTRA_PAD_PROFILE_ID = "com.tyranor.runtime.extra.PAD_PROFILE_ID";
+    private static final String TYN_EXTRA_RUBY_RUNTIME = "com.tyranor.runtime.extra.RUBY_RUNTIME";
     private static final String TYN_EXTRA_THEME_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_PRIMARY_COLOR";
     private static final String TYN_EXTRA_THEME_ON_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_ON_PRIMARY_COLOR";
+    private static final String[] RUBY_187_LIBRARIES = {
+        "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "ruby187", "mkxp-z-187"
+    };
+    private static final String[] RUBY_193_LIBRARIES = {
+        "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "ruby193", "mkxp-z-193"
+    };
+    private static final String[] RUBY_313_LIBRARIES = {
+        "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "ruby", "mkxp-z"
+    };
+    private static int sRubyRuntime = 313;
     private boolean mCustomGameDir = false;
     private boolean mTynLaunch = false;
     private boolean mPadEnabled = true;
@@ -163,6 +174,8 @@ public class MainActivity extends SDLActivity
 
         if (TYN_ACTION_LAUNCH.equals(intent.getAction())) {
             mTynLaunch = true;
+            String rubyRuntime = intent.getStringExtra(TYN_EXTRA_RUBY_RUNTIME);
+            sRubyRuntime = "187".equals(rubyRuntime) ? 187 : "193".equals(rubyRuntime) ? 193 : 313;
             String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
             if (dir == null || dir.isEmpty() || !new File(dir).isDirectory()) {
                 Log.e(TAG, "TYN runtime launch has no readable game folder");
@@ -196,6 +209,14 @@ public class MainActivity extends SDLActivity
         GAME_FOLDER = GAME_PATH;
         mCustomGameDir = true;
         Log.i(TAG, "Game folder from legacy launcher: " + GAME_PATH);
+    }
+
+    @Override
+    protected String[] getLibraries()
+    {
+        if (sRubyRuntime == 187) return RUBY_187_LIBRARIES;
+        if (sRubyRuntime == 193) return RUBY_193_LIBRARIES;
+        return RUBY_313_LIBRARIES;
     }
 
     /** Creates the private mkxp session; the original game folder is only the configured gameFolder. */
