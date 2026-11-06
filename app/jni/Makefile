@@ -142,7 +142,7 @@ CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 # through RVM requires libssl1.0-dev, which Ubuntu 22.04 no longer provides.
 SHELL := /bin/bash
 # The host Ruby handles Ruby 1.8 install scripts; suppress gem startup to avoid loading Ruby 1.8 rbconfig.
-RUBY_187_ENV := export RUBYOPT="--disable=gems"
+RUBY_187_ENV := export RUBYOPT="--disable-gems"
 RUBY_193_ENV := true && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
