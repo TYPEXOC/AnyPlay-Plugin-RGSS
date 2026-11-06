@@ -490,7 +490,7 @@ public class MainActivity extends SDLActivity
                 mLayout,
                 mGameId == null ? GAME_FOLDER : mGameId,
                 PAD_PROFILE_PATH,
-                mPadProfileUri,
+                mPadProfileUri == null ? null : Uri.parse(mPadProfileUri),
                 mPadEnabled,
                 mThemePrimaryColor,
                 mThemeOnPrimaryColor
