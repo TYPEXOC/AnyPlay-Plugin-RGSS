@@ -1413,7 +1413,11 @@ static void mriBindingExecute() {
 #endif
 #endif
     
+#if RAPI_FULL > 187
     VALUE rbArgv = rb_get_argv();
+#else
+    VALUE rbArgv = rb_gv_get("$*");
+#endif
     for (const auto &str : conf.launchArgs)
         rb_ary_push(rbArgv, rb_utf8_str_new_cstr(str.c_str()));
     
@@ -1481,8 +1485,13 @@ end
 Fixnum = Integer unless defined?(Fixnum)
 Bignum = Integer unless defined?(Bignum)
 )RB", &reqState);
-        if (reqState)
+        if (reqState) {
+#if RAPI_FULL > 187
             rb_set_errinfo(Qnil);
+#else
+            ruby_errinfo = Qnil;
+#endif
+        }
 
         // AnyPlay: safe dispose, full-screen fit, tap-to-walk (see anyplay_prelude.rb)
         {
@@ -3751,8 +3760,13 @@ class << Graphics
     AnyPlayPerf.run(lambda { __anyplay_update(*a) })
   end
 end)RB", &preState);
-            if (preState)
+            if (preState) {
+#if RAPI_FULL > 187
                 rb_set_errinfo(Qnil);
+#else
+                ruby_errinfo = Qnil;
+#endif
+            }
         }
     }
 #endif
@@ -3774,8 +3788,13 @@ end)RB", &preState);
         rb_gv_set("$__anyplay_fatal", exc);
         int fatalState = 0;
         rb_eval_string_protect("AnyPlayLog.fatal($__anyplay_fatal) if defined?(AnyPlayLog)", &fatalState);
-        if (fatalState)
+        if (fatalState) {
+#if RAPI_FULL > 187
             rb_set_errinfo(Qnil);
+#else
+            ruby_errinfo = Qnil;
+#endif
+        }
 #endif
         showExc(exc, btData);
     }

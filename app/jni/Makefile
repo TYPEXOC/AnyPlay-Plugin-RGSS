@@ -244,6 +244,8 @@ ruby187: init openssl $(LIBDIR)/libruby187.so
 
 $(LIBDIR)/libruby187.so: ruby187/Makefile
 	cd ruby187; $(RUBY_187_ENV) && make -j$(NPROC); $(RUBY_187_ENV) && make install
+	mkdir -p "$(BUILD_PREFIX)/include/ruby-1.8.7"
+	cp -f ruby187/*.h "$(BUILD_PREFIX)/include/ruby-1.8.7/"
 	cd $(LIBDIR); ln -sf libruby.so.1.8.7 libruby187.so
 
 ruby187/Makefile: ruby187/configure $(BUILD_PREFIX)/bin/bison
