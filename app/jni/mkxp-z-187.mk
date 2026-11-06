@@ -19,7 +19,6 @@ LOCAL_CPPFLAGS := \
 	-Wno-uninitialized
 
 LOCAL_C_INCLUDES := \
-	$(LOCAL_BUILD_PATH)/include/ruby-1.8.7 \
 	$(LOCAL_BUILD_PATH)/include \
 	$(LOCAL_PATH)/xxd/assets \
 	$(LOCAL_PATH)/xxd/shader \
@@ -35,7 +34,8 @@ LOCAL_C_INCLUDES := \
 	$(LOCAL_PATH)/src/input \
 	$(LOCAL_PATH)/src/net \
 	$(LOCAL_PATH)/src/system \
-	$(LOCAL_PATH)/src/util
+	$(LOCAL_PATH)/src/util \
+	$(LOCAL_BUILD_PATH)/include/ruby-1.8.7
 
 LOCAL_SRC_FILES := \
 	$(LOCAL_PATH)/src/main.cpp \
