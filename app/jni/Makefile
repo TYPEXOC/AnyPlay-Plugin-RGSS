@@ -253,7 +253,6 @@ ruby187/Makefile: ruby187/configure $(BUILD_PREFIX)/bin/bison
 	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" CLANG_FLAGS="$(CLANG_FLAGS)" \
 	PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)" LDSHARED="$(CC) -shared" \
 	./configure --host=$(HOST_187) --prefix="$(BUILD_PREFIX)" \
-	--includedir="$(BUILD_PREFIX)/include/ruby-1.8.7" \
 	ac_cv_header_pwd_h=no ac_cv_header_langinfo_h=no \
 	$(RUBY_CONFIGURE_ARGS) --program-suffix=187
 
