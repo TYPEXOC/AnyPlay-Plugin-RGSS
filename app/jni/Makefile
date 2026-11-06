@@ -141,8 +141,9 @@ CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 # source version. The Android target runtimes are cross-compiled separately.
 SHELL := /bin/bash
 RVM_SCRIPT := source $(HOME)/.rvm/scripts/rvm
-RUBY_187_ENV := $(RVM_SCRIPT) && rvm use 1.8.7-p374
+RUBY_187_ENV := $(RVM_SCRIPT) && rvm use 1.8.7-p374 && export PATH="$(BUILD_PREFIX)/bin:$$PATH"
 RUBY_193_ENV := $(RVM_SCRIPT) && rvm use 1.9.3-p551 && \
+    export PATH="$(BUILD_PREFIX)/bin:$$PATH" && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
 RUBY_31_ENV := true
@@ -242,7 +243,7 @@ $(LIBDIR)/libruby187.so: ruby187/Makefile
 	cd ruby187; $(RUBY_187_ENV) && make -j$(NPROC); $(RUBY_187_ENV) && make install
 	cd $(LIBDIR); ln -sf libruby.so.1.8.7 libruby187.so
 
-ruby187/Makefile: ruby187/configure
+ruby187/Makefile: ruby187/configure $(BUILD_PREFIX)/bin/bison
 	cd ruby187; $(RUBY_187_ENV) && DLDFLAGS="-Wl,-soname,libruby187.so" \
 	CC="$(CC)" CXX="$(CXX)" AS="$(AS)" LD="$(LD)" AR="$(AR)" NM="$(NM)" \
 	RANLIB="$(RANLIB)" STRIP="$(STRIP)" OBJCOPY="$(OBJCOPY)" OBJDUMP="$(OBJDUMP)" \
@@ -263,7 +264,7 @@ $(LIBDIR)/libruby193.so: ruby193/Makefile
 	cd ruby193; $(RUBY_193_ENV) && make -j$(NPROC); $(RUBY_193_ENV) && make install
 	cd $(LIBDIR); ln -sf libruby.so.1.9.1 libruby193.so
 
-ruby193/Makefile: ruby193/configure
+ruby193/Makefile: ruby193/configure $(BUILD_PREFIX)/bin/bison
 	cd ruby193; $(RUBY_193_ENV) && DLDFLAGS="-Wl,-soname,libruby193.so" \
 	CC="$(CC)" CXX="$(CXX)" AS="$(AS)" LD="$(LD)" AR="$(AR)" NM="$(NM)" \
 	RANLIB="$(RANLIB)" STRIP="$(STRIP)" OBJCOPY="$(OBJCOPY)" OBJDUMP="$(OBJDUMP)" \
