@@ -70,6 +70,8 @@ jobs:
           curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -
           curl -sSL https://get.rvm.io | bash -s stable --ignore-dotfiles
           source "$HOME/.rvm/scripts/rvm"
+          # RVM's detected -j4 can race Ruby 1.9.3's generated extension makefiles.
+          printf '%s\n' 'rvm_make_flags=( -j1 )' > "$HOME/.rvmrc"
           : > "$HOME/.rvm/gemsets/default.gems"
           : > "$HOME/.rvm/gemsets/global.gems"
           install_host_ruby() {
