@@ -1582,7 +1582,7 @@ end
 # as a fallback save folder). On Android they are missing, so scripts crashed
 # with "no implicit conversion of nil into String".
 begin
-  __ap_base = "/data/data/com.anyplay.rgssplugin"
+  __ap_base = "/data/data/com.tyranor.runtime.rgss"
   __ap_tmp = __ap_base + "/cache"
   __ap_files = __ap_base + "/files"
   [__ap_tmp, __ap_files].each { |d| (Dir.mkdir(d) unless File.directory?(d)) rescue nil }
@@ -1927,7 +1927,7 @@ module AnyPlayLog
     end
 
     def header_now
-      eng = (AnyPlayCheats.engine rescue "?")
+      eng = (TyranorCheats.engine rescue "?")
       gt  = (System.game_title rescue "?") rescue "?"
       raw("==== AnyPlay log (plugin #{VERSION}) #{Time.now.strftime('%Y-%m-%d %H:%M:%S')} ====")
       raw("game=#{clean(gt, 80)} folder=#{Dir.pwd} engine=#{eng} ruby=#{RUBY_VERSION} #{RUBY_PLATFORM}")
@@ -2742,10 +2742,10 @@ end
 # The Android overlay writes one command per file into the app cache folder,
 # this module reads it (every few frames), runs it, and writes a one line
 # answer back.  Checkbox cheats are just flags that are applied every frame.
-module AnyPlayCheats
-  DIR   = "/data/data/com.anyplay.rgssplugin/cache"
-  CMD   = DIR + "/anyplay_cheat_cmd.txt"
-  REPLY = DIR + "/anyplay_cheat_reply.txt"
+module TyranorCheats
+  DIR   = "/data/data/com.tyranor.runtime.rgss/cache"
+  CMD   = DIR + "/tyranor_cheat_cmd.txt"
+  REPLY = DIR + "/tyranor_cheat_reply.txt"
   NOPE  = "This cheat doesn't work in this type of game."
   NEED_BATTLE = "You are not in a battle right now."
 
@@ -3456,8 +3456,8 @@ module AnyPlayCheats
         Game_Character.class_eval do
           alias_method :__ap_cheat_update, :update
           def update(*args)
-            if AnyPlayCheats.speed_on? && $game_player && self.equal?($game_player)
-              m = AnyPlayCheats.speed.to_f
+            if TyranorCheats.speed_on? && $game_player && self.equal?($game_player)
+              m = TyranorCheats.speed.to_f
               m = 1.0 if m <= 0
               # Games store the walking speed in different ways, so scale
               # whichever one this game actually uses, for this frame only.
@@ -3466,7 +3466,7 @@ module AnyPlayCheats
               elsif instance_variable_defined?(:@move_time) && @move_time.is_a?(Numeric)
                 key = :@move_time; saved = @move_time; scaled = saved / m
               elsif @move_speed.is_a?(Numeric)
-                key = :@move_speed; saved = @move_speed; scaled = saved + AnyPlayCheats.speed_bonus
+                key = :@move_speed; saved = @move_speed; scaled = saved + TyranorCheats.speed_bonus
               end
               if key
                 instance_variable_set(key, scaled)
@@ -3492,7 +3492,7 @@ module AnyPlayCheats
           if method_defined?(:encounter_triggered?)
             alias_method :__ap_cheat_enc, :encounter_triggered?
             def encounter_triggered?(enc_type, repel_active = false, triggered_by_step = true)
-              return false if triggered_by_step && AnyPlayCheats.on?('noEncounter')
+              return false if triggered_by_step && TyranorCheats.on?('noEncounter')
               __ap_cheat_enc(enc_type, repel_active, triggered_by_step)
             end
           end
@@ -3508,7 +3508,7 @@ module AnyPlayCheats
         move_c.class_eval do
           alias_method :__ap_cheat_crit, :pbIsCritical?
           def pbIsCritical?(attacker, opponent)
-            if AnyPlayCheats.on?('crit') && attacker && !AnyPlayCheats.foe?(@battle, attacker.index)
+            if TyranorCheats.on?('crit') && attacker && !TyranorCheats.foe?(@battle, attacker.index)
               return true
             end
             __ap_cheat_crit(attacker, opponent)
@@ -3521,16 +3521,16 @@ module AnyPlayCheats
           if method_defined?(:pbReduceHP)
             alias_method :__ap_cheat_reduce, :pbReduceHP
             def pbReduceHP(amt, *rest)
-              foe = AnyPlayCheats.foe?(@battle, @index)
-              return 0 if !foe && AnyPlayCheats.on?('invincible')
-              amt = self.hp if foe && AnyPlayCheats.on?('oneHit') && amt > 0
+              foe = TyranorCheats.foe?(@battle, @index)
+              return 0 if !foe && TyranorCheats.on?('invincible')
+              amt = self.hp if foe && TyranorCheats.on?('oneHit') && amt > 0
               __ap_cheat_reduce(amt, *rest)
             end
           end
           if method_defined?(:pbReducePP)
             alias_method :__ap_cheat_pp, :pbReducePP
             def pbReducePP(move)
-              return true if AnyPlayCheats.on?('freeSkill') && !AnyPlayCheats.foe?(@battle, @index)
+              return true if TyranorCheats.on?('freeSkill') && !TyranorCheats.foe?(@battle, @index)
               __ap_cheat_pp(move)
             end
           end
@@ -3542,7 +3542,7 @@ module AnyPlayCheats
           if method_defined?(:pbCommandPhase)
             alias_method :__ap_cheat_cmd, :pbCommandPhase
             def pbCommandPhase(*a)
-              AnyPlayCheats.battle = self
+              TyranorCheats.battle = self
               __ap_cheat_cmd(*a)
             end
           end
@@ -3552,14 +3552,14 @@ module AnyPlayCheats
               begin
                 __ap_cheat_end(*a)
               ensure
-                AnyPlayCheats.battle = nil
+                TyranorCheats.battle = nil
               end
             end
           end
           if method_defined?(:pbCanRun?)
             alias_method :__ap_cheat_canrun, :pbCanRun?
             def pbCanRun?(idx)
-              if AnyPlayCheats.on?('escape') && !@opponent && !(@cantescape || @cantRun) && !AnyPlayCheats.foe?(self, idx)
+              if TyranorCheats.on?('escape') && !@opponent && !(@cantescape || @cantRun) && !TyranorCheats.foe?(self, idx)
                 return true
               end
               __ap_cheat_canrun(idx)
@@ -3568,7 +3568,7 @@ module AnyPlayCheats
           if method_defined?(:pbRun)
             alias_method :__ap_cheat_run, :pbRun
             def pbRun(idx, duringBattle = false)
-              if AnyPlayCheats.on?('escape') && !@opponent && !(@cantescape || @cantRun) && !AnyPlayCheats.foe?(self, idx)
+              if TyranorCheats.on?('escape') && !@opponent && !(@cantescape || @cantRun) && !TyranorCheats.foe?(self, idx)
                 pbSEPlay("Battle flee") rescue nil
                 pbDisplayPaused(_INTL("Got away safely!"))
                 @decision = 3
@@ -3732,7 +3732,7 @@ module AnyPlayPerf
     AnyPlayLog.internal += 1
     begin
       AnyPlayTouch.frame
-      AnyPlayCheats.frame
+      TyranorCheats.frame
     ensure
       AnyPlayLog.internal -= 1
     end

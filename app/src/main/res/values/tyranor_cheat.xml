@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tyn_cheat_title">Tyranor 修改器</string>
+    <string name="tyn_cheat_close">关闭修改器</string>
+    <string name="tyn_cheat_tab_quick">快捷</string>
+    <string name="tyn_cheat_tab_character">角色</string>
+    <string name="tyn_cheat_tab_exploration">探索</string>
+    <string name="tyn_cheat_tab_battle">战斗</string>
+    <string name="tyn_cheat_section_quick">常用修改</string>
+    <string name="tyn_cheat_section_character">角色状态与数值</string>
+    <string name="tyn_cheat_section_exploration">探索功能</string>
+    <string name="tyn_cheat_section_battle">战斗功能</string>
+    <string name="tyn_cheat_unlimited_hp_mp">生命与魔力不减</string>
+    <string name="tyn_cheat_unlimited_tp">技能点不减</string>
+    <string name="tyn_cheat_unlimited_gold">金币不减</string>
+    <string name="tyn_cheat_status_immunity">异常状态免疫</string>
+    <string name="tyn_cheat_unlimited_items">物品不减</string>
+    <string name="tyn_cheat_noclip">穿墙</string>
+    <string name="tyn_cheat_no_encounters">不遇敌</string>
+    <string name="tyn_cheat_speed_boost">移动加速</string>
+    <string name="tyn_cheat_fast_text">快速显示文本</string>
+    <string name="tyn_cheat_one_hit">一击必杀</string>
+    <string name="tyn_cheat_invincibility">队伍无敌</string>
+    <string name="tyn_cheat_always_crit">必定暴击</string>
+    <string name="tyn_cheat_escape_always">必定逃跑成功</string>
+    <string name="tyn_cheat_free_skill">技能不消耗</string>
+    <string name="tyn_cheat_gold">金币</string>
+    <string name="tyn_cheat_speed">移动倍率</string>
+    <string name="tyn_cheat_level">等级</string>
+    <string name="tyn_cheat_exp">经验</string>
+    <string name="tyn_cheat_attack">攻击</string>
+    <string name="tyn_cheat_defense">防御</string>
+    <string name="tyn_cheat_magic_attack">魔法攻击</string>
+    <string name="tyn_cheat_magic_defense">魔法防御</string>
+    <string name="tyn_cheat_agility">敏捷</string>
+    <string name="tyn_cheat_luck">幸运</string>
+    <string name="tyn_cheat_max_exp">经验最大化</string>
+    <string name="tyn_cheat_full_inventory">物品全部补满</string>
+    <string name="tyn_cheat_instant_win">立即获胜</string>
+    <string name="tyn_cheat_value_hint">输入数值</string>
+    <string name="tyn_cheat_apply">应用</string>
+    <string name="tyn_cheat_run">执行</string>
+    <string name="tyn_cheat_applied">已应用</string>
+</resources>

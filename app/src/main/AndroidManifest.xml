@@ -61,24 +61,30 @@
             android:preferMinimalPostProcessing="true"
             android:exported="true"
         >
-            <!-- AnyPlay: the MAIN / LAUNCHER / LEANBACK_LAUNCHER filter was REMOVED on purpose,
-                 so this plugin has no icon on the home screen or in the app drawer.
-                 It is only visible in Settings > Apps and is started by AnyPlay (filter below). -->
+            <!-- No launcher filter: Tyranor Next starts the runtime through the module action. -->
 
             <!-- Let Android know that we can handle some USB devices and should receive this event -->
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
 
-            <!-- AnyPlay: lets the AnyPlay app start a game by folder path.
-                 Intent action com.anyplay.rgss.LAUNCH + string extra "game_dir". -->
+            <!-- Legacy launch action retained for compatible launchers. -->
             <intent-filter>
                 <action android:name="com.anyplay.rgss.LAUNCH" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
+            <!-- TYN runtime-module contract. Optional URI extras are additive to protocol v1. -->
+            <intent-filter>
+                <action android:name="com.tyranor.runtime.action.LAUNCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
             <!-- mkxp-z Activity metadata -->
             <meta-data android:name="mkxp_debug" android:value="false" />
+            <meta-data
+                android:name="com.tyranor.runtime.MANIFEST"
+                android:resource="@raw/tyranor_runtime" />
 
             <!-- Samsung DeX multiwindow stuff -->
             <meta-data android:name="com.samsung.android.keepalive.density" android:value="true" />

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tyranor RGSS ランタイム</string>
+    <string name="tyn_runtime_loading">ゲームを起動中…</string>
+    <string name="tyn_runtime_cheat_button">チート</string>
+    <string name="tyn_runtime_close_title">ゲームを終了しますか？</string>
+    <string name="tyn_runtime_close_message">ゲームを終了して戻りますか？保存されていない進行状況は失われる可能性があります。</string>
+    <string name="tyn_runtime_no">キャンセル</string>
+    <string name="tyn_runtime_yes">終了</string>
+</resources>

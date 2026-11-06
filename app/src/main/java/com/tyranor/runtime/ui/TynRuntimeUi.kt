@@ -1,4 +1,4 @@
-package com.anyplay.overlay
+package com.tyranor.runtime.ui
 
 import android.app.Activity
 import android.app.Dialog
@@ -18,40 +18,48 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.content.res.ColorStateList
 import android.util.TypedValue
-import com.anyplay.engine.CheatManager
-import com.anyplay.engine.JsBridge
+import com.tyranor.runtime.cheat.TyranorCheatController
+import com.tyranor.runtime.input.PadProfile
+import com.tyranor.runtime.input.TyranorPadController
+import com.hatkid.mkxpz.R
+import java.io.File
 import kotlin.math.abs
 
 /**
- * Everything AnyPlay draws on top of the game inside the RGSS plugin:
+ * TYN-owned controls drawn over the RGSS game:
  *  - a loading spinner (until the game draws its first frame),
- *  - (taps on empty screen go straight to the game, which turns them into
- *    walk-to / talk / confirm, see anyplay_prelude.rb),
- *  - the AnyPlay gamepad / keyboard / edit-mode / toolbar overlay,
- *  - the "Close game?" dialog for the Back button.
+ *  - TYN's configurable virtual pad and edit mode,
+ *  - TYN's cheat panel,
+ *  - a close-game dialog for the Back button.
  *
  * MainActivity only creates one of these and forwards a few calls.
  */
-class AnyPlayUi(
+class TynRuntimeUi(
     private val activity: Activity,
     parent: ViewGroup,
-    gameKey: String
+    gameKey: String,
+    padProfilePath: String?,
+    padProfileUri: android.net.Uri?,
+    padEnabled: Boolean,
+    private val primaryColor: Int,
+    private val onPrimaryColor: Int,
 ) {
     private val density = activity.resources.displayMetrics.density
-    private val bridge = JsBridge()
     private val root = FrameLayout(activity)
     private val loading = FrameLayout(activity)
-    private val controller: OverlayController
-    private val cheats = CheatManager(activity, gameKey)
-    private var cheatMenu: CheatMenuDialog? = null
+    private val controller: TyranorPadController
+    private val cheats = TyranorCheatController(activity, gameKey)
+    private var cheatMenu: TyranorCheatPanel? = null
     private var dialog: Dialog? = null
     private var loadingGone = false
 
     init {
         parent.addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        // 1) gamepad + keyboard + toolbar
-        controller = OverlayController(activity, root, bridge, gameKey, onOpenCheats = { openCheats() }, showCheats = true)
+        val padProfile = padProfilePath
+            ?.let { path -> runCatching { PadProfile.parse(File(path).readText()) }.getOrNull() }
+            ?: PadProfile.defaultProfile()
+        controller = TyranorPadController(activity, root, padProfile, padProfileUri, padEnabled, primaryColor, onPrimaryColor)
 
         // 2) loading spinner (top-most, hides the black screen)
         loading.setBackgroundColor(Color.BLACK)
@@ -65,7 +73,7 @@ class AnyPlayUi(
             indeterminateTintList = ColorStateList.valueOf(Color.WHITE)
         }, LinearLayout.LayoutParams((56 * density).toInt(), (56 * density).toInt()))
         box.addView(TextView(activity).apply {
-            text = "Loading game…"
+            text = activity.getString(R.string.tyn_runtime_loading)
             setTextColor(0xCCFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             gravity = Gravity.CENTER
@@ -73,6 +81,28 @@ class AnyPlayUi(
         })
         loading.addView(box, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         root.addView(loading, FrameLayout.LayoutParams(-1, -1))
+
+        val cheatButton = TextView(activity).apply {
+            text = "TYN"
+            contentDescription = activity.getString(R.string.tyn_runtime_cheat_button)
+            gravity = Gravity.CENTER
+            setTextColor(onPrimaryColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(primaryColor)
+            }
+            elevation = 8f * density
+            setOnClickListener { openCheats() }
+        }
+        root.addView(
+            cheatButton,
+            FrameLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt(), Gravity.TOP or Gravity.END).apply {
+                topMargin = (16 * density).toInt()
+                marginEnd = (16 * density).toInt()
+            },
+        )
     }
 
     /** Called (from any thread) when the game has drawn its first frame. */
@@ -95,13 +125,13 @@ class AnyPlayUi(
     }
 
     private fun openCheats() {
-        val menu = cheatMenu ?: CheatMenuDialog(activity, root, cheats).also { cheatMenu = it }
+        val menu = cheatMenu ?: TyranorCheatPanel(activity, root, cheats, primaryColor, onPrimaryColor).also { cheatMenu = it }
         controller.releaseAllKeys()
         menu.show()
     }
 
     fun onPause() {
-        controller.releaseAllKeys()
+        controller.onPause()
     }
 
     fun onDestroy() {
@@ -111,7 +141,7 @@ class AnyPlayUi(
         controller.shutdown()
     }
 
-    // ---- "Close game?" dialog, same look as the AnyPlay app ---------------
+    // ---- Close-game dialog -------------------------------------------------
 
     private fun showCloseDialog() {
         if (dialog?.isShowing == true) return
@@ -128,13 +158,13 @@ class AnyPlayUi(
             setPadding(p, p, p, (20 * density).toInt())
         }
         content.addView(TextView(activity).apply {
-            text = "Close game?"
+            text = activity.getString(R.string.tyn_runtime_close_title)
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         })
         content.addView(TextView(activity).apply {
-            text = "Do you want to close the game and go back? Unsaved progress may be lost."
+            text = activity.getString(R.string.tyn_runtime_close_message)
             setTextColor(0xFFB8BCC8.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setPadding(0, (12 * density).toInt(), 0, (24 * density).toInt())
@@ -155,8 +185,8 @@ class AnyPlayUi(
         }
 
         val row = LinearLayout(activity).apply { gravity = Gravity.END }
-        row.addView(button("No", 0xFF3A3D48.toInt()) { d.dismiss() })
-        row.addView(button("Yes", 0xFFE04B4B.toInt()) {
+        row.addView(button(activity.getString(R.string.tyn_runtime_no), 0xFF3A3D48.toInt()) { d.dismiss() })
+        row.addView(button(activity.getString(R.string.tyn_runtime_yes), 0xFFE04B4B.toInt()) {
             d.dismiss()
             activity.finish() // MainActivity.onDestroy() ends the process cleanly
         }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = (14 * density).toInt() })

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tyn_cheat_title">Tyranor 改造パネル</string>
+    <string name="tyn_cheat_close">改造パネルを閉じる</string>
+    <string name="tyn_cheat_tab_quick">クイック</string>
+    <string name="tyn_cheat_tab_character">キャラクター</string>
+    <string name="tyn_cheat_tab_exploration">探索</string>
+    <string name="tyn_cheat_tab_battle">戦闘</string>
+    <string name="tyn_cheat_section_quick">よく使う機能</string>
+    <string name="tyn_cheat_section_character">キャラクターの数値</string>
+    <string name="tyn_cheat_section_exploration">探索機能</string>
+    <string name="tyn_cheat_section_battle">戦闘機能</string>
+    <string name="tyn_cheat_unlimited_hp_mp">HP・MP減少なし</string>
+    <string name="tyn_cheat_unlimited_tp">TP減少なし</string>
+    <string name="tyn_cheat_unlimited_gold">ゴールド減少なし</string>
+    <string name="tyn_cheat_status_immunity">状態異常無効</string>
+    <string name="tyn_cheat_unlimited_items">アイテム減少なし</string>
+    <string name="tyn_cheat_noclip">壁を通り抜ける</string>
+    <string name="tyn_cheat_no_encounters">ランダムエンカウントなし</string>
+    <string name="tyn_cheat_speed_boost">移動速度アップ</string>
+    <string name="tyn_cheat_fast_text">テキスト高速表示</string>
+    <string name="tyn_cheat_one_hit">一撃必殺</string>
+    <string name="tyn_cheat_invincibility">パーティ無敵</string>
+    <string name="tyn_cheat_always_crit">必ずクリティカル</string>
+    <string name="tyn_cheat_escape_always">必ず逃走成功</string>
+    <string name="tyn_cheat_free_skill">スキル消費なし</string>
+    <string name="tyn_cheat_gold">ゴールド</string>
+    <string name="tyn_cheat_speed">移動倍率</string>
+    <string name="tyn_cheat_level">レベル</string>
+    <string name="tyn_cheat_exp">経験値</string>
+    <string name="tyn_cheat_attack">攻撃力</string>
+    <string name="tyn_cheat_defense">防御力</string>
+    <string name="tyn_cheat_magic_attack">魔法攻撃</string>
+    <string name="tyn_cheat_magic_defense">魔法防御</string>
+    <string name="tyn_cheat_agility">敏捷性</string>
+    <string name="tyn_cheat_luck">運</string>
+    <string name="tyn_cheat_max_exp">経験値を最大にする</string>
+    <string name="tyn_cheat_full_inventory">全アイテム補充</string>
+    <string name="tyn_cheat_instant_win">戦闘に勝利</string>
+    <string name="tyn_cheat_value_hint">数値を入力</string>
+    <string name="tyn_cheat_apply">適用</string>
+    <string name="tyn_cheat_run">実行</string>
+    <string name="tyn_cheat_applied">適用しました</string>
+</resources>

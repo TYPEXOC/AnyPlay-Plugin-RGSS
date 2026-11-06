@@ -1,4 +1,4 @@
-package com.anyplay.engine
+package com.tyranor.runtime.cheat
 
 import android.content.Context
 import android.os.Handler
@@ -6,7 +6,7 @@ import android.os.Looper
 import java.io.File
 
 /** The three checkbox sections of the cheat panel. */
-enum class CheatSection(val title: String) {
+enum class TyranorCheatSection(val title: String) {
     CHARACTER("Character states"),
     EXPLORATION("Exploration"),
     BATTLE("Battle")
@@ -14,39 +14,39 @@ enum class CheatSection(val title: String) {
 
 /**
  * Every checkbox cheat. [wireName] MUST match the names used in
- * rb/anyplay_prelude.rb (module AnyPlayCheats) exactly.
+ * rb/anyplay_prelude.rb (module TyranorCheats) exactly.
  */
-enum class CheatToggle(
+enum class TyranorCheatToggle(
     val wireName: String,
     val label: String,
-    val section: CheatSection
+    val section: TyranorCheatSection
 ) {
     // Character states
-    UNLIMITED_HPMP("hpmp", "Unlimited HP/MP", CheatSection.CHARACTER),
-    UNLIMITED_TP("tp", "Unlimited TP", CheatSection.CHARACTER),
-    UNLIMITED_GOLD("gold", "Unlimited Gold", CheatSection.CHARACTER),
-    STATUS_IMMUNITY("status", "Status ailment immunity", CheatSection.CHARACTER),
-    UNLIMITED_ITEMS("items", "Unlimited Items", CheatSection.CHARACTER),
+    UNLIMITED_HPMP("hpmp", "Unlimited HP/MP", TyranorCheatSection.CHARACTER),
+    UNLIMITED_TP("tp", "Unlimited TP", TyranorCheatSection.CHARACTER),
+    UNLIMITED_GOLD("gold", "Unlimited Gold", TyranorCheatSection.CHARACTER),
+    STATUS_IMMUNITY("status", "Status ailment immunity", TyranorCheatSection.CHARACTER),
+    UNLIMITED_ITEMS("items", "Unlimited Items", TyranorCheatSection.CHARACTER),
 
     // Exploration
-    WALK_THROUGH_WALLS("noclip", "Walk through walls", CheatSection.EXPLORATION),
-    NO_ENCOUNTERS("noEncounter", "No random encounters", CheatSection.EXPLORATION),
-    SPEED_BOOST("speed", "Speed boost", CheatSection.EXPLORATION),
-    FAST_TEXT("fastText", "Fast text speed", CheatSection.EXPLORATION),
+    WALK_THROUGH_WALLS("noclip", "Walk through walls", TyranorCheatSection.EXPLORATION),
+    NO_ENCOUNTERS("noEncounter", "No random encounters", TyranorCheatSection.EXPLORATION),
+    SPEED_BOOST("speed", "Speed boost", TyranorCheatSection.EXPLORATION),
+    FAST_TEXT("fastText", "Fast text speed", TyranorCheatSection.EXPLORATION),
 
     // Battle
-    ONE_HIT_KILL("oneHit", "One-hit kill", CheatSection.BATTLE),
-    INVINCIBILITY("invincible", "Invincibility", CheatSection.BATTLE),
-    ALWAYS_CRIT("crit", "Always critical hit", CheatSection.BATTLE),
-    ESCAPE_ALWAYS("escape", "Escape always works", CheatSection.BATTLE),
-    FREE_SKILL_COST("freeSkill", "Free skill cost (MP/TP/PP)", CheatSection.BATTLE)
+    ONE_HIT_KILL("oneHit", "One-hit kill", TyranorCheatSection.BATTLE),
+    INVINCIBILITY("invincible", "Invincibility", TyranorCheatSection.BATTLE),
+    ALWAYS_CRIT("crit", "Always critical hit", TyranorCheatSection.BATTLE),
+    ESCAPE_ALWAYS("escape", "Escape always works", TyranorCheatSection.BATTLE),
+    FREE_SKILL_COST("freeSkill", "Free skill cost (MP/TP/PP)", TyranorCheatSection.BATTLE)
 }
 
 /**
- * CheatManager (RGSS plugin version)
+ * TyranorCheatController (RGSS plugin version)
  * ----------------------------------
- * Same public API as the AnyPlay app's CheatManager, but the cheats run
- * inside the game's Ruby code (AnyPlayCheats in anyplay_prelude.rb) instead
+ * Same public API as the AnyPlay app's TyranorCheatController, but the cheats run
+ * inside the game's Ruby code (TyranorCheats in anyplay_prelude.rb) instead
  * of JavaScript.
  *
  * Talking to the game: one command at a time is written to a small file in
@@ -56,21 +56,21 @@ enum class CheatToggle(
  *
  * Must be used from the main thread.
  */
-class CheatManager(
+class TyranorCheatController(
     context: Context,
     gameKey: String
 ) {
     private val prefs =
-        context.applicationContext.getSharedPreferences("anyplay_cheats", Context.MODE_PRIVATE)
+        context.applicationContext.getSharedPreferences("tyranor_cheats", Context.MODE_PRIVATE)
 
     private val keyBase = "game_${gameKey.hashCode()}"
     private val togglesKey = "$keyBase.toggles"
     private val speedKey = "$keyBase.speed"
 
     private val dir = context.applicationContext.cacheDir
-    private val cmdFile = File(dir, "anyplay_cheat_cmd.txt")
-    private val tmpFile = File(dir, "anyplay_cheat_cmd.tmp")
-    private val replyFile = File(dir, "anyplay_cheat_reply.txt")
+    private val cmdFile = File(dir, "tyranor_cheat_cmd.txt")
+    private val tmpFile = File(dir, "tyranor_cheat_cmd.tmp")
+    private val replyFile = File(dir, "tyranor_cheat_reply.txt")
     private val handler = Handler(Looper.getMainLooper())
 
     private class Pending(
@@ -133,7 +133,7 @@ class CheatManager(
     private fun enabledNames(): Set<String> =
         prefs.getStringSet(togglesKey, emptySet())?.toSet() ?: emptySet()
 
-    fun isEnabled(toggle: CheatToggle): Boolean = enabledNames().contains(toggle.wireName)
+    fun isEnabled(toggle: TyranorCheatToggle): Boolean = enabledNames().contains(toggle.wireName)
 
     fun speedMultiplier(): Float = prefs.getFloat(speedKey, 2f)
 
@@ -142,7 +142,7 @@ class CheatManager(
      * (for example "This cheat doesn't work in this type of game.") and the
      * checkbox must go back to OFF.
      */
-    fun setEnabled(toggle: CheatToggle, enabled: Boolean, onResult: (String) -> Unit = {}) {
+    fun setEnabled(toggle: TyranorCheatToggle, enabled: Boolean, onResult: (String) -> Unit = {}) {
         send("toggle\t${toggle.wireName}\t${if (enabled) "1" else "0"}") { msg ->
             if (msg.isEmpty()) {
                 val updated = enabledNames().toMutableSet()
@@ -166,7 +166,7 @@ class CheatManager(
             if (name == "speed" && msg.startsWith("Speed x")) {
                 a.trim().toFloatOrNull()?.takeIf { it > 0f }?.let {
                     prefs.edit().putFloat(speedKey, it.coerceIn(0.25f, 8f)).apply()
-                    val updated = enabledNames().toMutableSet().apply { add(CheatToggle.SPEED_BOOST.wireName) }
+                    val updated = enabledNames().toMutableSet().apply { add(TyranorCheatToggle.SPEED_BOOST.wireName) }
                     prefs.edit().putStringSet(togglesKey, updated).apply()
                 }
             }

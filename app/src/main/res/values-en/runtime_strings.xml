@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tyranor RGSS Runtime</string>
+    <string name="tyn_runtime_loading">Starting game…</string>
+    <string name="tyn_runtime_cheat_button">Cheats</string>
+    <string name="tyn_runtime_close_title">Close game?</string>
+    <string name="tyn_runtime_close_message">Close the game and return? Unsaved progress may be lost.</string>
+    <string name="tyn_runtime_no">Cancel</string>
+    <string name="tyn_runtime_yes">Close</string>
+</resources>

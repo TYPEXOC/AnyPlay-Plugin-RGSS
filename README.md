@@ -1,25 +1,25 @@
-# 🎮 Any Play - RGSS Plugin
+# Tyranor Next RGSS Runtime
 
-A small companion app for **[Any Play](https://001-lovely-singh.github.io/)**. It runs **RPG Maker XP, VX and VX Ace** games (the "RGSS" / Ruby ones) on Android. It has no icon of its own: you add the game in AnyPlay, press play, and AnyPlay opens this plugin for you.
+An installable runtime module for **Tyranor Next** that runs **RPG Maker XP, VX and VX Ace** (RGSS) games on Android. Tyranor Next discovers the module, hands it the selected game, and provides the selected translation file and virtual-pad profile when configured.
 
-It is built on [mkxp-z](https://github.com/mkxp-z/mkxp-z), using the Android port [BookerRues9/mkxp-z-android-reworked](https://github.com/BookerRues9/mkxp-z-android-reworked) as the starting point.
+The runtime is based on [mkxp-z](https://github.com/mkxp-z/mkxp-z) and the Android port [BookerRues9/mkxp-z-android-reworked](https://github.com/BookerRues9/mkxp-z-android-reworked), adapted from [AnyPlay-Plugin-RGSS](https://github.com/001-lovely-singh/AnyPlay-Plugin-RGSS).
 
-> This plugin is only distributed here, through the **Releases** page of this repository.
+The TYN module uses its own APK process. It includes a TYN virtual pad and editor, a TYN cheat panel, and a Ruby translation bridge that loads the selected JSON table at runtime and checks for updates while the game is running. The bridge and generated table are kept in the module's private session directory; the game folder is not patched with plugin or translation files.
 
 ## 📥 Install
 
-1. Open the [latest release](../../releases/latest) and download **`AnyPlay-RGSS-Plugin.apk`**
-   (direct link: `https://github.com/001-lovely-singh/AnyPlay-Plugin-RGSS/releases/latest/download/AnyPlay-RGSS-Plugin.apk`).
-2. Open the file and allow "Install unknown apps" for your browser or file manager if Android asks.
-3. Open AnyPlay, add an RPG Maker game (a folder, or a `.zip`), and press play.
+1. Download **`Tyranor-RGSS-Runtime.apk`** from the `rgss-module` branch's GitHub Actions artifact, or from a tagged release.
+2. Install it and allow "Install unknown apps" for your browser or file manager if Android asks.
+3. In Tyranor Next, enable the module under **妙妙工具 → 引擎模块管理**, scan your games, then launch a detected RGSS game.
 
 New versions install over the old one. Nothing needs to be uninstalled.
 
 ## 📦What it includes
 
 - One APK for 64-bit and 32-bit phones (arm64-v8a and armeabi-v7a).
-- Touch controls: tap the map to walk, on-screen pad and buttons.
-- Cheat menu (opened from the AnyPlay overlay) for XP / VX / VX Ace and for Pokémon Essentials games (v17, v19, v21 style).
+- TYN's configurable on-screen pad and pad-layout editor; virtual keys are sent to SDL in the runtime process.
+- TYN cheat panel backed by Ruby-side RGSS control code for supported XP / VX / VX Ace games and Pokémon Essentials variants.
+- Runtime loading of the translation file selected in Tyranor Next, with polling-based hot reload. The module reads the JSON through a temporary content URI grant and does not copy the bridge into the game folder.
 - Fixes for old scripts. Many games were written for Ruby 1.8; the plugin repairs the common problems automatically when the game starts, so the game does not need to be edited.
 - `AnyPlayLog.txt`, a problem report written into the game folder (see below).
 
@@ -31,7 +31,7 @@ Please report it on **[Discord](https://discord.gg/Y9Yjsn5yDP)** and attach that
 
 ## 👨‍🍳 Build it yourself
 
-The APK is built by GitHub Actions (`.github/workflows/android.yml`) whenever a tag like `v1.0.41` is pushed. The result is attached to the release as `AnyPlay-RGSS-Plugin.apk`.
+The APK is built by GitHub Actions (`.github/workflows/android.yml`) when a `rgss-module` branch update is pushed or a tagged build is requested. Branch builds upload a `Tyranor-RGSS-Runtime.apk` artifact and do not publish a Release. A manual build can also publish a Release when a release tag is supplied.
 
 The release is signed with a key that is kept in the repository secrets (`ANYPLAY_KEYSTORE_BASE64`, `ANYPLAY_STORE_PASSWORD`, `ANYPLAY_KEY_ALIAS`, `ANYPLAY_KEY_PASSWORD`). If you fork this repository without those secrets, the build still works and is signed with a temporary debug key.
 
@@ -39,6 +39,7 @@ The release is signed with a key that is kept in the repository secrets (`ANYPLA
 
 - mkxp-z and its contributors.
 - [BookerRues9](https://github.com/BookerRues9) for the Android port this project started from.
+- [001-lovely-singh](https://github.com/001-lovely-singh/AnyPlay-Plugin-RGSS) for the AnyPlay RGSS base adapted by this module branch.
 - Ruby, SDL2, OpenAL Soft and the other libraries bundled in the build keep their own licenses.
 
 This project is licensed under the **GNU General Public License v2** (see [`app/jni/mkxp-z/COPYING`](app/jni/mkxp-z/COPYING)). The complete source of every release is this repository, at the release's tag.

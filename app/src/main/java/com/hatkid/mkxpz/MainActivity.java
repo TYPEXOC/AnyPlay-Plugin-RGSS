@@ -3,6 +3,7 @@ package com.hatkid.mkxpz;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ContentResolver;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.view.KeyEvent;
@@ -11,22 +12,43 @@ import android.view.InputDevice;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Vibrator;
 import android.os.VibrationEffect;
 import android.os.storage.StorageManager;
 import android.os.storage.OnObbStateChangeListener;
 import android.net.Uri;
 import android.provider.Settings;
+import android.system.Os;
 import android.util.Log;
 import android.widget.Toast;
 import java.util.Locale;
 import java.io.File;
+import java.io.ByteArrayOutputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import org.libsdl.app.SDLActivity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import com.anyplay.overlay.AnyPlayUi;
+import com.tyranor.runtime.ui.TynRuntimeUi;
 
 public class MainActivity extends SDLActivity
 {
@@ -36,23 +58,42 @@ public class MainActivity extends SDLActivity
     private static final String TAG = "mkxp-z[Activity]";
     private static final String GAME_PATH_DEFAULT = Environment.getExternalStorageDirectory() + "/mkxp-z";
     private static String GAME_PATH = GAME_PATH_DEFAULT;
+    private static String GAME_FOLDER = GAME_PATH_DEFAULT;
+    private static String PAD_PROFILE_PATH;
     private static String OBB_MAIN_FILENAME;
     private static boolean DEBUG = false;
 
-    // ---- AnyPlay integration -------------------------------------------
-    // AnyPlay starts this activity with action "com.anyplay.rgss.LAUNCH" and the
-    // full game folder in the string extra "game_dir". When it is present we use
-    // that folder INSTEAD of the fixed /storage/emulated/0/mkxp-z one. Opening
-    // the app normally (launcher icon) still uses the default folder.
+    // ---- Runtime module launch ------------------------------------------
+    // Tyranor Next supplies a game folder plus optional URI grants. The legacy
+    // AnyPlay game_dir extra remains accepted for source compatibility.
     private static final String EXTRA_GAME_DIR = "game_dir";
+    private static final String TYN_ACTION_LAUNCH = "com.tyranor.runtime.action.LAUNCH";
+    private static final String TYN_EXTRA_FOLDER = "com.tyranor.runtime.extra.FOLDER_PATH";
+    private static final String TYN_EXTRA_TITLE = "com.tyranor.runtime.extra.GAME_TITLE";
+    private static final String TYN_EXTRA_GAME_ID = "com.tyranor.runtime.extra.GAME_ID";
+    private static final String TYN_EXTRA_TRANSLATION_URI = "com.tyranor.runtime.extra.TRANSLATION_URI";
+    private static final String TYN_EXTRA_PAD_ENABLED = "com.tyranor.runtime.extra.PAD_ENABLED";
+    private static final String TYN_EXTRA_PAD_PROFILE_URI = "com.tyranor.runtime.extra.PAD_PROFILE_URI";
+    private static final String TYN_EXTRA_PAD_PROFILE_ID = "com.tyranor.runtime.extra.PAD_PROFILE_ID";
+    private static final String TYN_EXTRA_THEME_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_PRIMARY_COLOR";
+    private static final String TYN_EXTRA_THEME_ON_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_ON_PRIMARY_COLOR";
     private boolean mCustomGameDir = false;
+    private boolean mTynLaunch = false;
+    private boolean mPadEnabled = true;
+    private int mThemePrimaryColor = 0xFF18B978;
+    private int mThemeOnPrimaryColor = 0xFFFFFFFF;
+    private String mPadProfileUri;
+    private String mTranslationUri;
+    private String mGameId;
+    private File mSessionDir;
+    private ScheduledExecutorService mTranslationSync;
 
     protected boolean mStarted = false;
 
     private StorageManager mStorageManager;
 
-    // AnyPlay overlay (gamepad, keyboard, loading spinner, Close-game dialog)
-    private AnyPlayUi mUi;
+    // TYN virtual pad, cheat panel, loading indicator, and close-game dialog
+    private TynRuntimeUi mUi;
     private static MainActivity sInstance;
 
     private void runSDLThread()
@@ -120,6 +161,28 @@ public class MainActivity extends SDLActivity
     {
         if (intent == null) return;
 
+        if (TYN_ACTION_LAUNCH.equals(intent.getAction())) {
+            mTynLaunch = true;
+            String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
+            if (dir == null || dir.isEmpty() || !new File(dir).isDirectory()) {
+                Log.e(TAG, "TYN runtime launch has no readable game folder");
+                return;
+            }
+            GAME_FOLDER = new File(dir).getAbsolutePath();
+            GAME_PATH = GAME_FOLDER;
+            mCustomGameDir = true;
+            mPadEnabled = intent.getBooleanExtra(TYN_EXTRA_PAD_ENABLED, true);
+            mPadProfileUri = intent.getStringExtra(TYN_EXTRA_PAD_PROFILE_URI);
+            mThemePrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_PRIMARY_COLOR, mThemePrimaryColor);
+            mThemeOnPrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_ON_PRIMARY_COLOR, mThemeOnPrimaryColor);
+            mTranslationUri = intent.getStringExtra(TYN_EXTRA_TRANSLATION_URI);
+            mGameId = intent.getStringExtra(TYN_EXTRA_GAME_ID);
+            String title = intent.getStringExtra(TYN_EXTRA_TITLE);
+            preparePrivateSession(title);
+            Log.i(TAG, "TYN runtime game folder: " + GAME_FOLDER + ", session: " + GAME_PATH);
+            return;
+        }
+
         String dir = intent.getStringExtra(EXTRA_GAME_DIR);
         if (dir == null || dir.isEmpty()) return;
 
@@ -130,13 +193,239 @@ public class MainActivity extends SDLActivity
         }
 
         GAME_PATH = f.getAbsolutePath();
+        GAME_FOLDER = GAME_PATH;
         mCustomGameDir = true;
-        Log.i(TAG, "Game folder from AnyPlay: " + GAME_PATH);
+        Log.i(TAG, "Game folder from legacy launcher: " + GAME_PATH);
+    }
+
+    /** Creates the private mkxp session; the original game folder is only the configured gameFolder. */
+    private void preparePrivateSession(String title)
+    {
+        try {
+            String suffix = shortHash((mGameId == null ? GAME_FOLDER : mGameId) + System.nanoTime());
+            mSessionDir = new File(getFilesDir(), "tyranor/sessions/" + suffix);
+            if (!mSessionDir.isDirectory() && !mSessionDir.mkdirs()) throw new java.io.IOException("Unable to create session folder");
+
+            File bridge = new File(mSessionDir, "tyranor_rgss_translation.rb");
+            try (InputStream input = getAssets().open("tyranor_rgss_translation.rb"); FileOutputStream output = new FileOutputStream(bridge)) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) >= 0) output.write(buffer, 0, count);
+            }
+            writeAtomically(new File(mSessionDir, "rgss_version"), String.valueOf(detectRgssVersion(GAME_FOLDER)));
+
+            File profile = new File(mSessionDir, "tyranor_pad_profile.json");
+            PAD_PROFILE_PATH = profile.getAbsolutePath();
+            if (mPadProfileUri != null) copyUriToFile(mPadProfileUri, profile, 1024 * 1024);
+
+            if (mTranslationUri != null) {
+                File table = new File(mSessionDir, "runtime_translations.hex");
+                if (!syncTranslationTable(mTranslationUri, table)) mTranslationUri = null;
+            }
+
+            JSONObject config = readGameConfig();
+            config.put("gameFolder", GAME_FOLDER);
+            config.put("rgssVersion", detectRgssVersion(GAME_FOLDER));
+            if (title != null && !title.trim().isEmpty()) config.put("windowTitle", title);
+            JSONArray scripts = stringArray(config.opt("preloadScript"));
+            String bridgePath = bridge.getAbsolutePath();
+            boolean present = false;
+            for (int i = 0; i < scripts.length(); i++) present |= bridgePath.equals(scripts.optString(i));
+            if (!present) scripts.put(bridgePath);
+            config.put("preloadScript", scripts);
+            writeAtomically(new File(mSessionDir, "mkxp.json"), config.toString());
+            GAME_PATH = mSessionDir.getAbsolutePath();
+        } catch (Exception error) {
+            Log.e(TAG, "Could not prepare private TYN session; falling back to the game folder", error);
+            GAME_PATH = GAME_FOLDER;
+        }
+    }
+
+    private JSONObject readGameConfig()
+    {
+        File source = new File(GAME_FOLDER, "mkxp.json");
+        if (source.isFile() && source.length() <= 1024 * 1024) {
+            try {
+                byte[] bytes = readBytes(source, 1024 * 1024);
+                String text = new String(bytes, StandardCharsets.UTF_8).replace("\uFEFF", "").trim();
+                return new JSONObject(text);
+            } catch (Exception error) {
+                Log.w(TAG, "Ignoring invalid game mkxp.json", error);
+            }
+        }
+        return new JSONObject();
+    }
+
+    private JSONArray stringArray(Object value)
+    {
+        JSONArray result = new JSONArray();
+        if (value instanceof JSONArray) {
+            JSONArray source = (JSONArray) value;
+            for (int i = 0; i < source.length(); i++) {
+                String item = source.optString(i, "");
+                if (!item.isEmpty()) result.put(item);
+            }
+        } else if (value instanceof String && !((String) value).isEmpty()) {
+            result.put(value);
+        }
+        return result;
+    }
+
+    private static int detectRgssVersion(String folder)
+    {
+        File data = new File(folder, "Data");
+        if (new File(data, "Actors.rxdata").isFile() || new File(folder, "Game.rgssad").isFile()) return 1;
+        if (new File(data, "Actors.rvdata").isFile() || new File(folder, "Game.rgss2a").isFile()) return 2;
+        return 3;
+    }
+
+    private static String shortHash(String value)
+    {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder out = new StringBuilder();
+            for (int i = 0; i < 12; i++) out.append(String.format(Locale.ROOT, "%02x", digest[i]));
+            return out.toString();
+        } catch (Exception error) {
+            return Long.toHexString(System.nanoTime());
+        }
+    }
+
+    private boolean copyUriToFile(String uriText, File destination, int maxBytes)
+    {
+        try (InputStream input = getContentResolver().openInputStream(Uri.parse(uriText)); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            if (input == null) return false;
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) >= 0) {
+                if (bytes.size() + count > maxBytes) return false;
+                bytes.write(buffer, 0, count);
+            }
+            writeAtomically(destination, bytes.toString("UTF-8"));
+            return true;
+        } catch (Exception error) {
+            Log.w(TAG, "Could not read granted content URI", error);
+            return false;
+        }
+    }
+
+    private boolean syncTranslationTable(String uriText, File destination)
+    {
+        try (InputStream input = getContentResolver().openInputStream(Uri.parse(uriText)); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            if (input == null) return false;
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) >= 0) {
+                if (bytes.size() + count > 16 * 1024 * 1024) return false;
+                bytes.write(buffer, 0, count);
+            }
+            JSONObject map = new JSONObject(new String(bytes.toByteArray(), StandardCharsets.UTF_8).replace("\uFEFF", ""));
+            String encoded = encodeTranslationMap(map);
+            String current = destination.isFile() ? new String(readBytes(destination, 16 * 1024 * 1024), StandardCharsets.US_ASCII) : null;
+            if (!encoded.equals(current)) writeAtomically(destination, encoded);
+            return true;
+        } catch (Exception error) {
+            Log.w(TAG, "Translation table is unavailable or invalid", error);
+            return false;
+        }
+    }
+
+    private static String encodeTranslationMap(JSONObject map)
+    {
+        StringBuilder output = new StringBuilder();
+        Iterator<String> keys = map.keys();
+        ArrayList<Charset> charsets = new ArrayList<>(Arrays.asList(
+            StandardCharsets.UTF_8,
+            Charset.forName("Shift_JIS"),
+            Charset.forName("windows-1252"),
+            Charset.forName("windows-1250"),
+            Charset.forName("windows-1251"),
+            Charset.forName("GB18030")
+        ));
+        while (keys.hasNext()) {
+            String source = keys.next();
+            Object rawTarget = map.opt(source);
+            if (!(rawTarget instanceof String)) continue;
+            String target = (String) rawTarget;
+            if (source.isEmpty() || target.isEmpty()) continue;
+            for (Charset charset : charsets) {
+                byte[] sourceBytes = encodeStrict(source, charset);
+                if (sourceBytes == null || sourceBytes.length == 0) continue;
+                byte[] targetBytes = encodeStrict(target, charset);
+                Charset targetCharset = charset;
+                if (targetBytes == null) {
+                    targetCharset = StandardCharsets.UTF_8;
+                    targetBytes = target.getBytes(StandardCharsets.UTF_8);
+                }
+                output.append(hex(sourceBytes)).append('\t').append(hex(targetBytes)).append('\t')
+                    .append(targetCharset.name()).append('\n');
+            }
+        }
+        return output.toString();
+    }
+
+    private static byte[] encodeStrict(String value, Charset charset)
+    {
+        try {
+            CharsetEncoder encoder = charset.newEncoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+            ByteBuffer bytes = encoder.encode(CharBuffer.wrap(value));
+            byte[] result = new byte[bytes.remaining()];
+            bytes.get(result);
+            return result;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String hex(byte[] bytes)
+    {
+        StringBuilder out = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) out.append(String.format(Locale.ROOT, "%02x", value & 0xff));
+        return out.toString();
+    }
+
+    private static void writeAtomically(File destination, String text) throws java.io.IOException
+    {
+        File parent = destination.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new java.io.IOException("Unable to create " + parent);
+        File temporary = new File(destination.getAbsolutePath() + ".tmp");
+        try (FileOutputStream output = new FileOutputStream(temporary)) {
+            output.write(text.getBytes(StandardCharsets.UTF_8));
+            output.getFD().sync();
+        }
+        try {
+            Os.rename(temporary.getAbsolutePath(), destination.getAbsolutePath());
+        } catch (Exception error) {
+            throw new java.io.IOException("Unable to atomically publish " + destination, error);
+        }
+    }
+
+    private static byte[] readBytes(File file, int limit) throws java.io.IOException
+    {
+        try (InputStream input = new java.io.FileInputStream(file); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) >= 0) {
+                if (output.size() + count > limit) throw new java.io.IOException("File exceeds limit: " + file);
+                output.write(buffer, 0, count);
+            }
+            return output.toByteArray();
+        }
+    }
+
+    private void startTranslationSync(final File table)
+    {
+        if (mTranslationUri == null) return;
+        mTranslationSync = Executors.newSingleThreadScheduledExecutor();
+        final String uri = mTranslationUri;
+        mTranslationSync.scheduleWithFixedDelay(() -> syncTranslationTable(uri, table), 2, 2, TimeUnit.SECONDS);
     }
 
     /**
      * The activity is singleTask. If it is still alive (user pressed Home) and
-     * AnyPlay asks for a DIFFERENT game, Ruby cannot be re-initialised in the same
+     * A launcher asks for a DIFFERENT game, Ruby cannot be re-initialised in the same
      * process, so we close and the next launch starts a fresh process.
      */
     @Override
@@ -144,8 +433,10 @@ public class MainActivity extends SDLActivity
     {
         super.onNewIntent(intent);
 
-        String dir = intent.getStringExtra(EXTRA_GAME_DIR);
-        if (dir != null && !dir.isEmpty() && !new File(dir).getAbsolutePath().equals(GAME_PATH)) {
+        String dir = TYN_ACTION_LAUNCH.equals(intent.getAction())
+            ? intent.getStringExtra(TYN_EXTRA_FOLDER)
+            : intent.getStringExtra(EXTRA_GAME_DIR);
+        if (dir != null && !dir.isEmpty() && !new File(dir).getAbsolutePath().equals(GAME_FOLDER)) {
             Toast.makeText(this, "Closing the running game. Open the new game again.", Toast.LENGTH_LONG).show();
             finish(); // onDestroy() exits the process, so the next launch is clean
         }
@@ -188,10 +479,22 @@ public class MainActivity extends SDLActivity
 
         hideSystemUi();
 
-        // AnyPlay overlay on top of the game surface
+        // TYN controls on top of the game surface
         sInstance = this;
+        if (mTynLaunch && mTranslationUri != null && mSessionDir != null) {
+            startTranslationSync(new File(mSessionDir, "runtime_translations.hex"));
+        }
         if (mLayout != null) {
-            mUi = new AnyPlayUi(this, mLayout, GAME_PATH);
+            mUi = new TynRuntimeUi(
+                this,
+                mLayout,
+                mGameId == null ? GAME_FOLDER : mGameId,
+                PAD_PROFILE_PATH,
+                mPadProfileUri,
+                mPadEnabled,
+                mThemePrimaryColor,
+                mThemeOnPrimaryColor
+            );
         }
     }
 
@@ -271,6 +574,10 @@ public class MainActivity extends SDLActivity
     @Override
     protected void onDestroy()
     {
+        if (mTranslationSync != null) {
+            mTranslationSync.shutdownNow();
+            mTranslationSync = null;
+        }
         if (mUi != null) mUi.onDestroy();
         sInstance = null;
         super.onDestroy();
@@ -284,7 +591,7 @@ public class MainActivity extends SDLActivity
     @Override
     public boolean dispatchKeyEvent(KeyEvent evt)
     {
-        // Back button: show the "Close game?" dialog (same as the AnyPlay app)
+        // Back button: show the module's close-game dialog.
         if (evt.getKeyCode() == KeyEvent.KEYCODE_BACK) {
             if (evt.getAction() == KeyEvent.ACTION_UP && mUi != null) {
                 mUi.onBack();

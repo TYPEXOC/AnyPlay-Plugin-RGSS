@@ -1,4 +1,4 @@
-package com.anyplay.engine
+package com.tyranor.runtime.input
 
 import android.os.Handler
 import android.os.Looper
@@ -19,13 +19,12 @@ object InputMapper {
 }
 
 /**
- * In the AnyPlay app this sends keys into a WebView. In the RGSS plugin it sends
- * them straight into SDL (the game engine), as if a real keyboard was used.
+ * Sends virtual-pad key events directly into SDL, as if a real keyboard was used.
  *
  * A key is always held for at least MIN_HOLD_MS, because the game only looks at
  * the keyboard once per frame (40 fps) and a very short tap could be missed.
  */
-class JsBridge {
+class TynSdlInputBridge {
     private val handler = Handler(Looper.getMainLooper())
     private val downAt = HashMap<Int, Long>()
 

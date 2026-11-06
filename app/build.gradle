@@ -8,19 +8,18 @@ android {
     compileSdk 33
 
     defaultConfig {
-        // Package name AnyPlay looks for (RgssLauncher.PLUGIN_PACKAGE).
-        // Only applicationId changes; `namespace` above must stay com.hatkid.mkxpz
-        // because the Java package / native JNI code use it.
-        applicationId "com.anyplay.rgssplugin"
+        // TYN discovers this package through the runtime-module action.
+        // Keep `namespace` as com.hatkid.mkxpz for the existing Java/JNI classes.
+        applicationId "com.tyranor.runtime.rgss"
         minSdk 23
         targetSdk 33
         versionCode 67
-        versionName "0.1.40"
+        versionName "0.1.41-tyn.1"
         archivesBaseName = "mkxp-z-$versionName"
         ndk.debugSymbolLevel = 'FULL'
     }
 
-    // AnyPlay: the signing key is NOT stored in the repo. GitHub Actions puts it in
+    // The signing key is NOT stored in the repo. GitHub Actions puts it in
     // the ANYPLAY_* environment variables from the repository secrets. Every build
     // uses the same key, so a new APK installs over the old one.
     // Without those variables (for example a local test build) Gradle uses its
@@ -41,7 +40,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            // AnyPlay: an UNSIGNED APK cannot be installed on Android ("package appears
+            // An UNSIGNED APK cannot be installed on Android ("package appears
             // to be invalid"), so sign with the fixed AnyPlay key defined above.
             signingConfig System.getenv('ANYPLAY_KEYSTORE_FILE') ? signingConfigs.anyplay : signingConfigs.debug
         }
@@ -67,7 +66,7 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    // AnyPlay overlay is written in Kotlin
+    // Runtime overlay is written in Kotlin
     kotlinOptions {
         jvmTarget = '1.8'
     }

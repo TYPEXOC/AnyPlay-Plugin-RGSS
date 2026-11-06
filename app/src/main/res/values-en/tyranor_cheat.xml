@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tyn_cheat_title">Tyranor Mod</string>
+    <string name="tyn_cheat_close">Close mod panel</string>
+    <string name="tyn_cheat_tab_quick">Quick</string>
+    <string name="tyn_cheat_tab_character">Character</string>
+    <string name="tyn_cheat_tab_exploration">Explore</string>
+    <string name="tyn_cheat_tab_battle">Battle</string>
+    <string name="tyn_cheat_section_quick">Common</string>
+    <string name="tyn_cheat_section_character">Character values</string>
+    <string name="tyn_cheat_section_exploration">Exploration</string>
+    <string name="tyn_cheat_section_battle">Battle</string>
+    <string name="tyn_cheat_unlimited_hp_mp">Unlimited HP and MP</string>
+    <string name="tyn_cheat_unlimited_tp">Unlimited TP</string>
+    <string name="tyn_cheat_unlimited_gold">Unlimited gold</string>
+    <string name="tyn_cheat_status_immunity">Status immunity</string>
+    <string name="tyn_cheat_unlimited_items">Unlimited items</string>
+    <string name="tyn_cheat_noclip">Walk through walls</string>
+    <string name="tyn_cheat_no_encounters">No random encounters</string>
+    <string name="tyn_cheat_speed_boost">Move faster</string>
+    <string name="tyn_cheat_fast_text">Fast text</string>
+    <string name="tyn_cheat_one_hit">One-hit kill</string>
+    <string name="tyn_cheat_invincibility">Party invincibility</string>
+    <string name="tyn_cheat_always_crit">Always critical</string>
+    <string name="tyn_cheat_escape_always">Always escape</string>
+    <string name="tyn_cheat_free_skill">Free skills</string>
+    <string name="tyn_cheat_gold">Gold</string>
+    <string name="tyn_cheat_speed">Movement multiplier</string>
+    <string name="tyn_cheat_level">Level</string>
+    <string name="tyn_cheat_exp">Experience</string>
+    <string name="tyn_cheat_attack">Attack</string>
+    <string name="tyn_cheat_defense">Defense</string>
+    <string name="tyn_cheat_magic_attack">Magic attack</string>
+    <string name="tyn_cheat_magic_defense">Magic defense</string>
+    <string name="tyn_cheat_agility">Agility</string>
+    <string name="tyn_cheat_luck">Luck</string>
+    <string name="tyn_cheat_max_exp">Max experience</string>
+    <string name="tyn_cheat_full_inventory">Fill inventory</string>
+    <string name="tyn_cheat_instant_win">Win battle</string>
+    <string name="tyn_cheat_value_hint">Enter a value</string>
+    <string name="tyn_cheat_apply">Apply</string>
+    <string name="tyn_cheat_run">Run</string>
+    <string name="tyn_cheat_applied">Applied</string>
+</resources>

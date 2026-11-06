@@ -1,0 +1,18 @@
+{
+  "protocol": 1,
+  "label": "TYN RGSS Runtime",
+  "scan": {
+    "match": "any",
+    "markers": [
+      "Data/MapInfos.rxdata",
+      "Data/MapInfos.rvdata",
+      "Data/MapInfos.rvdata2",
+      "Data/Actors.rxdata",
+      "Data/Actors.rvdata",
+      "Data/Actors.rvdata2",
+      "Game.rgssad",
+      "Game.rgss2a",
+      "Game.rgss3a"
+    ]
+  }
+}
