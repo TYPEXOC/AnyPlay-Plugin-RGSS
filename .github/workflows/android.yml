@@ -62,6 +62,8 @@ jobs:
       - name: Set up legacy Ruby build hosts
         shell: bash
         run: |
+          curl -sSL https://rvm.io/mpapis.asc | gpg --import -
+          curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -
           curl -sSL https://get.rvm.io | bash -s stable --autolibs=disable --ignore-dotfiles
           source "$HOME/.rvm/scripts/rvm"
           rvm install 1.8.7 --autolibs=disable --with-out-ext=openssl,readline,gdbm,dbm
