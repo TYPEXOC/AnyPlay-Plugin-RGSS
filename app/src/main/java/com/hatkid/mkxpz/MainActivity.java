@@ -76,6 +76,7 @@ public class MainActivity extends SDLActivity
     private static final String TYN_EXTRA_PAD_PROFILE_URI = "com.tyranor.runtime.extra.PAD_PROFILE_URI";
     private static final String TYN_EXTRA_PAD_PROFILE_ID = "com.tyranor.runtime.extra.PAD_PROFILE_ID";
     private static final String TYN_EXTRA_RUBY_RUNTIME = "com.tyranor.runtime.extra.RUBY_RUNTIME";
+    private static final String TYN_EXTRA_RGSS_OPTIONS = "com.tyranor.runtime.extra.RGSS_OPTIONS";
     private static final String TYN_EXTRA_THEME_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_PRIMARY_COLOR";
     private static final String TYN_EXTRA_THEME_ON_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_ON_PRIMARY_COLOR";
     private static final String[] RUBY_187_LIBRARIES = {
@@ -91,11 +92,13 @@ public class MainActivity extends SDLActivity
     private boolean mCustomGameDir = false;
     private boolean mTynLaunch = false;
     private boolean mPadEnabled = true;
+    private boolean mCheatsEnabled = true;
     private int mThemePrimaryColor = 0xFF18B978;
     private int mThemeOnPrimaryColor = 0xFFFFFFFF;
     private String mPadProfileUri;
     private String mTranslationUri;
     private String mGameId;
+    private JSONObject mTynRgssOptions;
     private File mSessionDir;
     private ScheduledExecutorService mTranslationSync;
 
@@ -185,6 +188,14 @@ public class MainActivity extends SDLActivity
             GAME_PATH = GAME_FOLDER;
             mCustomGameDir = true;
             mPadEnabled = intent.getBooleanExtra(TYN_EXTRA_PAD_ENABLED, true);
+            try {
+                String options = intent.getStringExtra(TYN_EXTRA_RGSS_OPTIONS);
+                mTynRgssOptions = options == null ? null : new JSONObject(options);
+                if (mTynRgssOptions != null) mCheatsEnabled = mTynRgssOptions.optBoolean("cheatsEnabled", true);
+            } catch (Exception error) {
+                Log.w(TAG, "Ignoring invalid TYN RGSS options", error);
+                mTynRgssOptions = null;
+            }
             mPadProfileUri = intent.getStringExtra(TYN_EXTRA_PAD_PROFILE_URI);
             mThemePrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_PRIMARY_COLOR, mThemePrimaryColor);
             mThemeOnPrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_ON_PRIMARY_COLOR, mThemeOnPrimaryColor);
@@ -248,6 +259,7 @@ public class MainActivity extends SDLActivity
             config.put("gameFolder", GAME_FOLDER);
             config.put("rgssVersion", detectRgssVersion(GAME_FOLDER));
             if (title != null && !title.trim().isEmpty()) config.put("windowTitle", title);
+            applyTynRgssOptions(config);
             JSONArray scripts = stringArray(config.opt("preloadScript"));
             String bridgePath = bridge.getAbsolutePath();
             boolean present = false;
@@ -259,6 +271,31 @@ public class MainActivity extends SDLActivity
         } catch (Exception error) {
             Log.e(TAG, "Could not prepare private TYN session; falling back to the game folder", error);
             GAME_PATH = GAME_FOLDER;
+        }
+    }
+
+    /** Applies only options supported by this mkxp-z build to its private session config. */
+    private void applyTynRgssOptions(JSONObject config) throws Exception
+    {
+        JSONObject options = mTynRgssOptions;
+        if (options == null) return;
+        String[] booleanKeys = {"smoothScaling", "vsync", "frameSkip", "solidFonts", "pathCache"};
+        for (String key : booleanKeys) {
+            if (options.has(key)) config.put(key, options.optBoolean(key));
+        }
+        String screenSize = options.optString("screenSize", "auto");
+        if ("auto".equals(screenSize)) return;
+        String[] supportedSizes = {
+            "512x384", "512x768", "544x416", "640x480", "800x600",
+            "1024x768", "1280x720", "1280x960", "1920x1080"
+        };
+        for (String supported : supportedSizes) {
+            if (supported.equals(screenSize)) {
+                String[] dimensions = supported.split("x");
+                config.put("defScreenW", Integer.parseInt(dimensions[0]));
+                config.put("defScreenH", Integer.parseInt(dimensions[1]));
+                break;
+            }
         }
     }
 
@@ -514,7 +551,8 @@ public class MainActivity extends SDLActivity
                 mPadProfileUri == null ? null : Uri.parse(mPadProfileUri),
                 mPadEnabled,
                 mThemePrimaryColor,
-                mThemeOnPrimaryColor
+                mThemeOnPrimaryColor,
+                mCheatsEnabled
             );
         }
     }

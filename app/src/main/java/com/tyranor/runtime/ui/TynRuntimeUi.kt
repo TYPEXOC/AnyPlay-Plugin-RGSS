@@ -43,12 +43,13 @@ class TynRuntimeUi(
     padEnabled: Boolean,
     private val primaryColor: Int,
     private val onPrimaryColor: Int,
+    cheatsEnabled: Boolean,
 ) {
     private val density = activity.resources.displayMetrics.density
     private val root = FrameLayout(activity)
     private val loading = FrameLayout(activity)
     private val controller: TyranorPadController
-    private val cheats = TyranorCheatController(activity, gameKey)
+    private val cheats = if (cheatsEnabled) TyranorCheatController(activity, gameKey) else null
     private var cheatMenu: TyranorCheatPanel? = null
     private var dialog: Dialog? = null
     private var loadingGone = false
@@ -82,27 +83,29 @@ class TynRuntimeUi(
         loading.addView(box, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         root.addView(loading, FrameLayout.LayoutParams(-1, -1))
 
-        val cheatButton = TextView(activity).apply {
-            text = "TYN"
-            contentDescription = activity.getString(R.string.tyn_runtime_cheat_button)
-            gravity = Gravity.CENTER
-            setTextColor(onPrimaryColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(primaryColor)
+        if (cheatsEnabled) {
+            val cheatButton = TextView(activity).apply {
+                text = "TYN"
+                contentDescription = activity.getString(R.string.tyn_runtime_cheat_button)
+                gravity = Gravity.CENTER
+                setTextColor(onPrimaryColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(primaryColor)
+                }
+                elevation = 8f * density
+                setOnClickListener { openCheats() }
             }
-            elevation = 8f * density
-            setOnClickListener { openCheats() }
+            root.addView(
+                cheatButton,
+                FrameLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt(), Gravity.TOP or Gravity.END).apply {
+                    topMargin = (16 * density).toInt()
+                    marginEnd = (16 * density).toInt()
+                },
+            )
         }
-        root.addView(
-            cheatButton,
-            FrameLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt(), Gravity.TOP or Gravity.END).apply {
-                topMargin = (16 * density).toInt()
-                marginEnd = (16 * density).toInt()
-            },
-        )
     }
 
     /** Called (from any thread) when the game has drawn its first frame. */
@@ -125,7 +128,8 @@ class TynRuntimeUi(
     }
 
     private fun openCheats() {
-        val menu = cheatMenu ?: TyranorCheatPanel(activity, root, cheats, primaryColor, onPrimaryColor).also { cheatMenu = it }
+        val controller = cheats ?: return
+        val menu = cheatMenu ?: TyranorCheatPanel(activity, root, controller, primaryColor, onPrimaryColor).also { cheatMenu = it }
         controller.releaseAllKeys()
         menu.show()
     }
@@ -137,7 +141,7 @@ class TynRuntimeUi(
     fun onDestroy() {
         dialog?.dismiss()
         cheatMenu?.dismiss()
-        cheats.shutdown()
+        cheats?.shutdown()
         controller.shutdown()
     }
 
