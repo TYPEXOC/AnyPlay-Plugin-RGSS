@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.CheckBox
+import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -233,7 +234,7 @@ class TyranorCheatPanel(
         addRow(row)
     }
 
-    private fun toggleChanged(toggle: TyranorCheatToggle, button: CheckBox, checked: Boolean) {
+    private fun toggleChanged(toggle: TyranorCheatToggle, button: CompoundButton, checked: Boolean) {
         button.isEnabled = false
         manager.setEnabled(toggle, checked) { message ->
             activity.runOnUiThread {
