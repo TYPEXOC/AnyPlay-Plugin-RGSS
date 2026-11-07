@@ -72,6 +72,11 @@ static void mriBindingExecute();
 static void mriBindingTerminate();
 static void mriBindingReset();
 
+static bool tynVerboseRuntimeLogs() {
+    const char *enabled = std::getenv("TYN_RGSS_VERBOSE_LOG");
+    return enabled && enabled[0] == '1' && enabled[1] == '\0';
+}
+
 ScriptBinding scriptBindingImpl = {
 	mriBindingExecute,
 	mriBindingTerminate,
@@ -774,19 +779,25 @@ static void processReset() {
     shState->graphics().repaintWait(shState->rtData().rqResetFinish, false);
 }
 
-static void runCustomScript(const std::string &filename);
+static bool runCustomScript(const std::string &filename, const char *phase);
+static void logRubyExecutionFailure(const char *phase, const std::string &name, int state);
 
 RB_METHOD(mriRgssMain) {
     RB_UNUSED_PARAM;
 
     /* Postload scripts run after the game's script pack has been loaded. */
     const Config &conf = shState->rtData().config;
+    if (tynVerboseRuntimeLogs())
+        Debug() << "[ruby] rgss_main entered; postload script count:" << conf.postloadScripts.size();
     for (std::vector<std::string>::const_iterator i = conf.postloadScripts.begin();
          i != conf.postloadScripts.end(); ++i) {
         if (shState->rtData().rqTerm)
             break;
-        runCustomScript(*i);
+        if (!runCustomScript(*i, "postload"))
+            break;
     }
+    if (tynVerboseRuntimeLogs())
+        Debug() << "[ruby] entering RGSS game main callback loop";
     
     while (true) {
         VALUE exc = Qnil;
@@ -807,6 +818,8 @@ RB_METHOD(mriRgssMain) {
         else
             rb_exc_raise(exc);
     }
+    if (tynVerboseRuntimeLogs())
+        Debug() << "[ruby] RGSS game main callback loop returned";
     
     return Qnil;
 }
@@ -875,17 +888,58 @@ static VALUE evalString(VALUE string, VALUE filename, int *state) {
     return rb_protect((VALUE(*)(VALUE))evalHelper, (VALUE)&arg, state);
 }
 
-static void runCustomScript(const std::string &filename) {
+static VALUE currentRubyException() {
+#if RAPI_FULL > 187
+    return rb_errinfo();
+#else
+    return rb_gv_get("$!");
+#endif
+}
+
+static void logRubyExecutionFailure(const char *phase, const std::string &name, int state) {
+    VALUE exc = currentRubyException();
+    Debug() << "[ruby] execution failed; phase:" << phase << "script:" << name << "protect state:" << state;
+    if (NIL_P(exc))
+        return;
+
+    VALUE className = rb_class_path(rb_obj_class(exc));
+    VALUE message = rb_funcall2(exc, rb_intern("message"), 0, NULL);
+    Debug() << "[ruby] exception:" << RSTRING_PTR(className) << ":" << RSTRING_PTR(message);
+
+    VALUE backtrace = rb_funcall2(exc, rb_intern("backtrace"), 0, NULL);
+    if (!RB_TYPE_P(backtrace, RUBY_T_ARRAY))
+        return;
+    long length = RARRAY_LEN(backtrace);
+    if (length > 12)
+        length = 12;
+    for (long i = 0; i < length; ++i) {
+        VALUE line = rb_ary_entry(backtrace, i);
+        if (RB_TYPE_P(line, RUBY_T_STRING))
+            Debug() << "[ruby]   at" << RSTRING_PTR(line);
+    }
+}
+
+static bool runCustomScript(const std::string &filename, const char *phase) {
     std::string scriptData;
-	Debug() << "Loading configured Ruby script:" << filename;
+    if (tynVerboseRuntimeLogs())
+        Debug() << "[ruby] begin" << phase << "script:" << filename;
     
     if (!readFileSDL(filename.c_str(), scriptData)) {
+        Debug() << "[ruby] could not read" << phase << "script:" << filename;
         showMsg(std::string("Unable to open '") + filename + "'");
-        return;
+        return false;
     }
     
+    int state = 0;
     evalString(newStringUTF8(scriptData.c_str(), scriptData.size()),
-               newStringUTF8(filename.c_str(), filename.size()), NULL);
+               newStringUTF8(filename.c_str(), filename.size()), &state);
+    if (state) {
+        logRubyExecutionFailure(phase, filename, state);
+        return false;
+    }
+    if (tynVerboseRuntimeLogs())
+        Debug() << "[ruby] completed" << phase << "script:" << filename << "bytes:" << scriptData.size();
+    return true;
 }
 
 VALUE kernelLoadDataInt(const char *filename, bool rubyExc, bool raw);
@@ -911,11 +965,15 @@ static void runRMXPScripts(BacktraceData &btData) {
     const std::string &scriptPack = conf.game.scripts;
     
     if (scriptPack.empty()) {
+        Debug() << "[ruby] no game script pack configured";
         showMsg("No game scripts specified (missing Game.ini?)");
         return;
     }
     
+    if (tynVerboseRuntimeLogs())
+        Debug() << "[ruby] opening game script pack:" << scriptPack;
     if (!shState->fileSystem().exists(scriptPack.c_str())) {
+        Debug() << "[ruby] game script pack does not exist:" << scriptPack;
         showMsg("Unable to open '" + scriptPack + "'");
         return;
     }
@@ -927,11 +985,13 @@ static void runRMXPScripts(BacktraceData &btData) {
     try {
         scriptArray = kernelLoadDataInt(scriptPack.c_str(), false, false);
     } catch (const Exception &e) {
+        Debug() << "[ruby] failed to deserialize game script pack:" << scriptPack << e.msg;
         showMsg(std::string("Failed to read script data: ") + e.msg);
         return;
     }
     
     if (!RB_TYPE_P(scriptArray, RUBY_T_ARRAY)) {
+        Debug() << "[ruby] deserialized game script pack is not an Array:" << scriptPack;
         showMsg("Failed to read script data");
         return;
     }
@@ -939,7 +999,8 @@ static void runRMXPScripts(BacktraceData &btData) {
     rb_gv_set("$RGSS_SCRIPTS", scriptArray);
     
     long scriptCount = RARRAY_LEN(scriptArray);
-	Debug() << "Loaded game script pack:" << scriptPack << "entries:" << scriptCount;
+    Debug() << "[ruby] loaded game script pack:" << scriptPack << "entries:" << scriptCount;
+    long decodedCount = 0;
     
     std::string decodeBuffer;
     decodeBuffer.resize(0x1000);
@@ -952,6 +1013,8 @@ static void runRMXPScripts(BacktraceData &btData) {
         
         VALUE scriptName = rb_ary_entry(script, 1);
         VALUE scriptString = rb_ary_entry(script, 2);
+        if (tynVerboseRuntimeLogs())
+            Debug() << "[ruby] decompressing game script" << (i + 1) << "/" << scriptCount << ":" << RSTRING_PTR(scriptName);
         
         int result = Z_OK;
         unsigned long bufferLen;
@@ -979,23 +1042,32 @@ static void runRMXPScripts(BacktraceData &btData) {
             static char buffer[256];
             snprintf(buffer, sizeof(buffer), "Error decoding script %ld: '%s'", i,
                      RSTRING_PTR(scriptName));
-            
+            Debug() << "[ruby] script decompression failed; index:" << i << "name:" << RSTRING_PTR(scriptName) << "zlib result:" << result;
             showMsg(buffer);
             
             break;
         }
         
         rb_ary_store(script, 3, rb_utf8_str_new_cstr(decodeBuffer.c_str()));
+        ++decodedCount;
     }
+    if (tynVerboseRuntimeLogs())
+        Debug() << "[ruby] script pack decompression complete:" << decodedCount << "/" << scriptCount;
     
     /* Execute preloaded scripts */
+    if (tynVerboseRuntimeLogs())
+        Debug() << "[ruby] starting preload scripts; count:" << conf.preloadScripts.size();
     for (std::vector<std::string>::const_iterator i = conf.preloadScripts.begin();
-         i != conf.preloadScripts.end(); ++i)
-        runCustomScript(*i);
+         i != conf.preloadScripts.end(); ++i) {
+        if (!runCustomScript(*i, "preload"))
+            break;
+    }
     
-    VALUE exc = rb_gv_get("$!");
+    VALUE exc = currentRubyException();
     if (exc != Qnil)
         return;
+    if (tynVerboseRuntimeLogs())
+        Debug() << "[ruby] preload scripts complete";
     
 #ifdef __ANDROID__
     // AnyPlay: old RPG Maker games were written for Ruby 1.8. Before running anything,
@@ -1203,9 +1275,13 @@ lambda { |s, name|
 )RB");
             rb_gc_register_address(&compatFix);
         }
+        if (tynVerboseRuntimeLogs())
+            Debug() << "[ruby] Ruby 1.8 compatibility prepass begin; scripts:" << scriptCount;
         rb_eval_string("$__anyplay_syntax_errors = []");
         fixedScripts = rb_ary_new();
         for (long i = 0; i < scriptCount; ++i) {
+            if (tynVerboseRuntimeLogs() && (i == 0 || (i + 1) % 25 == 0 || i + 1 == scriptCount))
+                Debug() << "[ruby] compatibility prepass progress:" << (i + 1) << "/" << scriptCount;
             VALUE script = rb_ary_entry(scriptArray, i);
             VALUE scriptDecoded = rb_ary_entry(script, 3);
             VALUE string =
@@ -1222,6 +1298,10 @@ lambda { |s, name|
             VALUE fixed = rb_funcall2(compatFix, rb_intern("call"), 2, args);
             rb_ary_push(fixedScripts, fixed == Qnil ? string : fixed);
         }
+        VALUE syntaxErrors = rb_gv_get("$__anyplay_syntax_errors");
+        long syntaxErrorCount = RB_TYPE_P(syntaxErrors, RUBY_T_ARRAY) ? RARRAY_LEN(syntaxErrors) : 0;
+        if (tynVerboseRuntimeLogs())
+            Debug() << "[ruby] Ruby 1.8 compatibility prepass complete; syntax errors:" << syntaxErrorCount;
         rb_eval_string(R"RB(
 begin
   old = "AnyPlay_script_errors.txt"
@@ -1235,6 +1315,8 @@ end
 #endif
 
     while (true) {
+        if (tynVerboseRuntimeLogs())
+            Debug() << "[ruby] game script execution pass begin; count:" << scriptCount;
         for (long i = 0; i < scriptCount; ++i) {
             VALUE script = rb_ary_entry(scriptArray, i);
             VALUE scriptDecoded = rb_ary_entry(script, 3);
@@ -1253,6 +1335,8 @@ end
             
             fname = newStringUTF8(buf, len);
             btData.scriptNames.insert(buf, scriptName);
+            if (tynVerboseRuntimeLogs())
+                Debug() << "[ruby] executing game script" << (i + 1) << "/" << scriptCount << ":" << scriptName;
             
             
             // if the script name starts with |s|, only execute
@@ -1290,14 +1374,24 @@ end
             }
 #endif
             evalString(string, fname, &state);
-            if (state)
+            if (state) {
+                std::string failedName = scriptName ? scriptName : buf;
+                logRubyExecutionFailure("game", failedName, state);
                 break;
+            }
+            if (tynVerboseRuntimeLogs() && ((i + 1) % 25 == 0 || i + 1 == scriptCount))
+                Debug() << "[ruby] game script execution progress:" << (i + 1) << "/" << scriptCount;
         }
         
-        VALUE exc = rb_gv_get("$!");
-        if (rb_obj_class(exc) != getRbData()->exc[Reset])
+        VALUE exc = currentRubyException();
+        if (rb_obj_class(exc) != getRbData()->exc[Reset]) {
+            if (tynVerboseRuntimeLogs() && NIL_P(exc))
+                Debug() << "[ruby] game script execution pass complete";
             break;
+        }
         
+        if (tynVerboseRuntimeLogs())
+            Debug() << "[ruby] game script execution requested RGSS reset";
         processReset();
     }
 }
@@ -1528,12 +1622,15 @@ static void mriBindingExecute() {
     BacktraceData btData;
     
     mriBindingInit();
+    Debug() << "[ruby] RGSS binding registration complete";
     
 #ifdef __ANDROID__
     // AnyPlay: RPG Maker XP/VX/Ace ship with Zlib (and a few other standard
     // libraries) already loaded, so games use them without "require".
     // Load them up front; if one is missing, just carry on.
     {
+        if (tynVerboseRuntimeLogs())
+            Debug() << "[ruby] Android Ruby standard-library compatibility bootstrap begin";
         int reqState = 0;
         rb_eval_string_protect(R"RB(
 ['zlib', 'stringio'].each { |l| begin; require l; rescue LoadError; end }
@@ -1561,15 +1658,19 @@ Fixnum = Integer unless defined?(Fixnum)
 Bignum = Integer unless defined?(Bignum)
 )RB", &reqState);
         if (reqState) {
+            logRubyExecutionFailure("Android standard-library bootstrap", "embedded compatibility code", reqState);
 #if RAPI_FULL > 187
             rb_set_errinfo(Qnil);
 #else
             ruby_errinfo = Qnil;
 #endif
-        }
+        } else if (tynVerboseRuntimeLogs())
+            Debug() << "[ruby] Android Ruby standard-library compatibility bootstrap complete";
 
         // AnyPlay: safe dispose, full-screen fit, tap-to-walk (see anyplay_prelude.rb)
         {
+            if (tynVerboseRuntimeLogs())
+                Debug() << "[ruby] Android RGSS compatibility prelude begin";
             int preState = 0;
             rb_eval_string_protect(R"RB(# AnyPlay RGSS plugin: runs before the game's own scripts (Android only).
 # 1) Plane/Sprite/... #dispose no longer crashes for subclasses that skip `super` in initialize
@@ -2181,6 +2282,14 @@ module AnyPlayLog
       end
     rescue Exception
     end
+  end
+end
+
+if ENV["TYN_RGSS_VERBOSE_LOG"] == "1"
+  begin
+    AnyPlayLog.start
+    AnyPlayLog.write("Verbose startup diagnostics enabled; embedded Ruby prelude completed")
+  rescue Exception
   end
 end
 
@@ -3863,19 +3972,21 @@ class << Graphics
   end
 end)RB", &preState);
             if (preState) {
+                logRubyExecutionFailure("Android RGSS compatibility prelude", "embedded compatibility code", preState);
 #if RAPI_FULL > 187
                 rb_set_errinfo(Qnil);
 #else
                 ruby_errinfo = Qnil;
 #endif
-            }
+            } else if (tynVerboseRuntimeLogs())
+                Debug() << "[ruby] Android RGSS compatibility prelude complete";
         }
     }
 #endif
     
     std::string &customScript = conf.customScript;
     if (!customScript.empty())
-        runCustomScript(customScript);
+        runCustomScript(customScript, "custom");
     else
         runRMXPScripts(btData);
     
@@ -3885,6 +3996,7 @@ end)RB", &preState);
     VALUE exc = rb_gv_get("$!");
 #endif
     if (!NIL_P(exc) && !rb_obj_is_kind_of(exc, rb_eSystemExit)) {
+        Debug() << "[ruby] unhandled exception reached the engine error handler";
 #ifdef __ANDROID__
         // AnyPlay: write the final error (with its call chain) to AnyPlayLog.txt first
         rb_gv_set("$__anyplay_fatal", exc);

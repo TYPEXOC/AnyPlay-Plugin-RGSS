@@ -165,6 +165,13 @@ jobs:
             --no-daemon \
             --stacktrace
 
+      - name: Build diagnostic APK
+        run: |
+          ./gradlew assembleDebug \
+            -Pandroid.suppressUnsupportedCompileSdk=34 \
+            --no-daemon \
+            --stacktrace
+
       # ── 12b. Pick the universal APK (64-bit + 32-bit) and give it its final name
       - name: Name the APK
         run: |
@@ -174,14 +181,24 @@ jobs:
           cp "$APK" Tyranor-RGSS-Runtime.apk
           echo "APK_PATH=Tyranor-RGSS-Runtime.apk" >> "$GITHUB_ENV"
 
+      - name: Name the diagnostic APK
+        run: |
+          find app/build/outputs/apk/debug -name "*.apk"
+          APK=$(find app/build/outputs/apk/debug -name "*universal*.apk" | head -1)
+          if [ -z "$APK" ]; then APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1); fi
+          cp "$APK" Tyranor-RGSS-Debug.apk
+          echo "DEBUG_APK_PATH=Tyranor-RGSS-Debug.apk" >> "$GITHUB_ENV"
+
       - name: Verify Ruby runtimes in APK
         run: |
-          for abi in arm64-v8a armeabi-v7a; do
-            for library in libruby.so libruby187.so libruby193.so; do
-              unzip -Z1 "$APK_PATH" | grep -Fxq "lib/$abi/$library" || {
-                echo "Missing lib/$abi/$library from APK"
-                exit 1
-              }
+          for apk in "$APK_PATH" "$DEBUG_APK_PATH"; do
+            for abi in arm64-v8a armeabi-v7a; do
+              for library in libruby.so libruby187.so libruby193.so; do
+                unzip -Z1 "$apk" | grep -Fxq "lib/$abi/$library" || {
+                  echo "Missing lib/$abi/$library from $apk"
+                  exit 1
+                }
+              done
             done
           done
 
@@ -191,6 +208,13 @@ jobs:
         with:
           name: Tyranor-RGSS-Runtime
           path: ${{ env.APK_PATH }}
+          retention-days: 30
+
+      - name: Upload diagnostic APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tyranor-RGSS-Debug
+          path: ${{ env.DEBUG_APK_PATH }}
           retention-days: 30
 
       # ── 14. Determine release tag ─────────────────────────────────────────────

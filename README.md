@@ -37,7 +37,7 @@ Please report it on **[Discord](https://discord.gg/Y9Yjsn5yDP)** and attach that
 
 ## 👨‍🍳 Build it yourself
 
-The APK is built by GitHub Actions (`.github/workflows/android.yml`) when a `rgss-module` branch update is pushed or a tagged build is requested. Branch builds upload a `Tyranor-RGSS-Runtime.apk` artifact and do not publish a Release. A manual build can also publish a Release when a release tag is supplied.
+The APK is built by GitHub Actions (`.github/workflows/android.yml`) when a `rgss-module` branch update is pushed or a tagged build is requested. Branch builds upload `Tyranor-RGSS-Runtime.apk` and a separate `Tyranor-RGSS-Debug.apk` artifact and do not publish a Release. The Debug APK enables verbose startup logs by default, including Ruby bootstrap, preload scripts, script-pack decoding, compatibility checks, and the name/index of each game script as it executes. It does not force the game's own DEBUG or TEST mode. Install the Debug APK to reproduce a startup issue, then export all runtime logs from its launcher screen. A manual build can also publish a Release when a release tag is supplied.
 
 The release is signed with a key that is kept in the repository secrets (`ANYPLAY_KEYSTORE_BASE64`, `ANYPLAY_STORE_PASSWORD`, `ANYPLAY_KEY_ALIAS`, `ANYPLAY_KEY_PASSWORD`). If you fork this repository without those secrets, the build still works and is signed with a temporary debug key.
 

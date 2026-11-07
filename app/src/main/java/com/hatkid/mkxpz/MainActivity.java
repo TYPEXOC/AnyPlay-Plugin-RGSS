@@ -278,6 +278,11 @@ public class MainActivity extends SDLActivity
             try {
                 Os.setenv("TYN_RGSS_MISSING_RESOURCE_HINT", getString(R.string.tyn_runtime_missing_resource_hint), true);
                 Os.setenv("TYN_RGSS_MANAGED_RTP", "1", true);
+                boolean verboseDiagnostics = BuildConfig.TYN_VERBOSE_DIAGNOSTICS || mDebugEnabled;
+                Os.setenv("TYN_RGSS_VERBOSE_LOG", verboseDiagnostics ? "1" : "0", true);
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Verbose runtime diagnostics enabled=" + verboseDiagnostics
+                        + " (diagnostic build=" + BuildConfig.TYN_VERBOSE_DIAGNOSTICS + ")");
             } catch (Exception error) {
                 TynRuntimeDiagnostics.append(mSessionDir, "Could not set TYN runtime environment flags", error);
             }
@@ -725,7 +730,7 @@ public class MainActivity extends SDLActivity
         try {
             ActivityInfo actInfo = getPackageManager().getActivityInfo(this.getComponentName(), PackageManager.GET_META_DATA);
             DEBUG = actInfo.metaData.getBoolean("mkxp_debug") || mDebugEnabled;
-            TynRuntimeDiagnostics.append(mSessionDir, "Debug logging configured; enabled=" + DEBUG);
+            TynRuntimeDiagnostics.append(mSessionDir, "Game debug/test mode configured; enabled=" + DEBUG);
         } catch (PackageManager.NameNotFoundException e) {
             Log.w(TAG, "Failed to set debug flag: " + e);
             e.printStackTrace();

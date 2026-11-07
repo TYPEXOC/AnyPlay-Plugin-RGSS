@@ -39,6 +39,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
+            buildConfigField "boolean", "TYN_VERBOSE_DIAGNOSTICS", "false"
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             // An UNSIGNED APK cannot be installed on Android ("package appears
             // to be invalid"), so sign with the fixed AnyPlay key defined above.
@@ -48,6 +49,10 @@ android {
         debug {
             debuggable true
             jniDebuggable true
+            buildConfigField "boolean", "TYN_VERBOSE_DIAGNOSTICS", "true"
+            // When CI has the private signing key, let the diagnostic APK update
+            // the installed runtime instead of requiring an uninstall first.
+            signingConfig System.getenv('ANYPLAY_KEYSTORE_FILE') ? signingConfigs.anyplay : signingConfigs.debug
         }
     }
 
