@@ -1,0 +1,11 @@
+diff --git a/Makefile.in b/Makefile.in
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -123,6 +123,7 @@ $(LIBRUBY_SO):
+ 
+ fake.rb:	Makefile
+ 		@echo ' \
++		require "rbconfig"; \
+ 		class Object; \
+ 		  CROSS_COMPILING = RUBY_PLATFORM; \
+ 		  remove_const :RUBY_PLATFORM; \
