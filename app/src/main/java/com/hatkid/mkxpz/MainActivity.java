@@ -43,6 +43,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import org.libsdl.app.SDLActivity;
@@ -380,7 +381,7 @@ public class MainActivity extends SDLActivity
     }
 
     /** Uses the RTP directory supplied by TYN and rejects stale paths from other hosts. */
-    private void configureRtpPaths(JSONObject config)
+    private void configureRtpPaths(JSONObject config) throws JSONException
     {
         int rgssVersion = detectRgssVersion(GAME_FOLDER);
         String versionFolder = rgssVersion == 1 ? "RPGXP" : rgssVersion == 2 ? "RPGVX" : "RPGVXACE";
