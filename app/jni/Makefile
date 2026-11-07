@@ -134,6 +134,8 @@ RUBY_BASE_CONFIGURE_ARGS := \
 	--without-gmp
 RUBY_CONFIGURE_ARGS := $(RUBY_BASE_CONFIGURE_ARGS) \
 	--with-out-ext=readline,dbm,gdbm,win32,win32ole,fiddle
+RUBY_187_CONFIGURE_ARGS := $(RUBY_BASE_CONFIGURE_ARGS) \
+	--without-ext=readline,dbm,gdbm,win32,win32ole,fiddle,bigdecimal,Win32API,curses,tk
 RUBY_193_CONFIGURE_ARGS := $(RUBY_BASE_CONFIGURE_ARGS) \
 	--with-out-ext=readline,dbm,gdbm,win32,win32ole,fiddle,ripper
 
@@ -262,7 +264,7 @@ ruby187/Makefile: ruby187/configure $(BUILD_PREFIX)/bin/bison $(HOST_RUBY)
 	PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)" LDSHARED="$(CC) -shared" \
 	./configure --host=$(HOST_187) --prefix="$(BUILD_PREFIX)" \
 	ac_cv_header_pwd_h=no ac_cv_header_langinfo_h=no \
-	$(RUBY_CONFIGURE_ARGS) --program-suffix=187
+	$(RUBY_187_CONFIGURE_ARGS) --program-suffix=187
 
 ruby187/configure: ruby187/configure.in
 	cd ruby187; $(RUBY_187_ENV) && autoreconf -i

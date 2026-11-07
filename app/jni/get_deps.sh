@@ -148,6 +148,7 @@ fi
 cd ruby193
 # Ruby 1.9.3's mkconfig generator still uses TRUE under modern host Ruby.
 apply_patch_once ../patches/ruby193-host-ruby-compat.patch
+apply_patch_once ../patches/ruby193-host-install-compat.patch
 python3 ../prepare-ruby193.py .
 
 # Keep the upstream hostname-verification fix for this end-of-life Ruby branch.
