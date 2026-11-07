@@ -31,6 +31,8 @@ New versions install over the old one. Nothing needs to be uninstalled.
 
 When something goes wrong, open the in-game TYN panel and tap **Logs** in its header. If the game has already closed, open **TYN RGSS** from Android's app drawer and tap **Export all runtime logs**. The ZIP includes every saved game session, each session's startup timeline, native engine log, and Ruby error log when available, so you can test several XP/VX/VX Ace games and send one complete archive. It identifies sessions by game title and launch time, but redacts the game and private session roots and does not copy game assets/translations.
 
+RTP files stay in the existing shared `/JoiPlay/RTP` directory for compatibility with previously imported assets, but the TYN app passes that location directly to this module. The module ignores stale MTool/JoiPlay paths embedded in mkxp configuration and unavailable paths, and its runtime-supplied RTP list takes precedence over persisted mkxp preferences. Missing Ruby resources include a hint to check the game files or import the matching RTP in TYN's RPG Maker settings. Native diagnostics record which mkxp configuration files were read and the effective RTP paths.
+
 Please report it on **[Discord](https://discord.gg/Y9Yjsn5yDP)** and attach that file, together with the game name and your phone model.
 
 ## 👨‍🍳 Build it yourself

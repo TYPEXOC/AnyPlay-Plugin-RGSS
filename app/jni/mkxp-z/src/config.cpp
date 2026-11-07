@@ -103,6 +103,9 @@ json::value readConfFile(const char *path) {
     if (!mkxp_fs::fileExists(path)) {
         return json::object({});
     }
+
+    if (getEnvironmentBool("TYN_RGSS_MANAGED_RTP", false))
+        Debug() << "TYN runtime is reading mkxp configuration:" << path;
     
     try {
         std::string cfg = mkxp_fs::contentsOfFileAsString(path);
@@ -260,7 +263,20 @@ try { exp } catch (...) {}
     // Now check for an extra mkxp.conf in the user's save directory and merge anything else from that
     userConfPath = customDataPath + "/" CONF_FILE;
     json::value userConf = readConfFile(userConfPath.c_str());
+    const bool tynManagedRtp = getEnvironmentBool("TYN_RGSS_MANAGED_RTP", false);
+    json::value tynRtpConfig;
+    if (tynManagedRtp) {
+        tynRtpConfig = opts["RTP"];
+        std::vector<std::string> persistedRtps;
+        fillStringVec(userConf.as_object()["RTP"], persistedRtps);
+        for (const std::string &path : persistedRtps)
+            Debug() << "Persisted user RTP entry (TYN override applies):" << path;
+    }
     copyObject(optsJ, userConf);
+    if (tynManagedRtp) {
+        opts["RTP"] = tynRtpConfig;
+        Debug() << "TYN runtime kept the RTP list supplied in its private session config";
+    }
     
     // now RESUME
     
@@ -297,6 +313,10 @@ try { exp } catch (...) {}
     fillStringVec(opts["preloadScript"], preloadScripts);
     fillStringVec(opts["postloadScript"], postloadScripts);
     fillStringVec(opts["RTP"], rtps);
+    if (tynManagedRtp) {
+        for (const std::string &path : rtps)
+            Debug() << "TYN effective RTP path:" << path;
+    }
     fillStringVec(opts["fontSub"], fontSubs);
     fillStringVec(opts["rubyLoadpath"], rubyLoadpaths);
     

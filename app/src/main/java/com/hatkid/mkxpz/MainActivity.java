@@ -79,6 +79,7 @@ public class MainActivity extends SDLActivity
     private static final String TYN_EXTRA_PAD_PROFILE_ID = "com.tyranor.runtime.extra.PAD_PROFILE_ID";
     private static final String TYN_EXTRA_RUBY_RUNTIME = "com.tyranor.runtime.extra.RUBY_RUNTIME";
     private static final String TYN_EXTRA_RGSS_OPTIONS = "com.tyranor.runtime.extra.RGSS_OPTIONS";
+    private static final String TYN_EXTRA_RTP_ROOT = "com.tyranor.runtime.extra.RTP_ROOT";
     private static final String TYN_EXTRA_THEME_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_PRIMARY_COLOR";
     private static final String TYN_EXTRA_THEME_ON_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_ON_PRIMARY_COLOR";
     private static final String[] RUBY_187_LIBRARIES = {
@@ -103,6 +104,7 @@ public class MainActivity extends SDLActivity
     private String mPadProfileUri;
     private String mTranslationUri;
     private String mGameId;
+    private String mTynRtpRoot;
     private JSONObject mTynRgssOptions;
     private File mSessionDir;
     private ScheduledExecutorService mTranslationSync;
@@ -216,6 +218,7 @@ public class MainActivity extends SDLActivity
                 mTynRgssOptions = null;
             }
             mPadProfileUri = intent.getStringExtra(TYN_EXTRA_PAD_PROFILE_URI);
+            mTynRtpRoot = intent.getStringExtra(TYN_EXTRA_RTP_ROOT);
             mThemePrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_PRIMARY_COLOR, mThemePrimaryColor);
             mThemeOnPrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_ON_PRIMARY_COLOR, mThemeOnPrimaryColor);
             mTranslationUri = intent.getStringExtra(TYN_EXTRA_TRANSLATION_URI);
@@ -271,6 +274,12 @@ public class MainActivity extends SDLActivity
                 mLaunchRequestedAtMillis,
                 mLaunchRequestedAtElapsedRealtime
             );
+            try {
+                Os.setenv("TYN_RGSS_MISSING_RESOURCE_HINT", getString(R.string.tyn_runtime_missing_resource_hint), true);
+                Os.setenv("TYN_RGSS_MANAGED_RTP", "1", true);
+            } catch (Exception error) {
+                TynRuntimeDiagnostics.append(mSessionDir, "Could not set TYN runtime environment flags", error);
+            }
             TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: copying TYN Ruby translation bridge");
 
             File bridge = new File(mSessionDir, "tyranor_rgss_translation.rb");
@@ -299,7 +308,7 @@ public class MainActivity extends SDLActivity
                 }
             }
 
-            TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: reading game mkxp configuration");
+            TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: checking optional game-folder mkxp.json");
             JSONObject config = readGameConfig();
             config.put("gameFolder", GAME_FOLDER);
             config.put("rgssVersion", detectRgssVersion(GAME_FOLDER));
@@ -325,40 +334,35 @@ public class MainActivity extends SDLActivity
     private void applyTynRgssOptions(JSONObject config) throws Exception
     {
         JSONObject options = mTynRgssOptions;
-        if (options == null) return;
-        String[] booleanKeys = {
-            "debug", "smoothScaling", "vsync", "frameSkip", "solidFonts", "pathCache",
-            "prebuiltPathCache", "fastPathEnum", "copyText", "useCJKFont"
-        };
-        for (String key : booleanKeys) {
-            if (options.has(key)) {
-                String configKey = "debug".equals(key) ? "debugMode" : key;
-                config.put(configKey, options.optBoolean(key));
+        if (options != null) {
+            String[] booleanKeys = {
+                "debug", "smoothScaling", "vsync", "frameSkip", "solidFonts", "pathCache",
+                "prebuiltPathCache", "fastPathEnum", "copyText", "useCJKFont"
+            };
+            for (String key : booleanKeys) {
+                if (options.has(key)) {
+                    String configKey = "debug".equals(key) ? "debugMode" : key;
+                    config.put(configKey, options.optBoolean(key));
+                }
+            }
+
+            config.put("fontScale", parseFloat(options.optString("fontScale", "0.75"), 0.75f));
+            config.put("customFont", options.optString("customFont", ""));
+            config.put("verticalScreenAlign", options.optString("verticalScreenAlign", "top-center"));
+            config.put("speedUp", mSpeedUp);
+
+            // JoiPlay's postload switch controlled whether configured postload scripts ran.
+            // Keep that behavior, with execution implemented by this module's native Ruby host.
+            if (options.optBoolean("enablePostloadScripts", false)) {
+                config.put("postloadScript", stringArray(config.opt("postloadScript")));
+            } else {
+                config.put("postloadScript", new JSONArray());
             }
         }
 
-        config.put("fontScale", parseFloat(options.optString("fontScale", "0.75"), 0.75f));
-        config.put("customFont", options.optString("customFont", ""));
-        config.put("verticalScreenAlign", options.optString("verticalScreenAlign", "top-center"));
-        config.put("speedUp", mSpeedUp);
+        configureRtpPaths(config);
 
-        // JoiPlay's postload switch controlled whether configured postload scripts ran.
-        // Keep that behavior, with execution implemented by this module's native Ruby host.
-        if (options.optBoolean("enablePostloadScripts", false)) {
-            config.put("postloadScript", stringArray(config.opt("postloadScript")));
-        } else {
-            config.put("postloadScript", new JSONArray());
-        }
-
-        // The imported RTP folders remain in the existing shared-storage contract so
-        // previously imported assets keep working after replacing the JoiPlay module.
-        JSONArray rtps = stringArray(config.opt("RTP"));
-        String versionFolder = new File(Environment.getExternalStorageDirectory(),
-            "JoiPlay/RTP/" + (detectRgssVersion(GAME_FOLDER) == 1 ? "RPGXP" :
-                detectRgssVersion(GAME_FOLDER) == 2 ? "RPGVX" : "RPGVXACE") + "/app").getAbsolutePath();
-        if (new File(versionFolder).isDirectory() && !containsString(rtps, versionFolder)) rtps.put(versionFolder);
-        config.put("RTP", rtps);
-
+        if (options == null) return;
         String screenSize = options.optString("screenSize", "auto");
         if ("auto".equals(screenSize)) return;
         String[] supportedSizes = {
@@ -373,6 +377,74 @@ public class MainActivity extends SDLActivity
                 break;
             }
         }
+    }
+
+    /** Uses the RTP directory supplied by TYN and rejects stale paths from other hosts. */
+    private void configureRtpPaths(JSONObject config)
+    {
+        int rgssVersion = detectRgssVersion(GAME_FOLDER);
+        String versionFolder = rgssVersion == 1 ? "RPGXP" : rgssVersion == 2 ? "RPGVX" : "RPGVXACE";
+        JSONArray rtps = new JSONArray();
+        JSONArray configured = stringArray(config.opt("RTP"));
+        int skippedForeign = 0;
+        int skippedMissing = 0;
+        for (int i = 0; i < configured.length(); i++) {
+            String entry = configured.optString(i, "").trim();
+            if (entry.isEmpty()) continue;
+            if (isForeignHostRtpPath(entry)) {
+                skippedForeign++;
+                continue;
+            }
+            File path = new File(entry);
+            if (!path.isAbsolute()) path = new File(GAME_FOLDER, entry);
+            if (!path.isDirectory()) {
+                skippedMissing++;
+                continue;
+            }
+            String resolved = path.getAbsolutePath();
+            if (!containsString(rtps, resolved)) rtps.put(resolved);
+        }
+
+        File rtpRoot = mTynRtpRoot == null || mTynRtpRoot.trim().isEmpty()
+            ? new File(Environment.getExternalStorageDirectory(), "JoiPlay/RTP")
+            : new File(mTynRtpRoot);
+        File versionRtp = new File(new File(rtpRoot, versionFolder), "app");
+        boolean tynRtpAvailable = hasRtpFiles(versionRtp);
+        if (tynRtpAvailable) {
+            String resolved = versionRtp.getAbsolutePath();
+            if (!containsString(rtps, resolved)) rtps.put(resolved);
+            TynRuntimeDiagnostics.append(mSessionDir, "RTP source: TYN-managed " + versionFolder + " resources available");
+        } else {
+            TynRuntimeDiagnostics.append(mSessionDir, "RTP source: no imported TYN " + versionFolder + " resources found");
+        }
+        if (skippedForeign > 0) {
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Ignored " + skippedForeign + " stale MTool/JoiPlay RTP path(s) from runtime configuration");
+        }
+        if (skippedMissing > 0) {
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Ignored " + skippedMissing + " unavailable RTP path(s) from runtime configuration");
+        }
+        if (skippedForeign > 0 && !tynRtpAvailable) {
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "The game references an old external RTP path, but no matching RTP is imported in TYN settings");
+        }
+        config.put("RTP", rtps);
+    }
+
+    private static boolean isForeignHostRtpPath(String path)
+    {
+        String normalized = path.replace('\\', '/').toLowerCase(Locale.ROOT);
+        return normalized.contains("/mtool/rtp/") || normalized.endsWith("/mtool/rtp") ||
+            normalized.startsWith("mtool/rtp/") || normalized.equals("mtool/rtp") ||
+            normalized.contains("/joiplay/rtp/") || normalized.endsWith("/joiplay/rtp") ||
+            normalized.startsWith("joiplay/rtp/") || normalized.equals("joiplay/rtp");
+    }
+
+    private static boolean hasRtpFiles(File path)
+    {
+        File[] files = path.listFiles();
+        return path.isDirectory() && files != null && files.length > 0;
     }
 
     private static float parseFloat(String value, float fallback)
@@ -395,12 +467,14 @@ public class MainActivity extends SDLActivity
             try {
                 byte[] bytes = readBytes(source, 1024 * 1024);
                 String text = new String(bytes, StandardCharsets.UTF_8).replace("\uFEFF", "").trim();
+                TynRuntimeDiagnostics.append(mSessionDir, "Game-folder mkxp.json found; reading its settings");
                 return new JSONObject(text);
             } catch (Exception error) {
                 Log.w(TAG, "Ignoring invalid game mkxp.json", error);
                 TynRuntimeDiagnostics.append(mSessionDir, "Could not read the game's mkxp.json", error);
             }
         }
+        TynRuntimeDiagnostics.append(mSessionDir, "No game-folder mkxp.json found; using TYN runtime settings");
         return new JSONObject();
     }
 

@@ -11,6 +11,7 @@
     <string name="runtime_diagnostics_share_title">Share complete TYN RGSS diagnostics</string>
     <string name="runtime_info_source">Based on mkxp-z, an open-source GPL v2 project\nhttps://github.com/TYPEXOC/AnyPlay-Plugin-RGSS</string>
     <string name="tyn_runtime_loading">Starting game…</string>
+    <string name="tyn_runtime_missing_resource_hint">A game resource could not be found. Check the game files; if it belongs to the RPG Maker RTP, import the matching RTP in TYN's RPG Maker settings and retry.</string>
     <string name="tyn_runtime_cheat_button">Cheats</string>
     <string name="tyn_runtime_copy_text">Copy current dialogue</string>
     <string name="tyn_runtime_copy_empty">There is no dialogue to copy yet</string>

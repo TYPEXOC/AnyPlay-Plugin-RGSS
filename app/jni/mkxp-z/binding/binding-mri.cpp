@@ -41,6 +41,7 @@
 #include "eventthread.h"
 
 #include <vector>
+#include <cstdlib>
 
 extern "C" {
 #include <ruby.h>
@@ -1355,6 +1356,15 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
     std::string ms(640, '\0');
     snprintf(&ms[0], ms.size(), "Script '%s' line %s: %s occured.\n\n%s",
              file.c_str(), line, RSTRING_PTR(name), RSTRING_PTR(msg));
+
+    if (std::string(RSTRING_PTR(name)) == "Errno::ENOENT") {
+        const char *rtpHint = std::getenv("TYN_RGSS_MISSING_RESOURCE_HINT");
+        if (rtpHint && *rtpHint) {
+            ms.resize(strlen(ms.c_str()));
+            ms += "\n\n";
+            ms += rtpHint;
+        }
+    }
     
     showMsg(ms);
 }
