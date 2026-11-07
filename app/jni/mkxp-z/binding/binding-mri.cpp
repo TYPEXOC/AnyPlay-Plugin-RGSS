@@ -919,6 +919,61 @@ static void logRubyExecutionFailure(const char *phase, const std::string &name, 
     }
 }
 
+static void clearCurrentRubyException() {
+#if RAPI_FULL > 187
+    rb_set_errinfo(Qnil);
+#else
+    ruby_errinfo = Qnil;
+#endif
+}
+
+static void reportRubyStartupFailure(const char *phase, const std::string &name, int state) {
+    logRubyExecutionFailure(phase, name, state);
+
+    VALUE exc = currentRubyException();
+    std::string errorClass = "RubyError";
+    std::string errorLine = "The embedded Ruby initialization failed.";
+    if (!NIL_P(exc)) {
+        VALUE className = rb_class_path(rb_obj_class(exc));
+        VALUE message = rb_funcall2(exc, rb_intern("message"), 0, NULL);
+        if (RB_TYPE_P(className, RUBY_T_STRING))
+            errorClass = RSTRING_PTR(className);
+        if (RB_TYPE_P(message, RUBY_T_STRING)) {
+            std::string detail(RSTRING_PTR(message));
+            size_t lineEnd = detail.find('\n');
+            errorLine = detail.substr(0, lineEnd);
+            size_t syntaxAt = detail.find("syntax error");
+            if (syntaxAt != std::string::npos) {
+                size_t lineStart = detail.rfind('\n', syntaxAt);
+                lineStart = lineStart == std::string::npos ? 0 : lineStart + 1;
+                lineEnd = detail.find('\n', syntaxAt);
+                errorLine = detail.substr(lineStart, lineEnd == std::string::npos
+                                                        ? std::string::npos
+                                                        : lineEnd - lineStart);
+            }
+        }
+    }
+
+    std::string dialog = "RGSS startup failed before game scripts ran.\nPhase: ";
+    dialog += phase;
+    dialog += "\nScript: ";
+    dialog += name;
+    dialog += "\nError: ";
+    dialog += errorClass;
+    dialog += ": ";
+    dialog += errorLine;
+    dialog += "\n\nFull details are in the TYN-RGSS diagnostics export.\nPress OK to return to TYN.";
+    Debug() << "[ruby] displaying startup failure dialog; phase:" << phase;
+    showMsg(dialog);
+}
+
+static void abortRubyStartup(const char *phase, const std::string &name, int state) {
+    reportRubyStartupFailure(phase, name, state);
+    clearCurrentRubyException();
+    ruby_cleanup(0);
+    shState->rtData().rqTermAck.set();
+}
+
 static bool runCustomScript(const std::string &filename, const char *phase) {
     std::string scriptData;
     if (tynVerboseRuntimeLogs())
@@ -1085,7 +1140,8 @@ static void runRMXPScripts(BacktraceData &btData) {
         if (compatFix == Qnil) {
             if (tynVerboseRuntimeLogs())
                 Debug() << "[ruby] compatibility fixer initialization begin";
-            rb_eval_string(R"RB(
+            int compatInitState = 0;
+            rb_eval_string_protect(R"RB(
 # Ruby 1.8 accepted `return` inside a top-level `proc{ ... }`; Ruby 3 raises
 # LocalJumpError. Rewrite `return` (bare or before if/unless) in such procs to
 # a catch/throw pair, without changing line numbers.
@@ -1279,7 +1335,12 @@ lambda { |s, name|
     s
   end
 }
-)RB");
+)RB", &compatInitState);
+            if (compatInitState) {
+                reportRubyStartupFailure("Ruby 1.8 compatibility fixer", "embedded compatibility code", compatInitState);
+                clearCurrentRubyException();
+                return;
+            }
             rb_gc_register_address(&compatFix);
             if (tynVerboseRuntimeLogs())
                 Debug() << "[ruby] compatibility fixer initialization complete";
@@ -1667,12 +1728,8 @@ Fixnum = Integer unless defined?(Fixnum)
 Bignum = Integer unless defined?(Bignum)
 )RB", &reqState);
         if (reqState) {
-            logRubyExecutionFailure("Android standard-library bootstrap", "embedded compatibility code", reqState);
-#if RAPI_FULL > 187
-            rb_set_errinfo(Qnil);
-#else
-            ruby_errinfo = Qnil;
-#endif
+            abortRubyStartup("Android standard-library bootstrap", "embedded compatibility code", reqState);
+            return;
         } else if (tynVerboseRuntimeLogs())
             Debug() << "[ruby] Android Ruby standard-library compatibility bootstrap complete";
 
@@ -3981,12 +4038,8 @@ class << Graphics
   end
 end)RB", &preState);
             if (preState) {
-                logRubyExecutionFailure("Android RGSS compatibility prelude", "embedded compatibility code", preState);
-#if RAPI_FULL > 187
-                rb_set_errinfo(Qnil);
-#else
-                ruby_errinfo = Qnil;
-#endif
+                abortRubyStartup("Android RGSS compatibility prelude", "embedded compatibility code", preState);
+                return;
             } else if (tynVerboseRuntimeLogs())
                 Debug() << "[ruby] Android RGSS compatibility prelude complete";
         }
