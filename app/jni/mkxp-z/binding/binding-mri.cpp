@@ -1215,8 +1215,13 @@ $__anyplay_fix_proc_return = lambda { |s|
   out << s[pos..-1]
   out
 }
-)RB");
-            compatFix = rb_eval_string(R"RB(
+)RB", &compatInitState);
+            if (compatInitState) {
+                reportRubyStartupFailure("Ruby 1.8 compatibility fixer prelude", "embedded compatibility code", compatInitState);
+                clearCurrentRubyException();
+                return;
+            }
+            compatFix = rb_eval_string_protect(R"RB(
 lambda { |s, name|
   begin
     s = $__anyplay_fix_proc_return.call(s) if $__anyplay_fix_proc_return
