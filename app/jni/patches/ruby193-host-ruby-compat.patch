@@ -4,3 +4,15 @@ diff --git a/tool/mkconfig.rb b/tool/mkconfig.rb
 @@ -26 +26 @@
 -fast = {'prefix'=>TRUE, 'ruby_install_name'=>TRUE, 'INSTALL'=>TRUE, 'EXEEXT'=>TRUE}
 +fast = {'prefix'=>true, 'ruby_install_name'=>true, 'INSTALL'=>true, 'EXEEXT'=>true}
+diff --git a/template/fake.rb.in b/template/fake.rb.in
+--- a/template/fake.rb.in
++++ b/template/fake.rb.in
+@@ -7,2 +7,8 @@
+ ruby=ruby
++ruby_source_dir = File.expand_path(File.dirname(__FILE__))
++unless File.file?(File.join(ruby_source_dir, "rbconfig.rb"))
++  $LOAD_PATH.delete(ruby_source_dir)
++  require "rbconfig"
++  $LOAD_PATH.unshift(ruby_source_dir)
++end
+ class Object
