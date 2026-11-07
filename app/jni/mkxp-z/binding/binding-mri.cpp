@@ -51,6 +51,10 @@ extern "C" {
 #endif
 }
 
+#if RAPI_MAJOR == 1 && RAPI_FULL >= 190
+extern "C" void Init_ext(void);
+#endif
+
 #ifdef __WIN32__
 #include "binding-mri-win32.h"
 #endif
@@ -294,6 +298,7 @@ static void mriBindingInit()
 
 static void showMsg(const std::string &msg)
 {
+	Debug() << "Ruby message:" << msg;
 	shState->eThread().showMessageBox(msg.c_str());
 }
 
@@ -869,6 +874,7 @@ static VALUE evalString(VALUE string, VALUE filename, int *state) {
 
 static void runCustomScript(const std::string &filename) {
     std::string scriptData;
+	Debug() << "Loading configured Ruby script:" << filename;
     
     if (!readFileSDL(filename.c_str(), scriptData)) {
         showMsg(std::string("Unable to open '") + filename + "'");
@@ -930,6 +936,7 @@ static void runRMXPScripts(BacktraceData &btData) {
     rb_gv_set("$RGSS_SCRIPTS", scriptArray);
     
     long scriptCount = RARRAY_LEN(scriptArray);
+	Debug() << "Loaded game script pack:" << scriptPack << "entries:" << scriptCount;
     
     std::string decodeBuffer;
     decodeBuffer.resize(0x1000);
@@ -1371,6 +1378,7 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
 
 static void mriBindingExecute() {
     Config &conf = shState->rtData().config;
+	Debug() << "Embedded Ruby startup:" << RUBY_VERSION << "RGSS generation:" << rgssVer;
     
 #if RAPI_MAJOR >= 2
     /* Normally only a ruby executable would do a sysinit,
@@ -1378,10 +1386,16 @@ static void mriBindingExecute() {
      * stdio streams on some platforms (eg. Windows) */
     int argc = 0;
     char **argv = 0;
+	Debug() << "Ruby sysinit begin";
     ruby_sysinit(&argc, &argv);
+	Debug() << "Ruby sysinit complete";
     
+	Debug() << "Ruby main-thread stack initialization begin";
     RUBY_INIT_STACK;
+	Debug() << "Ruby main-thread stack initialization complete";
+	Debug() << "Ruby VM initialization begin";
     ruby_init();
+	Debug() << "Ruby VM initialization complete";
     
     std::vector<const char*> rubyArgsC{"mkxp-z"};
     rubyArgsC.push_back("-e ");
@@ -1398,6 +1412,7 @@ static void mriBindingExecute() {
     } else {
         node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
     }
+	Debug() << "Ruby options/static extension initialization complete";
     
     int state;
     bool valid = ruby_executable_node(node, &state);
@@ -1422,7 +1437,28 @@ static void mriBindingExecute() {
     rb_enc_set_default_internal(rb_enc_from_encoding(rb_utf8_encoding()));
     rb_enc_set_default_external(rb_enc_from_encoding(rb_utf8_encoding()));
 #else
+#if RAPI_FULL >= 190
+    // Ruby 1.9's embedded startup needs the same process initialization used by
+    // its executable before initializing the VM.
+    int argc = 0;
+    char **argv = 0;
+	Debug() << "Ruby sysinit begin";
+    ruby_sysinit(&argc, &argv);
+	Debug() << "Ruby sysinit complete";
+#endif
+    // The VM needs its native stack bounds before the first Ruby allocation.
+	Debug() << "Ruby main-thread stack initialization begin";
+    RUBY_INIT_STACK;
+	Debug() << "Ruby main-thread stack initialization complete";
+	Debug() << "Ruby VM initialization begin";
     ruby_init();
+	Debug() << "Ruby VM initialization complete";
+#if RAPI_FULL >= 190
+    // ruby_init() alone does not initialize statically linked extensions.
+	Debug() << "Ruby static extension initialization begin";
+    Init_ext();
+	Debug() << "Ruby static extension initialization complete";
+#endif
     rb_eval_string("$KCODE='U'");
 #ifdef __WIN32__
     if (!conf.winConsole) {
@@ -1433,6 +1469,7 @@ static void mriBindingExecute() {
     }
 #endif
 #endif
+	Debug() << "Embedded Ruby initialized:" << RUBY_VERSION;
     
 #if RAPI_FULL > 187
     VALUE rbArgv = rb_get_argv();
