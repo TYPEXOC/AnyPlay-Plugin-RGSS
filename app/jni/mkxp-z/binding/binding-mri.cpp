@@ -1378,7 +1378,7 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
 
 static void mriBindingExecute() {
     Config &conf = shState->rtData().config;
-	Debug() << "Embedded Ruby startup:" << RUBY_VERSION << "RGSS generation:" << rgssVer;
+	Debug() << "Embedded Ruby startup:" << RAPI_MAJOR << "." << RAPI_MINOR << "." << RAPI_TEENY << "RGSS generation:" << rgssVer;
     
 #if RAPI_MAJOR >= 2
     /* Normally only a ruby executable would do a sysinit,
@@ -1469,7 +1469,7 @@ static void mriBindingExecute() {
     }
 #endif
 #endif
-	Debug() << "Embedded Ruby initialized:" << RUBY_VERSION;
+	Debug() << "Embedded Ruby initialized:" << RAPI_MAJOR << "." << RAPI_MINOR << "." << RAPI_TEENY;
     
 #if RAPI_FULL > 187
     VALUE rbArgv = rb_get_argv();
