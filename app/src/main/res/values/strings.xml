@@ -4,11 +4,12 @@
     <string name="app_name">TYN RGSS</string>
     <string name="runtime_info_version">版本：%1$s</string>
     <string name="runtime_info_message">这是 TYN 的 RGSS 运行时模块。请从 TYN 游戏库启动 XP、VX 或 VX Ace 游戏，不要单独启动本模块。</string>
-    <string name="runtime_info_export_diagnostics">导出最近一次运行日志</string>
+    <string name="runtime_info_export_diagnostics">导出全部运行日志</string>
+    <string name="runtime_info_exporting_diagnostics">正在整理全部运行日志…</string>
     <string name="tyn_runtime_export_diagnostics">诊断</string>
     <string name="runtime_diagnostics_no_logs">还没有可导出的运行日志</string>
     <string name="runtime_diagnostics_export_failed">导出运行日志失败</string>
-    <string name="runtime_diagnostics_share_title">分享 TYN RGSS 诊断日志</string>
+    <string name="runtime_diagnostics_share_title">分享 TYN RGSS 完整诊断日志</string>
     <string name="runtime_info_source">基于 GPL v2 开源项目 mkxp-z\nhttps://github.com/TYPEXOC/AnyPlay-Plugin-RGSS</string>
     <string name="tyn_runtime_loading">正在启动游戏…</string>
     <string name="tyn_runtime_cheat_button">作弊面板</string>

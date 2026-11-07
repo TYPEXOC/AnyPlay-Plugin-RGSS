@@ -1856,11 +1856,9 @@ else
   end
 end
 
-# ---- AnyPlayLog: one file, "AnyPlayLog.txt" in the game folder -----------------
-# Created only when something goes wrong.  It lists (1) scripts that could not be
-# parsed, (2) every kind of Ruby error the game hits (also the ones the game
-# catches itself - those are marked), (3) the final error that stopped the game
-# with the full call chain, and (4) a few notes (touch / slow frames) for context.
+# ---- AnyPlayLog: one file, "AnyPlayLog.txt" in the private TYN session ---------
+# It records runtime start and scene/map changes, scripts that could not be parsed,
+# Ruby errors (including ones the game catches), fatal call chains, and context notes.
 module AnyPlayLog
   VERSION   = "0.1.40"
   FILE      = begin
@@ -1881,8 +1879,9 @@ module AnyPlayLog
   @slow = 0
   @internal = 0
   @watching = false
+  @last_scene_map = nil
   @t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  # every launch starts with a clean file, so it only describes the last run
+  # TYN gives every launch its own private file; keep the legacy fallback clean too.
   (File.delete(FILE) if File.exist?(FILE)) rescue nil
   IGNORE = /\A(SystemExit|Interrupt|StopIteration|SignalException|Reset|RGSSReset)\z/
 
@@ -1890,7 +1889,9 @@ module AnyPlayLog
     attr_accessor :internal
 
     def stamp
-      "%s +%ds" % [Time.now.strftime("%H:%M:%S"), (Process.clock_gettime(Process::CLOCK_MONOTONIC) - @t0).to_i]
+      now = Time.now
+      "%s.%03d +%ds" % [now.strftime("%Y-%m-%d %H:%M:%S"), now.usec / 1000,
+        (Process.clock_gettime(Process::CLOCK_MONOTONIC) - @t0).to_i]
     end
 
     # run code without our own error watcher noticing exceptions it rescues
@@ -1961,7 +1962,7 @@ module AnyPlayLog
     def header_now
       eng = (TyranorCheats.engine rescue "?")
       gt  = (System.game_title rescue "?") rescue "?"
-      raw("==== AnyPlay log (plugin #{VERSION}) #{Time.now.strftime('%Y-%m-%d %H:%M:%S')} ====")
+      raw("==== AnyPlay runtime log (plugin #{VERSION}) started=#{Time.now.strftime('%Y-%m-%d %H:%M:%S')} ====")
       raw("game=#{clean(gt, 80)} folder=#{File.basename(Dir.pwd)} engine=#{eng} ruby=#{RUBY_VERSION} #{RUBY_PLATFORM}")
       raw("screen=#{(Graphics.width rescue '?')}x#{(Graphics.height rescue '?')} fps=#{(Graphics.frame_rate rescue '?')} scripts=#{($RGSS_SCRIPTS.size rescue '?')}")
     end
@@ -1985,6 +1986,17 @@ module AnyPlayLog
       scene = (defined?(SceneManager) && SceneManager.respond_to?(:scene) ? SceneManager.scene : $scene).class rescue "?"
       map = ($game_map.map_id rescue "-")
       "scene=#{scene} map=#{map} frame=#{(Graphics.frame_count rescue '?')} resize=#{($ResizeFactor rescue '?')}"
+    end
+
+    # Keep a compact execution timeline without writing once per frame.
+    def runtime_checkpoint
+      scene = (defined?(SceneManager) && SceneManager.respond_to?(:scene) ? SceneManager.scene : $scene).class rescue "?"
+      map = ($game_map.map_id rescue "-")
+      current = "scene=#{scene} map=#{map}"
+      return if current == @last_scene_map
+      @last_scene_map = current
+      write("runtime checkpoint: #{current} frame=#{(Graphics.frame_count rescue '?')}")
+    rescue Exception
     end
 
     # Context notes (touch / slow frames). They do not create the file by
@@ -2072,6 +2084,8 @@ module AnyPlayLog
     def watch
       return if @watching
       @watching = true
+      start
+      write("Ruby update loop entered; #{context}")
       @tp = TracePoint.new(:raise) { |tp| on_raise(tp) }
       @tp.enable
     rescue Exception
@@ -3757,6 +3771,7 @@ module AnyPlayPerf
     where = nil
     where = (caller(2, 3) || []).map { |c| AnyPlayLog.label(c) }.join(" < ") if script_ms > 120
     AnyPlayLog.watch
+    AnyPlayLog.runtime_checkpoint
     start_sampler
     late_shims
     r = orig.call

@@ -24,10 +24,53 @@
 
 #include <iostream>
 #include <sstream>
+#include <chrono>
+#include <cstdlib>
+#include <ctime>
+#include <iomanip>
+#include <string>
 #include <vector>
 
 #ifdef __ANDROID__
 #include <android/log.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+static void appendTynRuntimeDiagnostic(const std::string &message)
+{
+	const char *sessionDir = std::getenv("TYN_RGSS_DIAGNOSTICS_DIR");
+	if (!sessionDir || !*sessionDir) return;
+
+	using namespace std::chrono;
+	const system_clock::time_point now = system_clock::now();
+	const std::time_t wallTime = system_clock::to_time_t(now);
+	std::tm localTime;
+	if (!localtime_r(&wallTime, &localTime)) return;
+	const long millisecondsPart = duration_cast<milliseconds>(now.time_since_epoch()).count() % 1000;
+	std::string redactedMessage = message;
+	const char *gameFolder = std::getenv("TYN_RGSS_GAME_FOLDER_FOR_LOG");
+	const std::string privatePaths[] = {gameFolder ? gameFolder : "", sessionDir};
+	for (const std::string &privatePath : privatePaths) {
+		if (privatePath.empty()) continue;
+		std::string::size_type position = 0;
+		while ((position = redactedMessage.find(privatePath, position)) != std::string::npos) {
+			redactedMessage.replace(position, privatePath.size(), privatePath == sessionDir ? "<session>" : "<game-folder>");
+			position += privatePath == sessionDir ? 9 : 13;
+		}
+	}
+
+	std::ostringstream line;
+	line << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S")
+		 << '.' << std::setw(3) << std::setfill('0') << millisecondsPart
+		 << " " << redactedMessage << '\n';
+	const std::string path = std::string(sessionDir) + "/NativeRuntime.txt";
+	const std::string record = line.str();
+	const int fd = ::open(path.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0600);
+	if (fd < 0) return;
+	const ssize_t ignored = ::write(fd, record.data(), record.size());
+	(void)ignored;
+	::close(fd);
+}
 #endif
 
 
@@ -62,7 +105,9 @@ public:
 	~Debug()
 	{
 #ifdef __ANDROID__
-		__android_log_write(ANDROID_LOG_DEBUG, "mkxp", buf.str().c_str());
+		const std::string message = buf.str();
+		__android_log_write(ANDROID_LOG_DEBUG, "mkxp", message.c_str());
+		appendTynRuntimeDiagnostic(message);
 #else
 		std::cerr << buf.str() << std::endl;
 #endif

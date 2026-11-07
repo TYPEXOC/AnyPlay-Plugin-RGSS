@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.os.Vibrator;
 import android.os.VibrationEffect;
 import android.os.storage.StorageManager;
@@ -105,6 +106,10 @@ public class MainActivity extends SDLActivity
     private JSONObject mTynRgssOptions;
     private File mSessionDir;
     private ScheduledExecutorService mTranslationSync;
+    private volatile long mLastTranslationFailureLogAt;
+    private boolean mDiagnosticsExporting;
+    private long mLaunchRequestedAtMillis;
+    private long mLaunchRequestedAtElapsedRealtime;
 
     protected boolean mStarted = false;
 
@@ -116,10 +121,13 @@ public class MainActivity extends SDLActivity
 
     private void runSDLThread()
     {
+        boolean wasStarted = mStarted;
         if (!mStarted) {
             Log.i(TAG, "Game path: " + GAME_PATH);
         }
 
+        TynRuntimeDiagnostics.append(mSessionDir,
+            wasStarted ? "Native SDL runtime resume requested" : "Native SDL runtime start requested");
         mStarted = true;
 
         // Run (resume) native SDL thread
@@ -181,6 +189,8 @@ public class MainActivity extends SDLActivity
 
         if (TYN_ACTION_LAUNCH.equals(intent.getAction())) {
             mTynLaunch = true;
+            mLaunchRequestedAtMillis = System.currentTimeMillis();
+            mLaunchRequestedAtElapsedRealtime = SystemClock.elapsedRealtime();
             String rubyRuntime = intent.getStringExtra(TYN_EXTRA_RUBY_RUNTIME);
             String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
             if (dir == null || dir.isEmpty() || !new File(dir).isDirectory()) {
@@ -257,8 +267,11 @@ public class MainActivity extends SDLActivity
                 detectRgssVersion(GAME_FOLDER),
                 mTranslationUri != null,
                 mPadEnabled,
-                mTynRgssOptions == null ? "{}" : mTynRgssOptions.toString()
+                mTynRgssOptions == null ? "{}" : mTynRgssOptions.toString(),
+                mLaunchRequestedAtMillis,
+                mLaunchRequestedAtElapsedRealtime
             );
+            TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: copying TYN Ruby translation bridge");
 
             File bridge = new File(mSessionDir, "tyranor_rgss_translation.rb");
             try (InputStream input = getAssets().open("tyranor_rgss_translation.rb"); FileOutputStream output = new FileOutputStream(bridge)) {
@@ -270,13 +283,23 @@ public class MainActivity extends SDLActivity
 
             File profile = new File(mSessionDir, "tyranor_pad_profile.json");
             PAD_PROFILE_PATH = profile.getAbsolutePath();
-            if (mPadProfileUri != null) copyUriToFile(mPadProfileUri, profile, 1024 * 1024);
-
-            if (mTranslationUri != null) {
-                File table = new File(mSessionDir, "runtime_translations.hex");
-                if (!syncTranslationTable(mTranslationUri, table)) mTranslationUri = null;
+            if (mPadProfileUri != null) {
+                TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: importing virtual-pad profile");
+                boolean copied = copyUriToFile(mPadProfileUri, profile, 1024 * 1024);
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    copied ? "Virtual-pad profile imported" : "Virtual-pad profile import failed");
             }
 
+            if (mTranslationUri != null) {
+                TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: importing selected translation table");
+                File table = new File(mSessionDir, "runtime_translations.hex");
+                if (!syncTranslationTable(mTranslationUri, table)) {
+                    TynRuntimeDiagnostics.append(mSessionDir, "Selected translation table could not be loaded; continuing without it");
+                    mTranslationUri = null;
+                }
+            }
+
+            TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: reading game mkxp configuration");
             JSONObject config = readGameConfig();
             config.put("gameFolder", GAME_FOLDER);
             config.put("rgssVersion", detectRgssVersion(GAME_FOLDER));
@@ -290,6 +313,7 @@ public class MainActivity extends SDLActivity
             config.put("preloadScript", scripts);
             writeAtomically(new File(mSessionDir, "mkxp.json"), config.toString());
             GAME_PATH = mSessionDir.getAbsolutePath();
+            TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup complete; private mkxp configuration is ready");
         } catch (Exception error) {
             Log.e(TAG, "Could not prepare private TYN session; falling back to the game folder", error);
             TynRuntimeDiagnostics.append(mSessionDir, "Private session preparation failed", error);
@@ -440,6 +464,7 @@ public class MainActivity extends SDLActivity
             return true;
         } catch (Exception error) {
             Log.w(TAG, "Could not read granted content URI", error);
+            TynRuntimeDiagnostics.append(mSessionDir, "Could not read a granted runtime content URI", error);
             return false;
         }
     }
@@ -457,10 +482,19 @@ public class MainActivity extends SDLActivity
             JSONObject map = new JSONObject(new String(bytes.toByteArray(), StandardCharsets.UTF_8).replace("\uFEFF", ""));
             String encoded = encodeTranslationMap(map);
             String current = destination.isFile() ? new String(readBytes(destination, 16 * 1024 * 1024), StandardCharsets.US_ASCII) : null;
-            if (!encoded.equals(current)) writeAtomically(destination, encoded);
+            if (!encoded.equals(current)) {
+                writeAtomically(destination, encoded);
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Translation table loaded or refreshed; entries=" + map.length());
+            }
             return true;
         } catch (Exception error) {
             Log.w(TAG, "Translation table is unavailable or invalid", error);
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (mSessionDir != null && now - mLastTranslationFailureLogAt >= TimeUnit.SECONDS.toMillis(30)) {
+                mLastTranslationFailureLogAt = now;
+                TynRuntimeDiagnostics.append(mSessionDir, "Translation table read or validation failed; polling will continue", error);
+            }
             return false;
         }
     }
@@ -584,6 +618,7 @@ public class MainActivity extends SDLActivity
         applyGameDirFromIntent(getIntent());
 
         super.onCreate(savedInstanceState);
+        TynRuntimeDiagnostics.append(mSessionDir, "Android SDL activity onCreate completed");
 
         mStorageManager = (StorageManager) getSystemService(STORAGE_SERVICE);
 
@@ -596,6 +631,7 @@ public class MainActivity extends SDLActivity
         try {
             ActivityInfo actInfo = getPackageManager().getActivityInfo(this.getComponentName(), PackageManager.GET_META_DATA);
             DEBUG = actInfo.metaData.getBoolean("mkxp_debug") || mDebugEnabled;
+            TynRuntimeDiagnostics.append(mSessionDir, "Debug logging configured; enabled=" + DEBUG);
         } catch (PackageManager.NameNotFoundException e) {
             Log.w(TAG, "Failed to set debug flag: " + e);
             e.printStackTrace();
@@ -640,17 +676,44 @@ public class MainActivity extends SDLActivity
 
     private void exportDiagnostics()
     {
-        try {
-            File report = TynRuntimeDiagnostics.createReport(this, mSessionDir);
-            if (report == null) {
-                Toast.makeText(this, R.string.runtime_diagnostics_no_logs, Toast.LENGTH_SHORT).show();
-                return;
+        if (mDiagnosticsExporting) return;
+        mDiagnosticsExporting = true;
+        Toast.makeText(this, R.string.runtime_diagnostics_exporting, Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            File archive = null;
+            Exception failure = null;
+            try {
+                archive = TynRuntimeDiagnostics.createArchive(this);
+            } catch (Exception error) {
+                failure = error;
             }
-            TynRuntimeDiagnostics.share(this, report, getString(R.string.runtime_diagnostics_share_title));
-        } catch (Exception error) {
-            Log.e(TAG, "Could not export runtime diagnostics", error);
-            Toast.makeText(this, R.string.runtime_diagnostics_export_failed, Toast.LENGTH_SHORT).show();
-        }
+            File result = archive;
+            Exception exportFailure = failure;
+            runOnUiThread(() -> {
+                mDiagnosticsExporting = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (exportFailure != null) {
+                    Log.e(TAG, "Could not export runtime diagnostics", exportFailure);
+                    Toast.makeText(this, R.string.runtime_diagnostics_export_failed, Toast.LENGTH_SHORT).show();
+                } else if (result == null) {
+                    Toast.makeText(this, R.string.runtime_diagnostics_no_logs, Toast.LENGTH_SHORT).show();
+                } else {
+                    try {
+                        TynRuntimeDiagnostics.share(this, result, getString(R.string.runtime_diagnostics_share_title));
+                    } catch (Exception error) {
+                        Log.e(TAG, "Could not share runtime diagnostics", error);
+                        Toast.makeText(this, R.string.runtime_diagnostics_export_failed, Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+        }, "tyn-rgss-diagnostics-export").start();
+    }
+
+    @Override
+    protected void onResume()
+    {
+        super.onResume();
+        TynRuntimeDiagnostics.append(mSessionDir, "Runtime activity resumed");
     }
 
     /**
@@ -661,7 +724,10 @@ public class MainActivity extends SDLActivity
     public static void onGameFirstFrame()
     {
         MainActivity a = sInstance;
-        if (a != null && a.mUi != null) a.mUi.onFirstFrame();
+        if (a != null) {
+            TynRuntimeDiagnostics.append(a.mSessionDir, "First game frame rendered; runtime reached the game screen");
+            if (a.mUi != null) a.mUi.onFirstFrame();
+        }
     }
 
     /**
@@ -707,6 +773,9 @@ public class MainActivity extends SDLActivity
     protected void onStart()
     {
         super.onStart();
+        TynRuntimeDiagnostics.append(mSessionDir, mStarted
+            ? "Runtime activity entered onStart after a previous start"
+            : "Runtime activity entered onStart; native runtime startup is next");
 
         if (!mStarted) {
             // Check for main OBB file
@@ -730,7 +799,7 @@ public class MainActivity extends SDLActivity
     @Override
     protected void onDestroy()
     {
-        TynRuntimeDiagnostics.append(mSessionDir, "Runtime activity destroyed");
+        TynRuntimeDiagnostics.append(mSessionDir, "Runtime activity destroyed; clean process exit requested");
         if (mTranslationSync != null) {
             mTranslationSync.shutdownNow();
             mTranslationSync = null;

@@ -75,28 +75,54 @@ class RuntimeInfoActivity : Activity() {
                 cornerRadius = dp(12).toFloat()
             }
             setOnClickListener {
-                try {
-                    val report = TynRuntimeDiagnostics.createReport(this@RuntimeInfoActivity, null)
-                    if (report == null) {
-                        android.widget.Toast.makeText(
-                            this@RuntimeInfoActivity,
-                            R.string.runtime_diagnostics_no_logs,
-                            android.widget.Toast.LENGTH_SHORT,
-                        ).show()
-                    } else {
-                        TynRuntimeDiagnostics.share(
-                            this@RuntimeInfoActivity,
-                            report,
-                            getString(R.string.runtime_diagnostics_share_title),
-                        )
+                if (!isEnabled) return@setOnClickListener
+                isEnabled = false
+                val button = this
+                val defaultText = text
+                text = getString(R.string.runtime_info_exporting_diagnostics)
+                Thread({
+                    var archive: java.io.File? = null
+                    var failure: Exception? = null
+                    try {
+                        archive = TynRuntimeDiagnostics.createArchive(this@RuntimeInfoActivity)
+                    } catch (error: Exception) {
+                        failure = error
                     }
-                } catch (error: Exception) {
-                    android.widget.Toast.makeText(
-                        this@RuntimeInfoActivity,
-                        R.string.runtime_diagnostics_export_failed,
-                        android.widget.Toast.LENGTH_SHORT,
-                    ).show()
-                }
+                    val result = archive
+                    val exportFailure = failure
+                    runOnUiThread {
+                        button.isEnabled = true
+                        button.text = defaultText
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        if (exportFailure != null) {
+                            android.widget.Toast.makeText(
+                                this@RuntimeInfoActivity,
+                                R.string.runtime_diagnostics_export_failed,
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        } else if (result == null) {
+                            android.widget.Toast.makeText(
+                                this@RuntimeInfoActivity,
+                                R.string.runtime_diagnostics_no_logs,
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        } else {
+                            try {
+                                TynRuntimeDiagnostics.share(
+                                    this@RuntimeInfoActivity,
+                                    result,
+                                    getString(R.string.runtime_diagnostics_share_title),
+                                )
+                            } catch (error: Exception) {
+                                android.widget.Toast.makeText(
+                                    this@RuntimeInfoActivity,
+                                    R.string.runtime_diagnostics_export_failed,
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        }
+                    }
+                }, "tyn-rgss-diagnostics-export").start()
             }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(14)
