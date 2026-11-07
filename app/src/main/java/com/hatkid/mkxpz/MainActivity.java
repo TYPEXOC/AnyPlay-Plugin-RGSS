@@ -678,7 +678,7 @@ public class MainActivity extends SDLActivity
     {
         if (mDiagnosticsExporting) return;
         mDiagnosticsExporting = true;
-        Toast.makeText(this, R.string.runtime_diagnostics_exporting, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.runtime_info_exporting_diagnostics, Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             File archive = null;
             Exception failure = null;
