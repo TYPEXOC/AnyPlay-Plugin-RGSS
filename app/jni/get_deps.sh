@@ -130,6 +130,7 @@ apply_patch_once ../patches/ruby187-remove-inline.patch
 # Ruby 1.8's config generator uses TRUE, removed from the CI host Ruby.
 apply_patch_once ../patches/ruby187-host-ruby-compat.patch
 # Load the host Ruby config before fake.rb overrides RUBY_VERSION for target checks.
+# Hide the source directory briefly so Ruby cannot load the target rbconfig.rb.
 apply_patch_once ../patches/ruby187-host-rbconfig-order.patch
 # Ruby 1.8 expects singleton method names as strings; Ruby 3 returns symbols.
 apply_patch_once ../patches/ruby187-host-fileutils-compat.patch

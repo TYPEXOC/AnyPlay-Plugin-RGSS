@@ -1,11 +1,14 @@
 diff --git a/Makefile.in b/Makefile.in
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -123,6 +123,7 @@ $(LIBRUBY_SO):
+@@ -123,6 +123,10 @@ $(LIBRUBY_SO):
  
  fake.rb:	Makefile
  		@echo ' \
++		ruby_source_dir = File.expand_path(File.dirname(__FILE__)); \
++		$$LOAD_PATH.delete(ruby_source_dir); \
 +		require "rbconfig"; \
++		$$LOAD_PATH.unshift(ruby_source_dir); \
  		class Object; \
  		  CROSS_COMPILING = RUBY_PLATFORM; \
  		  remove_const :RUBY_PLATFORM; \
