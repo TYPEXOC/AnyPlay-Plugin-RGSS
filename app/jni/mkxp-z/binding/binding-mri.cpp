@@ -51,10 +51,6 @@ extern "C" {
 #endif
 }
 
-#if RAPI_MAJOR == 1 && RAPI_FULL >= 190
-extern "C" void Init_ext(void);
-#endif
-
 #ifdef __WIN32__
 #include "binding-mri-win32.h"
 #endif
@@ -1454,10 +1450,24 @@ static void mriBindingExecute() {
     ruby_init();
 	Debug() << "Ruby VM initialization complete";
 #if RAPI_FULL >= 190
-    // ruby_init() alone does not initialize statically linked extensions.
-	Debug() << "Ruby static extension initialization begin";
-    Init_ext();
-	Debug() << "Ruby static extension initialization complete";
+    // Ruby 1.9 initializes static extensions while processing its normal
+    // command-line options. Init_ext is private to libruby and cannot be
+    // linked from this engine shared library.
+	Debug() << "Ruby options/static extension initialization begin";
+    std::vector<const char*> rubyArgsC{"mkxp-z", "-e "};
+    void *node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
+    int state = 0;
+    bool valid = ruby_executable_node(node, &state);
+    if (valid)
+        state = ruby_exec_node(node);
+    if (state || !valid) {
+		Debug() << "Ruby options/static extension initialization failed:" << state;
+        showMsg("An error occurred while initializing the Ruby 1.9 runtime.");
+        ruby_cleanup(state);
+        shState->rtData().rqTermAck.set();
+        return;
+    }
+	Debug() << "Ruby options/static extension initialization complete";
 #endif
     rb_eval_string("$KCODE='U'");
 #ifdef __WIN32__
