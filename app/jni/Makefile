@@ -143,8 +143,8 @@ CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 # The legacy Ruby generator scripts are patched for the supported CI host Ruby.
 # The Android runtimes still use the matching target headers and NDK toolchain.
 SHELL := /bin/bash
-RUBY_187_ENV := export PATH="$(BUILD_PREFIX)/bin:$$PATH"
-RUBY_193_ENV := export PATH="$(BUILD_PREFIX)/bin:$$PATH" && \
+RUBY_187_ENV := export RUBYOPT=--disable-gems && export PATH="$(BUILD_PREFIX)/bin:$$PATH"
+RUBY_193_ENV := export RUBYOPT=--disable-gems && export PATH="$(BUILD_PREFIX)/bin:$$PATH" && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
 RUBY_31_ENV := true
