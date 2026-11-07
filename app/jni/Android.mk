@@ -1,5 +1,13 @@
 L_PATH := $(call my-dir)
 
+ifeq ($(TARGET_ARCH_ABI), x86)
+RUBY193_CONFIG_ARCH := i686-linux-gnu
+else ifeq ($(TARGET_ARCH_ABI), x86_64)
+RUBY193_CONFIG_ARCH := x86_64-linux-gnu
+else
+RUBY193_CONFIG_ARCH := arm-linux-eabi
+endif
+
 # Include dependecies
 include $(L_PATH)/SDL2/Android.mk 
 include $(L_PATH)/SDL2_image/Android.mk

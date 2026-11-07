@@ -21,7 +21,7 @@ LOCAL_CPPFLAGS := \
 
 LOCAL_C_INCLUDES := \
 	$(LOCAL_BUILD_PATH)/include/ruby-1.9.3/ruby-1.9.1 \
-	$(LOCAL_BUILD_PATH)/include/ruby-1.9.3/ruby-1.9.1/arm-eabi/ \
+	$(LOCAL_BUILD_PATH)/include/ruby-1.9.3/ruby-1.9.1/$(RUBY193_CONFIG_ARCH) \
 	$(LOCAL_BUILD_PATH)/include \
 	$(LOCAL_PATH)/xxd/assets \
 	$(LOCAL_PATH)/xxd/shader \
