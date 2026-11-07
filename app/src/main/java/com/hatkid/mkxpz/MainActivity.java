@@ -325,7 +325,7 @@ public class MainActivity extends SDLActivity
     protected String getMainSharedObject()
     {
         String engine = runtimeLibs(sRuntimeId)[1];
-        return getContext().getApplicationInfo().nativeLibDir + "/lib" + engine + ".so";
+        return getContext().getApplicationInfo().nativeLibraryDir + "/lib" + engine + ".so";
     }
 
     @Override
@@ -416,7 +416,7 @@ public class MainActivity extends SDLActivity
     {
         super.onNewIntent(intent);
 
-        sNativeLibDir = getApplicationInfo().nativeLibDir;
+        sNativeLibDir = getApplicationInfo().nativeLibraryDir;
         String dir = intent.getStringExtra(EXTRA_GAME_DIR);
         String mode = intent.getStringExtra(EXTRA_RUNTIME_MODE);
         boolean anyplayLaunch = (dir != null && !dir.isEmpty()) || (mode != null && !mode.isEmpty());
@@ -444,7 +444,7 @@ public class MainActivity extends SDLActivity
     {
         // Must be before super.onCreate(): picks the game folder before SDL starts.
         applyGameDirFromIntent(getIntent());
-        sNativeLibDir = getApplicationInfo().nativeLibDir;
+        sNativeLibDir = getApplicationInfo().nativeLibraryDir;
         selectRubyRuntime(getIntent());
 
         super.onCreate(savedInstanceState);
