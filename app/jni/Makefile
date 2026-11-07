@@ -135,7 +135,9 @@ RUBY_BASE_CONFIGURE_ARGS := \
 RUBY_CONFIGURE_ARGS := $(RUBY_BASE_CONFIGURE_ARGS) \
 	--with-out-ext=readline,dbm,gdbm,win32,win32ole,fiddle
 RUBY_187_CONFIGURE_ARGS := $(RUBY_BASE_CONFIGURE_ARGS) \
-	--without-ext=readline,dbm,gdbm,win32,win32ole,fiddle,bigdecimal,Win32API,curses,tk
+	--without-readline --without-dbm --without-gdbm --without-win32 \
+	--without-win32ole --without-fiddle --without-bigdecimal \
+	--without-Win32API --without-curses --without-tk
 RUBY_193_CONFIGURE_ARGS := $(RUBY_BASE_CONFIGURE_ARGS) \
 	--with-out-ext=readline,dbm,gdbm,win32,win32ole,fiddle,ripper
 
