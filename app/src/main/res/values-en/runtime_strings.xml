@@ -11,6 +11,10 @@
     <string name="runtime_info_source">Based on mkxp-z, an open-source GPL v2 project\nhttps://github.com/TYPEXOC/AnyPlay-Plugin-RGSS</string>
     <string name="tyn_runtime_loading">Starting game…</string>
     <string name="tyn_runtime_cheat_button">Cheats</string>
+    <string name="tyn_runtime_copy_text">Copy current dialogue</string>
+    <string name="tyn_runtime_copy_empty">There is no dialogue to copy yet</string>
+    <string name="tyn_runtime_copy_done">Dialogue copied</string>
+    <string name="tyn_runtime_fast_forward">Fast forward %1$d×</string>
     <string name="tyn_runtime_close_title">Close game?</string>
     <string name="tyn_runtime_close_message">Close the game and return? Unsaved progress may be lost.</string>
     <string name="tyn_runtime_no">Cancel</string>

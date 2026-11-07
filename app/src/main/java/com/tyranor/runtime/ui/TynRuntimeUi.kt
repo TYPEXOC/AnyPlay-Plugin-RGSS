@@ -2,6 +2,9 @@ package com.tyranor.runtime.ui
 
 import android.app.Activity
 import android.app.Dialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -16,6 +19,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import android.content.res.ColorStateList
 import android.util.TypedValue
 import com.tyranor.runtime.cheat.TyranorCheatController
@@ -44,6 +48,9 @@ class TynRuntimeUi(
     private val primaryColor: Int,
     private val onPrimaryColor: Int,
     cheatsEnabled: Boolean,
+    private val copyTextEnabled: Boolean,
+    private val speedUp: Int,
+    private val sessionDir: File?,
     private val onExportDiagnostics: Runnable,
 ) {
     private val density = activity.resources.displayMetrics.density
@@ -54,6 +61,7 @@ class TynRuntimeUi(
     private var cheatMenu: TyranorCheatPanel? = null
     private var dialog: Dialog? = null
     private var loadingGone = false
+    private var fastForwardEnabled = false
 
     init {
         parent.addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -107,6 +115,38 @@ class TynRuntimeUi(
                 },
             )
         }
+
+        if (copyTextEnabled) {
+            root.addView(
+                actionButton("文", activity.getString(R.string.tyn_runtime_copy_text)) {
+                    copyActiveText()
+                },
+                FrameLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt(), Gravity.TOP or Gravity.START).apply {
+                    topMargin = (16 * density).toInt()
+                    marginStart = (16 * density).toInt()
+                },
+            )
+        }
+
+        if (speedUp > 1) {
+            val fastForwardButton = actionButton(
+                "≫",
+                activity.getString(R.string.tyn_runtime_fast_forward, speedUp),
+            ) {}
+            fastForwardButtonColor(fastForwardButton, enabled = false)
+            fastForwardButton.setOnClickListener {
+                fastForwardEnabled = !fastForwardEnabled
+                fastForwardButtonColor(fastForwardButton, fastForwardEnabled)
+                writeFastForwardState()
+            }
+            root.addView(
+                fastForwardButton,
+                FrameLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt(), Gravity.TOP or Gravity.END).apply {
+                    topMargin = (72 * density).toInt()
+                    marginEnd = (16 * density).toInt()
+                },
+            )
+        }
     }
 
     /** Called (from any thread) when the game has drawn its first frame. */
@@ -143,14 +183,61 @@ class TynRuntimeUi(
     }
 
     fun onPause() {
+        fastForwardEnabled = false
+        writeFastForwardState()
         controller.onPause()
     }
 
     fun onDestroy() {
+        fastForwardEnabled = false
+        writeFastForwardState()
         dialog?.dismiss()
         cheatMenu?.dismiss()
         cheats?.shutdown()
         controller.shutdown()
+    }
+
+    private fun actionButton(label: String, description: String, onClick: () -> Unit): TextView =
+        TextView(activity).apply {
+            text = label
+            contentDescription = description
+            gravity = Gravity.CENTER
+            setTextColor(onPrimaryColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(primaryColor)
+            }
+            elevation = 8f * density
+            setOnClickListener { onClick() }
+        }
+
+    private fun fastForwardButtonColor(fastForwardButton: TextView, enabled: Boolean) {
+        fastForwardButton.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(if (enabled) primaryColor else 0xAA30343B.toInt())
+        }
+    }
+
+    private fun copyActiveText() {
+        val text = sessionDir?.let { dir ->
+            runCatching { File(dir, "tyranor_copy_text.txt").readText() }.getOrNull()
+        }.orEmpty()
+        if (text.isBlank()) {
+            Toast.makeText(activity, R.string.tyn_runtime_copy_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        clipboard?.setPrimaryClip(ClipData.newPlainText("RPG Maker text", text))
+        Toast.makeText(activity, R.string.tyn_runtime_copy_done, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun writeFastForwardState() {
+        val dir = sessionDir ?: return
+        runCatching {
+            File(dir, "fast_forward").writeText(if (fastForwardEnabled) "1" else "0")
+        }
     }
 
     // ---- Close-game dialog -------------------------------------------------

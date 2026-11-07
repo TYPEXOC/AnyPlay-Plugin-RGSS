@@ -797,6 +797,7 @@ struct GraphicsPrivate {
     SDL_GLContext glCtx;
     
     int frameRate;
+    int fastForwardSpeed;
     int frameCount;
     int brightness;
     
@@ -835,7 +836,7 @@ struct GraphicsPrivate {
     winSize(rtData->config.defScreenW, rtData->config.defScreenH),
     screen(scRes.x, scRes.y), threadData(rtData),
     glCtx(SDL_GL_GetCurrentContext()), multithreadedMode(true),
-    frameRate(DEF_FRAMERATE), frameCount(0), brightness(255),
+    frameRate(DEF_FRAMERATE), fastForwardSpeed(1), frameCount(0), brightness(255),
     fpsLimiter(frameRate), useFrameSkip(rtData->config.frameSkip), frozen(false),
     last_update(0), last_avg_update(0), backingScaleFactor(1), integerScaleFactor(0, 0),
     integerScaleActive(rtData->config.integerScaling.active),
@@ -880,6 +881,18 @@ struct GraphicsPrivate {
     /* Enforces fixed aspect ratio, if desired */
     void recalculateScreenSize(bool fixedAspectRatio) {
         scSize = winSize;
+        const std::string &alignment = threadData->config.verticalScreenAlign;
+
+        const auto applyAlignment = [this, &alignment]() {
+            if (alignment == "top") {
+                scOffset = Vec2i(0, 0);
+            } else if (alignment == "top-center") {
+                scOffset = Vec2i((winSize.x - scSize.x) / 2, 0);
+            } else {
+                scOffset = Vec2i((winSize.x - scSize.x) / 2,
+                                 (winSize.y - scSize.y) / 2);
+            }
+        };
         
         if (!fixedAspectRatio && integerLastMileScaling) {
             scOffset = Vec2i(0, 0);
@@ -887,10 +900,8 @@ struct GraphicsPrivate {
         }
         
         if (integerScaleActive && !integerLastMileScaling) {
-            scOffset.x = ((winSize.x / 2) - (scRes.x / 2) * integerScaleFactor.x);
-            scOffset.y = ((winSize.y / 2) - (scRes.y / 2) * integerScaleFactor.y);
-            
             scSize = Vec2i(scRes.x * integerScaleFactor.x, scRes.y * integerScaleFactor.y);
+            applyAlignment();
             return;
         }
         
@@ -902,8 +913,7 @@ struct GraphicsPrivate {
         else if (resRatio < winRatio)
             scSize.x = scSize.y * resRatio;
         
-        scOffset.x = (winSize.x - scSize.x) / 2.f;
-        scOffset.y = (winSize.y - scSize.y) / 2.f;
+        applyAlignment();
     }
     
     static int findHighestFittingScale(int base, int target) {
@@ -1336,8 +1346,17 @@ void Graphics::setFrameRate(int value) {
     if (p->threadData->config.fixedFramerate > 0)
         return;
     
-    p->fpsLimiter.setDesiredFPS(p->frameRate);
+    int targetFPS = p->frameRate * p->fastForwardSpeed;
+    p->fpsLimiter.setDesiredFPS((uint16_t)clamp(targetFPS, 10, 720));
     shState->input().recalcRepeat((unsigned int)p->frameRate);
+}
+
+void Graphics::setFastForwardSpeed(int multiplier) {
+    p->fastForwardSpeed = clamp(multiplier, 1, 9);
+    int baseFPS = p->threadData->config.fixedFramerate > 0
+        ? p->threadData->config.fixedFramerate : p->frameRate;
+    p->fpsLimiter.setDesiredFPS((uint16_t)clamp(baseFPS * p->fastForwardSpeed, 10, 720));
+    p->fpsLimiter.resetFrameAdjust();
 }
 
 double Graphics::averageFrameRate() {

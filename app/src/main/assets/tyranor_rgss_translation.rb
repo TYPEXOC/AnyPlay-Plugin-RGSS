@@ -3,10 +3,13 @@ module TyranorText
   SESSION_DIR = File.dirname(__FILE__)
   TABLE_PATH = File.join(SESSION_DIR, 'runtime_translations.hex')
   VERSION_PATH = File.join(SESSION_DIR, 'rgss_version')
+  COPY_PATH = File.join(SESSION_DIR, 'tyranor_copy_text.txt')
+  FAST_FORWARD_PATH = File.join(SESSION_DIR, 'fast_forward')
   @translations = {}
   @signature = nil
   @ticks = 0
   @active_message_sources = []
+  @fast_forward_state = nil
 
   def self.log(message)
     begin
@@ -67,6 +70,30 @@ module TyranorText
 
   def self.set_active_message_sources(lines)
     @active_message_sources = lines.is_a?(Array) ? lines.collect { |line| line.is_a?(String) ? line.dup : '' } : []
+    write_copy_text(@active_message_sources.collect { |line| translate(line) }.join("\n"))
+  end
+
+  def self.write_copy_text(value)
+    return unless defined?(CFG) && CFG["copyText"]
+    File.open(COPY_PATH, 'w') { |file| file.write(value.to_s) }
+  rescue Exception => error
+    log("copy text update failed: #{error}")
+  end
+
+  def self.update_fast_forward
+    return unless defined?(Graphics) && Graphics.respond_to?(:set_fast_forward_speed)
+    active = false
+    begin
+      active = File.file?(FAST_FORWARD_PATH) && File.read(FAST_FORWARD_PATH).strip == '1'
+    rescue Exception
+    end
+    return if active == @fast_forward_state
+    factor = active ? (CFG["speedUp"].to_i rescue 1) : 1
+    factor = [[factor, 1].max, 9].min
+    Graphics.set_fast_forward_speed(factor)
+    @fast_forward_state = active
+  rescue Exception => error
+    log("fast-forward update failed: #{error}")
   end
 
   def self.refresh_active_message
@@ -84,6 +111,7 @@ module TyranorText
         window.instance_variable_set(:@fiber, nil) if window.instance_variable_defined?(:@fiber)
         window.instance_variable_set(:@line_count, 0) if window.instance_variable_defined?(:@line_count)
       end
+      write_copy_text(lines.join("\n"))
       return
     end
 
@@ -103,6 +131,7 @@ module TyranorText
           log("VX message redraw unavailable: #{error}")
         end
       end
+      write_copy_text(lines.join("\n"))
       return
     end
 
@@ -115,6 +144,7 @@ module TyranorText
       rescue Exception
       end
     end
+    write_copy_text(lines.join("\n"))
   rescue Exception => error
     log("active message refresh failed: #{error}")
   end
@@ -266,6 +296,7 @@ module TyranorText
   def self.tick
     @ticks += 1
     return unless (@ticks % 10) == 0
+    update_fast_forward
     reload
     install_hooks
   rescue Exception

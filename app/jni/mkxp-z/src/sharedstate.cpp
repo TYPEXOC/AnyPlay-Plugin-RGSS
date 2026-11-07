@@ -138,8 +138,7 @@ struct SharedStatePrivate
 		for (size_t i = 0; i < config.rtps.size(); ++i)
 			fileSystem.addPath(config.rtps[i].c_str());
 
-		if (config.pathCache)
-			fileSystem.createPathCache();
+		fileSystem.configurePathCache(config.pathCache, config.prebuiltPathCache);
 
 		fileSystem.initFontSets(fontState);
 

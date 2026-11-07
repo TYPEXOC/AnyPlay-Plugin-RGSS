@@ -303,6 +303,7 @@ struct FileSystemPrivate {
   /* This is for compatibility with games that take Windows'
    * case insensitivity for granted */
   bool havePathCache;
+  bool pathCachePending;
 };
 
 static void throwPhysfsError(const char *desc) {
@@ -343,6 +344,7 @@ FileSystem::FileSystem(const char *argv0, bool allowSymlinks)
 
 	p = new FileSystemPrivate;
 	p->havePathCache = false;
+  p->pathCachePending = false;
 
 	if (allowSymlinks)
 		PHYSFS_permitSymbolicLinks(1);
@@ -484,7 +486,14 @@ void FileSystem::createPathCache() {
   PHYSFS_enumerate("", cacheEnumCB, &data);
 
   p->havePathCache = true;
+  p->pathCachePending = false;
   Debug() << "AnyPlay: file index built in" << (int)(SDL_GetTicks() - t0) << "ms";
+}
+
+void FileSystem::configurePathCache(bool enabled, bool prebuild) {
+  p->pathCachePending = enabled && !prebuild;
+  if (enabled && prebuild)
+    createPathCache();
 }
 
 void FileSystem::reloadPathCache() {
@@ -517,7 +526,8 @@ static PHYSFS_EnumerateCallbackResult fontSetEnumCB(void *data, const char *dir,
     lowExt[i] = tolower(ext[i]);
   lowExt[i] = '\0';
 
-  if (strcmp(lowExt, "ttf") && strcmp(lowExt, "otf"))
+  if (strcmp(lowExt, "ttf") && strcmp(lowExt, "otf") &&
+      strcmp(lowExt, "ttc") && strcmp(lowExt, "otc"))
     return PHYSFS_ENUM_OK;
 
   char filename[512];
@@ -646,6 +656,9 @@ openReadEnumCB(void *d, const char *dirpath, const char *filename) {
 }
 
 void FileSystem::openRead(OpenHandler &handler, const char *filename) {
+  if (p->pathCachePending)
+    createPathCache();
+
   std::string filename_nm = normalize(filename, false, false);
   char buffer[512];
   size_t len = strcpySafe(buffer, filename_nm.c_str(), sizeof(buffer), -1);

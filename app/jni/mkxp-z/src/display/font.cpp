@@ -28,6 +28,7 @@
 #include "util.h"
 #include "config.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -102,11 +103,17 @@ struct SharedFontStatePrivate
     /* Internal default font family that is used anytime an
      * empty/invalid family is requested */
     std::string defaultFamily;
+    std::string customFontPath;
+    float fontScale;
+    bool useCJKFont;
 };
 
 SharedFontState::SharedFontState(const Config &conf)
 {
 	p = new SharedFontStatePrivate;
+	p->customFontPath = conf.customFont;
+	p->fontScale = conf.fontScale < 0.1f ? 1.0f : conf.fontScale;
+	p->useCJKFont = conf.useCJKFont;
 
 	/* Parse font substitutions */
 	for (size_t i = 0; i < conf.fontSubs.size(); ++i)
@@ -165,13 +172,17 @@ _TTF_Font *SharedFontState::getFont(std::string family,
 	if (p->subs.contains(family))
 		family = p->subs[family];
 
+	/* TYN's selected font replaces the game's requested family. */
+	if (!p->customFontPath.empty())
+		family = "__tyranor_custom_font__";
+
 	/* Find out if the font asset exists */
 	const FontSet &req = p->sets[family];
 
-	if (req.regular.empty() && req.other.empty())
+	if (family != "__tyranor_custom_font__" && req.regular.empty() && req.other.empty())
 	{
-		/* Doesn't exist; use built-in font */
-		family = "";
+		/* Use the Android CJK font for missing families when requested. */
+		family = p->useCJKFont ? "__tyranor_cjk_font__" : "";
 	}
 
 	FontKey key(family, size);
@@ -184,7 +195,34 @@ _TTF_Font *SharedFontState::getFont(std::string family,
 	/* Not in pool; open new handle */
 	SDL_RWops *ops;
 
-	if (family.empty())
+	if (family == "__tyranor_custom_font__")
+	{
+		ops = SDL_RWFromFile(p->customFontPath.c_str(), "rb");
+		if (!ops)
+			ops = openBundledFont();
+	}
+	else if (family == "__tyranor_cjk_font__")
+	{
+		const char *cjkPaths[] = {
+			"/system/fonts/NotoSansCJK-Regular.ttc",
+			"/system/fonts/NotoSansCJKsc-Regular.otf",
+			"/system/fonts/NotoSansCJK-Regular.otf",
+			0
+		};
+		ops = 0;
+		for (int i = 0; cjkPaths[i] && !ops; ++i)
+			ops = SDL_RWFromFile(cjkPaths[i], "rb");
+		if (!ops)
+		{
+			family = "";
+			key = FontKey(family, size);
+			font = p->pool.value(key);
+			if (font)
+				return font;
+			ops = openBundledFont();
+		}
+	}
+	else if (family.empty())
 	{
 		/* Built-in font */
 		ops = openBundledFont();
@@ -203,7 +241,7 @@ _TTF_Font *SharedFontState::getFont(std::string family,
 	// FIXME 0.9 is guesswork at this point
 //	float gamma = (96.0/45.0)*(5.0/14.0)*(size-5);
 //	font = TTF_OpenFontRW(ops, 1, gamma /** .90*/);
-	font = TTF_OpenFontRW(ops, 1, size* 0.90f);
+	font = TTF_OpenFontRW(ops, 1, std::max<int>(1, (int)(size * 0.90f * p->fontScale)));
 
 	if (!font)
 		throw Exception(Exception::SDLError, "%s", SDL_GetError());

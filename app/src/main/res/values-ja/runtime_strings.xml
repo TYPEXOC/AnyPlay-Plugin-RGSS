@@ -11,6 +11,10 @@
     <string name="runtime_info_source">GPL v2 のオープンソースプロジェクト mkxp-z をベースにしています\nhttps://github.com/TYPEXOC/AnyPlay-Plugin-RGSS</string>
     <string name="tyn_runtime_loading">ゲームを起動中…</string>
     <string name="tyn_runtime_cheat_button">チート</string>
+    <string name="tyn_runtime_copy_text">現在の会話をコピー</string>
+    <string name="tyn_runtime_copy_empty">コピーできる会話がありません</string>
+    <string name="tyn_runtime_copy_done">会話をコピーしました</string>
+    <string name="tyn_runtime_fast_forward">%1$d倍速</string>
     <string name="tyn_runtime_close_title">ゲームを終了しますか？</string>
     <string name="tyn_runtime_close_message">ゲームを終了して戻りますか？保存されていない進行状況は失われる可能性があります。</string>
     <string name="tyn_runtime_no">キャンセル</string>

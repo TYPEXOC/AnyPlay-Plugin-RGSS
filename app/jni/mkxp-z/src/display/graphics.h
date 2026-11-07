@@ -45,6 +45,7 @@ public:
 	                const char *filename = "",
 	                int vague = 40);
 	void frameReset();
+	void setFastForwardSpeed(int multiplier);
 
 	DECL_ATTR( FrameRate,  int )
 	DECL_ATTR( FrameCount, int )

@@ -765,8 +765,19 @@ static void processReset() {
     shState->graphics().repaintWait(shState->rtData().rqResetFinish, false);
 }
 
+static void runCustomScript(const std::string &filename);
+
 RB_METHOD(mriRgssMain) {
     RB_UNUSED_PARAM;
+
+    /* Postload scripts run after the game's script pack has been loaded. */
+    const Config &conf = shState->rtData().config;
+    for (std::vector<std::string>::const_iterator i = conf.postloadScripts.begin();
+         i != conf.postloadScripts.end(); ++i) {
+        if (shState->rtData().rqTerm)
+            break;
+        runCustomScript(*i);
+    }
     
     while (true) {
         VALUE exc = Qnil;
@@ -1689,6 +1700,7 @@ end
 # the folder is listed once (one trip) and the answers come from that list.
 # The list is refreshed every 10 minutes, so files that appear later are found.
 # Only the read-only resource folders are handled this way.
+if CFG["fastPathEnum"]
 module AnyPlayFastFiles
   RES = /\A(?:\.\/)?(?:Graphics|Audio|Fonts)\//i
   TTL = 600
@@ -1835,6 +1847,12 @@ module AnyPlayFastFiles
         v
       end
     end
+  end
+end
+else
+  module AnyPlayFastFiles
+    def self.take_stats; ""; end
+    def self.slowfs_report; ""; end
   end
 end
 

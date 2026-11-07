@@ -12,6 +12,10 @@
     <string name="runtime_info_source">基于 GPL v2 开源项目 mkxp-z\nhttps://github.com/TYPEXOC/AnyPlay-Plugin-RGSS</string>
     <string name="tyn_runtime_loading">正在启动游戏…</string>
     <string name="tyn_runtime_cheat_button">作弊面板</string>
+    <string name="tyn_runtime_copy_text">复制当前对话</string>
+    <string name="tyn_runtime_copy_empty">当前没有可复制的对话</string>
+    <string name="tyn_runtime_copy_done">对话已复制</string>
+    <string name="tyn_runtime_fast_forward">快进 %1$d 倍</string>
     <string name="tyn_runtime_close_title">关闭游戏？</string>
     <string name="tyn_runtime_close_message">要关闭游戏并返回吗？未保存的进度可能会丢失。</string>
     <string name="tyn_runtime_no">取消</string>

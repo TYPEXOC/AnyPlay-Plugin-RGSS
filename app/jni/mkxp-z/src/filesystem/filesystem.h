@@ -44,6 +44,7 @@ public:
 
 	/* Call these after the last 'addPath()' */
 	void createPathCache();
+	void configurePathCache(bool enabled, bool prebuild);
     
     void reloadPathCache();
 

@@ -171,8 +171,17 @@ void Config::read(int argc, char *argv[]) {
         {"SESourceCount", 6},
         {"customScript", ""},
         {"pathCache", true},
+        {"prebuiltPathCache", true},
+        {"fastPathEnum", true},
+        {"copyText", false},
+        {"useCJKFont", false},
+        {"customFont", ""},
+        {"verticalScreenAlign", "top-center"},
+        {"fontScale", 0.75},
+        {"speedUp", 1},
         {"useScriptNames", 1},
         {"preloadScript", json::array({})},
+        {"postloadScript", json::array({})},
         {"RTP", json::array({})},
         {"fontSub", json::array({})},
         {"rubyLoadpath", json::array({})},
@@ -227,6 +236,12 @@ try { exp } catch (...) {}
     SET_STRINGOPT(execName, execName);
     SET_OPT(allowSymlinks, boolean);
     SET_OPT(pathCache, boolean);
+    SET_OPT(prebuiltPathCache, boolean);
+    SET_OPT(useCJKFont, boolean);
+    SET_STRINGOPT(customFont, customFont);
+    SET_STRINGOPT(verticalScreenAlign, verticalScreenAlign);
+    SET_OPT(fontScale, number);
+    SET_OPT(speedUp, integer);
     SET_OPT_CUSTOMKEY(jit.enabled, JITEnable, boolean);
     SET_OPT_CUSTOMKEY(jit.verboseLevel, JITVerboseLevel, integer);
     SET_OPT_CUSTOMKEY(jit.maxCache, JITMaxCache, integer);
@@ -280,6 +295,7 @@ try { exp } catch (...) {}
     SET_OPT(useScriptNames, boolean);
     
     fillStringVec(opts["preloadScript"], preloadScripts);
+    fillStringVec(opts["postloadScript"], postloadScripts);
     fillStringVec(opts["RTP"], rtps);
     fillStringVec(opts["fontSub"], fontSubs);
     fillStringVec(opts["rubyLoadpath"], rubyLoadpaths);

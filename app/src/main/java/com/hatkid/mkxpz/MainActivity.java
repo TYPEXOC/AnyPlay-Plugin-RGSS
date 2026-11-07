@@ -94,6 +94,9 @@ public class MainActivity extends SDLActivity
     private boolean mTynLaunch = false;
     private boolean mPadEnabled = true;
     private boolean mCheatsEnabled = true;
+    private boolean mDebugEnabled = false;
+    private boolean mCopyTextEnabled = false;
+    private int mSpeedUp = 1;
     private int mThemePrimaryColor = 0xFF18B978;
     private int mThemeOnPrimaryColor = 0xFFFFFFFF;
     private String mPadProfileUri;
@@ -179,7 +182,6 @@ public class MainActivity extends SDLActivity
         if (TYN_ACTION_LAUNCH.equals(intent.getAction())) {
             mTynLaunch = true;
             String rubyRuntime = intent.getStringExtra(TYN_EXTRA_RUBY_RUNTIME);
-            sRubyRuntime = "187".equals(rubyRuntime) ? 187 : "193".equals(rubyRuntime) ? 193 : 313;
             String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
             if (dir == null || dir.isEmpty() || !new File(dir).isDirectory()) {
                 Log.e(TAG, "TYN runtime launch has no readable game folder");
@@ -187,12 +189,18 @@ public class MainActivity extends SDLActivity
             }
             GAME_FOLDER = new File(dir).getAbsolutePath();
             GAME_PATH = GAME_FOLDER;
+            sRubyRuntime = resolveRubyRuntime(rubyRuntime, GAME_FOLDER);
             mCustomGameDir = true;
             mPadEnabled = intent.getBooleanExtra(TYN_EXTRA_PAD_ENABLED, true);
             try {
                 String options = intent.getStringExtra(TYN_EXTRA_RGSS_OPTIONS);
                 mTynRgssOptions = options == null ? null : new JSONObject(options);
-                if (mTynRgssOptions != null) mCheatsEnabled = mTynRgssOptions.optBoolean("cheatsEnabled", true);
+                if (mTynRgssOptions != null) {
+                    mCheatsEnabled = mTynRgssOptions.optBoolean("cheatsEnabled", true);
+                    mDebugEnabled = mTynRgssOptions.optBoolean("debug", false);
+                    mCopyTextEnabled = mTynRgssOptions.optBoolean("copyText", false);
+                    mSpeedUp = Math.max(1, Math.min(9, mTynRgssOptions.optInt("speedUp", 1)));
+                }
             } catch (Exception error) {
                 Log.w(TAG, "Ignoring invalid TYN RGSS options", error);
                 mTynRgssOptions = null;
@@ -238,6 +246,8 @@ public class MainActivity extends SDLActivity
             String suffix = shortHash((mGameId == null ? GAME_FOLDER : mGameId) + System.nanoTime());
             mSessionDir = new File(getFilesDir(), "tyranor/sessions/" + suffix);
             if (!mSessionDir.isDirectory() && !mSessionDir.mkdirs()) throw new java.io.IOException("Unable to create session folder");
+            writeAtomically(new File(mSessionDir, "fast_forward"), "0");
+            writeAtomically(new File(mSessionDir, "tyranor_copy_text.txt"), "");
             TynRuntimeDiagnostics.beginSession(
                 this,
                 mSessionDir,
@@ -287,15 +297,44 @@ public class MainActivity extends SDLActivity
         }
     }
 
-    /** Applies only options supported by this mkxp-z build to its private session config. */
+    /** Applies TYN RPG Maker settings to the private mkxp session, never to the game folder. */
     private void applyTynRgssOptions(JSONObject config) throws Exception
     {
         JSONObject options = mTynRgssOptions;
         if (options == null) return;
-        String[] booleanKeys = {"smoothScaling", "vsync", "frameSkip", "solidFonts", "pathCache"};
+        String[] booleanKeys = {
+            "debug", "smoothScaling", "vsync", "frameSkip", "solidFonts", "pathCache",
+            "prebuiltPathCache", "fastPathEnum", "copyText", "useCJKFont"
+        };
         for (String key : booleanKeys) {
-            if (options.has(key)) config.put(key, options.optBoolean(key));
+            if (options.has(key)) {
+                String configKey = "debug".equals(key) ? "debugMode" : key;
+                config.put(configKey, options.optBoolean(key));
+            }
         }
+
+        config.put("fontScale", parseFloat(options.optString("fontScale", "0.75"), 0.75f));
+        config.put("customFont", options.optString("customFont", ""));
+        config.put("verticalScreenAlign", options.optString("verticalScreenAlign", "top-center"));
+        config.put("speedUp", mSpeedUp);
+
+        // JoiPlay's postload switch controlled whether configured postload scripts ran.
+        // Keep that behavior, with execution implemented by this module's native Ruby host.
+        if (options.optBoolean("enablePostloadScripts", false)) {
+            config.put("postloadScript", stringArray(config.opt("postloadScript")));
+        } else {
+            config.put("postloadScript", new JSONArray());
+        }
+
+        // The imported RTP folders remain in the existing shared-storage contract so
+        // previously imported assets keep working after replacing the JoiPlay module.
+        JSONArray rtps = stringArray(config.opt("RTP"));
+        String versionFolder = new File(Environment.getExternalStorageDirectory(),
+            "JoiPlay/RTP/" + (detectRgssVersion(GAME_FOLDER) == 1 ? "RPGXP" :
+                detectRgssVersion(GAME_FOLDER) == 2 ? "RPGVX" : "RPGVXACE") + "/app").getAbsolutePath();
+        if (new File(versionFolder).isDirectory() && !containsString(rtps, versionFolder)) rtps.put(versionFolder);
+        config.put("RTP", rtps);
+
         String screenSize = options.optString("screenSize", "auto");
         if ("auto".equals(screenSize)) return;
         String[] supportedSizes = {
@@ -310,6 +349,19 @@ public class MainActivity extends SDLActivity
                 break;
             }
         }
+    }
+
+    private static float parseFloat(String value, float fallback)
+    {
+        try { return Float.parseFloat(value); } catch (Exception ignored) { return fallback; }
+    }
+
+    private static boolean containsString(JSONArray values, String target)
+    {
+        for (int i = 0; i < values.length(); i++) {
+            if (target.equals(values.optString(i))) return true;
+        }
+        return false;
     }
 
     private JSONObject readGameConfig()
@@ -349,6 +401,17 @@ public class MainActivity extends SDLActivity
         if (new File(data, "Actors.rxdata").isFile() || new File(folder, "Game.rgssad").isFile()) return 1;
         if (new File(data, "Actors.rvdata").isFile() || new File(folder, "Game.rgss2a").isFile()) return 2;
         return 3;
+    }
+
+    private static int resolveRubyRuntime(String requested, String gameFolder)
+    {
+        if ("187".equals(requested)) return 187;
+        if ("193".equals(requested)) return 193;
+        if ("313".equals(requested)) return 313;
+        int rgssVersion = detectRgssVersion(gameFolder);
+        if (rgssVersion == 1 || rgssVersion == 2) return 187;
+        if (rgssVersion == 3) return 193;
+        return 313;
     }
 
     private static String shortHash(String value)
@@ -532,7 +595,7 @@ public class MainActivity extends SDLActivity
         // Get Debug flag
         try {
             ActivityInfo actInfo = getPackageManager().getActivityInfo(this.getComponentName(), PackageManager.GET_META_DATA);
-            DEBUG = actInfo.metaData.getBoolean("mkxp_debug");
+            DEBUG = actInfo.metaData.getBoolean("mkxp_debug") || mDebugEnabled;
         } catch (PackageManager.NameNotFoundException e) {
             Log.w(TAG, "Failed to set debug flag: " + e);
             e.printStackTrace();
@@ -567,6 +630,9 @@ public class MainActivity extends SDLActivity
                 mThemePrimaryColor,
                 mThemeOnPrimaryColor,
                 mCheatsEnabled,
+                mCopyTextEnabled,
+                mSpeedUp,
+                mSessionDir,
                 this::exportDiagnostics
             );
         }

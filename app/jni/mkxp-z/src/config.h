@@ -72,6 +72,8 @@ struct Config {
     bool enableSettings;
     bool allowSymlinks;
     bool pathCache;
+    bool prebuiltPathCache;
+    bool useCJKFont;
     
     std::string dataPathOrg;
     std::string dataPathApp;
@@ -96,9 +98,14 @@ struct Config {
     
     std::vector<std::string> launchArgs;
     std::vector<std::string> preloadScripts;
+    std::vector<std::string> postloadScripts;
     std::vector<std::string> rtps;
     
     std::vector<std::string> fontSubs;
+    std::string customFont;
+    std::string verticalScreenAlign;
+    float fontScale;
+    int speedUp;
     
     std::vector<std::string> rubyLoadpaths;
     

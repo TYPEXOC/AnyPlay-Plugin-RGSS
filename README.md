@@ -10,7 +10,7 @@ The TYN module uses its own APK process. It declares translation support to Tyra
 
 1. Download **`Tyranor-RGSS-Runtime.apk`** from the `rgss-module` branch's GitHub Actions artifact, or from a tagged release.
 2. Install it and allow "Install unknown apps" for your browser or file manager if Android asks.
-3. In Tyranor Next, enable the module under **妙妙工具 → 引擎模块管理**, scan your games, then launch a detected RGSS game.
+3. In Tyranor Next, rescan the game library and launch an XP, VX, or VX Ace game detected as RPG Maker. The module is managed from TYN's RPG Maker engine entry; it does not appear in the generic runtime-module manager.
 
 The APK also appears in Android's app drawer as **TYN RGSS**. Opening it shows the runtime version, usage note, and source link; game launches still come from Tyranor Next.
 
@@ -22,7 +22,8 @@ New versions install over the old one. Nothing needs to be uninstalled.
 - TYN's configurable on-screen pad and pad-layout editor; virtual keys are sent to SDL in the runtime process.
 - TYN cheat panel backed by Ruby-side RGSS control code for supported XP / VX / VX Ace games and Pokémon Essentials variants.
 - Runtime loading of the translation file selected in Tyranor Next, with polling-based hot reload. The module reads the JSON through a temporary content URI grant and does not copy the bridge into the game folder.
-- Three separately built Ruby VMs: 1.8.7, 1.9.3, and 3.1.3. Tyranor Next selects the configured global default or per-game override and loads the matching Ruby and mkxp-z native libraries. This is independent of the detected RGSS1/2/3 game generation.
+- Three separately built Ruby VMs: 1.8.7, 1.9.3, and 3.1.3. Tyranor Next selects the effective global or per-game choice before loading native libraries. Auto uses the detected RGSS generation; explicitly selected versions override that mapping.
+- Tyranor Next's RPG Maker runtime options are applied to the private mkxp session: automatic Ruby selection uses 1.8.7 for XP/VX and 1.9.3 for VX Ace (unknown generations fall back to 3.1.3); rendering and frame pacing, path caches, fast resource enumeration, resolution and screen alignment, speed-up toggle, font scale/custom/CJK fonts, dialogue copy, cheat panel, debug mode, and configured postload scripts are wired to the runtime. Options can have global defaults and per-game overrides. The dialogue-copy action covers standard RGSS message events; custom plugin drawing paths may not expose their text.
 - Fixes for old scripts. Many games were written for Ruby 1.8; the plugin repairs the common problems automatically when the game starts, so the game does not need to be edited.
 - Private runtime diagnostics with the selected Ruby/RGSS versions, device ABI, game marker checks, and Ruby error details. Logs stay in the module's private session folder and do not modify the game folder.
 
