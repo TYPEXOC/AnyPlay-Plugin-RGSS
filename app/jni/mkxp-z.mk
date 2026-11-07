@@ -9,6 +9,8 @@ MKXPZ_RUNTIME_ID ?= r3
 MKXPZ_LEGACY_RUBY ?= 0
 # 1 = this engine runs on the patched r18 libruby (ruby-legacy/) and calls mkxp_legacy_*.
 MKXPZ_RUBY18_COMPAT ?= 0
+# 1 = this engine runs on a Ruby that has YJIT (r34 on arm64): enables it at the first Graphics.update.
+MKXPZ_YJIT ?= 0
 
 include $(CLEAR_VARS)
 
@@ -32,6 +34,10 @@ endif
 
 ifeq ($(MKXPZ_RUBY18_COMPAT),1)
 LOCAL_CPPFLAGS += -DMKXPZ_RUBY18_COMPAT
+endif
+
+ifeq ($(MKXPZ_YJIT),1)
+LOCAL_CPPFLAGS += -DMKXPZ_YJIT
 endif
 
 LOCAL_C_INCLUDES := \

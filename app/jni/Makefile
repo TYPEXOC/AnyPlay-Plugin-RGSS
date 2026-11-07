@@ -59,6 +59,19 @@ else
 	R18_PREFIX := $(R18_BUILD_PREFIX)
 endif
 
+# Third Ruby ("r34" runtime): Ruby 3.4, optional. Only built when BUILD_R34=1 (the
+# workflow input "build_r34"), so the default build is not affected by it at all.
+# Own source tree (ruby-r34/) and own install prefix (build-r34-<abi>/).
+R34_BUILD_PREFIX := ${PWD}/build-r34-$(ABI)
+R34_LIBDIR := $(R34_BUILD_PREFIX)/lib
+ifneq (, ${MSYSTEM})
+	R34_PREFIX := $(shell cygpath -m ${R34_BUILD_PREFIX})
+else ifneq (, $(findstring /cygdrive/,$(PATH)))
+	R34_PREFIX := $(shell cygpath -m ${R34_BUILD_PREFIX})
+else
+	R34_PREFIX := $(R34_BUILD_PREFIX)
+endif
+
 # Files of the Ruby 1.8 compatibility layer (ruby-legacy/) and the stamp that records
 # "applied to ruby-r18". Defined here because rule prerequisites expand immediately.
 LEGACY_KIT   := $(wildcard ruby-legacy/mkxp_legacy.inc ruby-legacy/legacy_prelude.rb ruby-legacy/apply-legacy-patches.py)
@@ -152,11 +165,26 @@ RUBY_CONFIGURE_ARGS := \
 # (A later --prefix on the configure command line overrides the earlier one.)
 RUBY_R18_CONFIGURE_ARGS := $(patsubst --prefix=%,--prefix="$(R18_PREFIX)",$(RUBY_CONFIGURE_ARGS))
 
+# Ruby 3.4 (r34): same options, own prefix. YJIT (Ruby's JIT, written in Rust) is only
+# supported on 64-bit ARM, so it is only switched on for arm64-v8a, and only when
+# BUILD_R34_YJIT=1. Ruby's configure refuses to cross-compile YJIT on its own, so
+# --enable-yjit is forced and rustc is told which Android target to build for.
+# (Needs: rustup target add aarch64-linux-android; the workflow does that.)
+# RJIT is Ruby 3.4's other JIT, not wanted here.
+RUBY_R34_CONFIGURE_ARGS := $(patsubst --prefix=%,--prefix="$(R34_PREFIX)",$(RUBY_CONFIGURE_ARGS)) --disable-rjit
+R34_CONFIGURE_ENV :=
+ifeq ($(BUILD_R34_YJIT)-$(ABI),1-arm64-v8a)
+	RUBY_R34_CONFIGURE_ARGS += --enable-yjit
+	R34_CONFIGURE_ENV := RUSTC="rustc --target=aarch64-linux-android"
+else
+	RUBY_R34_CONFIGURE_ARGS += --disable-yjit
+endif
+
 CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
 CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 
 
-.PHONY: all init clean cpufeatures pixman iconv openal openssl ruby ruby-r18 legacy-patches clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby-r18
+.PHONY: all init clean cpufeatures pixman iconv openal openssl ruby ruby-r18 ruby-r34 legacy-patches clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby-r18 clean-ruby-r34
 
 default: all
 
@@ -257,6 +285,24 @@ $(LEGACY_STAMP): ruby-r18/configure $(LEGACY_KIT)
 ruby-r18/configure: ruby-r18/configure.ac
 	cd ruby-r18; autoreconf -i
 
+# -------------------- Ruby 3.4 for the "r34" runtime (optional) --------------------
+# Upstream Ruby 3.4.9 (same revision as Kirin's r34), unpatched. Installs into
+# build-r34-<abi>/ (headers in include/ruby-3.4.0, library lib/libruby.so). Same SONAME
+# "libruby.so" as r3 and r18, the APK keeps them apart by file name (libruby_r34.so).
+# Not part of `all` unless BUILD_R34=1.
+ruby-r34: init openssl $(R34_LIBDIR)/libruby.so.3.4.0
+
+$(R34_LIBDIR)/libruby.so.3.4.0: ruby-r34/Makefile
+	cd ruby-r34; make -j$(NPROC); make install
+
+ruby-r34/Makefile: ruby-r34/configure
+	cd ruby-r34; $(R34_CONFIGURE_ENV) DLDFLAGS="-Wl,-soname,libruby.so" \
+	$(CONFIGURE) $(RUBY_R34_CONFIGURE_ARGS)
+
+# A git checkout of Ruby has no configure script (needs autoconf and bison/gperf).
+ruby-r34/configure: ruby-r34/configure.ac
+	cd ruby-r34; ./autogen.sh
+
 init:
 	@mkdir -p $(LIBDIR) $(INCDIR)
 
@@ -278,6 +324,13 @@ clean-ruby:
 clean-ruby-r18:
 	-cd ruby-r18; make clean; rm Makefile; rm configure
 
-clean: clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby-r18
+# r34: only does something when the ruby-r34 tree exists (BUILD_R34=1)
+clean-ruby-r34:
+	-if [ -d ruby-r34 ]; then cd ruby-r34 && make clean; rm -f Makefile configure; fi
+
+clean: clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby-r18 clean-ruby-r34
 
 all: pixman iconv openal openssl ruby ruby-r18
+ifeq ($(BUILD_R34),1)
+all: ruby-r34
+endif

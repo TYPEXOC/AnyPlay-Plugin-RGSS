@@ -57,9 +57,22 @@ public class MainActivity extends SDLActivity
     // so a different runtime always needs a fresh process (see onNewIntent).
     //   r3   : Ruby 3.1, no compatibility patches      (default)
     //   r18  : Ruby 3.1 + Ruby 1.8 compatibility layer  (game code sees Ruby 1.8.7)
+    //   r34  : Ruby 3.4 (+ YJIT on arm64 if the APK was built with it). Never picked
+    //          automatically; only by runtime_mode / anyplay_runtime.txt, and only if
+    //          the APK really contains it (otherwise r3 is used and the log says so).
     private static final String RT_R3 = "r3";
     private static final String RT_R18 = "r18";
+    private static final String RT_R34 = "r34";    // optional: only in APKs built with BUILD_R34=1
     private static String sRuntimeId = RT_R3;
+    private static String sNativeLibDir = null;    // set in onCreate / onNewIntent
+    private static String sRuntimeReason = "";
+
+    // Phase C: which runtime "auto" picks for an RGSS1 (RPG Maker XP, Ruby 1.8) game.
+    // RGSS2/RGSS3 games and games that cannot be identified always get RT_R3.
+    // If the r18 runtime ever misbehaves on a device, change this one line to RT_R3
+    // and every game goes back to the clean Ruby 3.1 runtime (explicit runtime_mode and
+    // anyplay_runtime.txt still work).
+    private static final String RGSS1_AUTO_RUNTIME = RT_R18;
 
     protected boolean mStarted = false;
 
@@ -155,6 +168,7 @@ public class MainActivity extends SDLActivity
      *   r18, ruby18, r187 -> r18  (Ruby 1.8 compatibility runtime; the real Ruby
      *                          1.8.7 build was removed in Phase B, so the old
      *                          names the launcher may still send map to r18)
+     *   r34, ruby34, ruby3_plus, ruby3plus -> r34  (Ruby 3.4)
      */
     private static String runtimeFromMode(String mode)
     {
@@ -167,32 +181,118 @@ public class MainActivity extends SDLActivity
             case "ruby18":
             case "r187":
                 return RT_R18;
+            case "r34":
+            case "ruby34":
+            case "ruby3_plus":
+            case "ruby3plus":
+                return RT_R34;
             default:
                 return null;
         }
     }
 
+    /** The runtime picked for a game and a short ASCII reason for the log. */
+    private static final class RuntimeChoice
+    {
+        final String id;
+        final String reason;
+
+        RuntimeChoice(String id, String reason)
+        {
+            this.id = id;
+            this.reason = reason;
+        }
+    }
+
+    private static boolean isAutoMode(String mode)
+    {
+        if (mode == null) return true;
+        String m = mode.trim().toLowerCase(Locale.ROOT);
+        return m.isEmpty() || m.equals("auto");
+    }
+
     /**
-     * Select a native VM before SDL loads any libraries. The launcher may pass
-     * runtime_mode to select a runtime explicitly (see runtimeFromMode).
-     * Auto mode uses r3 (Ruby 3.1): Windows ProductVersion is not reliable evidence
-     * of an RGSS generation, so it must not silently switch existing games.
+     * Decides the runtime for a game folder. Order (first match wins):
+     *   1. runtime_mode extra from the launcher, when it names a runtime (not "auto")
+     *   2. anyplay_runtime.txt in the game folder (r3 / r18 / auto), per-game override
+     *   3. auto-detect: RGSS1 -> RGSS1_AUTO_RUNTIME, RGSS2/RGSS3 -> r3
+     *   4. anything unknown -> r3 (the safe default)
+     * Used both at start-up and by onNewIntent, so both always agree.
+     */
+    private static RuntimeChoice resolveRuntime(String requestedMode, String gameDir)
+    {
+        RuntimeChoice c = resolveRuntimeRaw(requestedMode, gameDir);
+        if (!isRuntimeInstalled(c.id)) {
+            return new RuntimeChoice(RT_R3, "wanted " + c.id + " (" + c.reason + ") but this APK does not contain it,"
+                    + " using r3");
+        }
+        return c;
+    }
+
+    /** r3 and r18 are always in the APK. r34 only when it was built with BUILD_R34=1. */
+    private static boolean isRuntimeInstalled(String id)
+    {
+        if (!RT_R34.equals(id)) return true;
+        if (sNativeLibDir == null) return false;
+        String[] libs = runtimeLibs(id);
+        for (String lib : libs) {
+            if (!new File(sNativeLibDir, "lib" + lib + ".so").isFile()) return false;
+        }
+        return true;
+    }
+
+    private static RuntimeChoice resolveRuntimeRaw(String requestedMode, String gameDir)
+    {
+        String warn = "";
+
+        // 1. launcher
+        String id = runtimeFromMode(requestedMode);
+        if (id != null) {
+            return new RuntimeChoice(id, "launcher runtime_mode=" + requestedMode.trim());
+        }
+        if (!isAutoMode(requestedMode)) {
+            warn = " (unknown runtime_mode \"" + requestedMode + "\" ignored)";
+        }
+
+        File dir = (gameDir == null || gameDir.isEmpty()) ? null : new File(gameDir);
+
+        // 2. per-game override file
+        String override = RuntimeDetector.readOverride(dir);
+        if (override != null && !override.equals("auto")) {
+            String oid = runtimeFromMode(override);
+            if (oid != null) {
+                return new RuntimeChoice(oid, "game folder " + RuntimeDetector.OVERRIDE_FILE + "=" + override + warn);
+            }
+            warn += " (unknown value \"" + override + "\" in " + RuntimeDetector.OVERRIDE_FILE + " ignored)";
+        }
+
+        // 3. auto-detect
+        RuntimeDetector.Detection d = RuntimeDetector.detect(dir);
+        if (d.rgss == 1) {
+            return new RuntimeChoice(RGSS1_AUTO_RUNTIME, "auto: " + d.reason + warn);
+        }
+        if (d.rgss == 2 || d.rgss == 3) {
+            return new RuntimeChoice(RT_R3, "auto: " + d.reason + warn);
+        }
+        return new RuntimeChoice(RT_R3, "auto: unknown, safe default (" + d.reason + ")" + warn);
+    }
+
+    /**
+     * Select a native VM before SDL loads any libraries (see resolveRuntime for the
+     * rules). The result is also exported as the environment variable
+     * ANYPLAY_RUNTIME_REASON so that AnyPlayLog can print why this runtime was chosen.
      */
     private void selectRubyRuntime(Intent intent)
     {
         String requested = intent == null ? null : intent.getStringExtra(EXTRA_RUNTIME_MODE);
-        String id = runtimeFromMode(requested);
-        if (id != null) {
-            sRuntimeId = id;
-            Log.i(TAG, "Runtime override: " + id + " (runtime_mode=" + requested + ")");
-            return;
-        }
-
-        sRuntimeId = RT_R3;
-        if (requested != null && !requested.isEmpty()) {
-            Log.w(TAG, "Unknown runtime_mode \"" + requested + "\", using r3");
-        } else {
-            Log.i(TAG, "Runtime auto-select: r3 (safe default; no explicit runtime_mode)");
+        RuntimeChoice c = resolveRuntime(requested, GAME_PATH);
+        sRuntimeId = c.id;
+        sRuntimeReason = c.reason;
+        Log.i(TAG, "Runtime " + c.id + " chosen: " + c.reason);
+        try {
+            android.system.Os.setenv("ANYPLAY_RUNTIME_REASON", c.reason, true);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not export ANYPLAY_RUNTIME_REASON: " + e);
         }
     }
 
@@ -206,6 +306,7 @@ public class MainActivity extends SDLActivity
     private static String[] runtimeLibs(String id)
     {
         if (RT_R18.equals(id)) return new String[] { "ruby_r18", "mkxp-z-r18" };
+        if (RT_R34.equals(id)) return new String[] { "ruby_r34", "mkxp-z-r34" };
         return new String[] { "ruby_r3", "mkxp-z-r3" };
     }
 
@@ -315,6 +416,7 @@ public class MainActivity extends SDLActivity
     {
         super.onNewIntent(intent);
 
+        sNativeLibDir = getApplicationInfo().nativeLibDir;
         String dir = intent.getStringExtra(EXTRA_GAME_DIR);
         String mode = intent.getStringExtra(EXTRA_RUNTIME_MODE);
         boolean anyplayLaunch = (dir != null && !dir.isEmpty()) || (mode != null && !mode.isEmpty());
@@ -322,10 +424,11 @@ public class MainActivity extends SDLActivity
         boolean otherGame = dir != null && !dir.isEmpty()
                 && !new File(dir).getAbsolutePath().equals(GAME_PATH);
 
-        // Same rule as selectRubyRuntime(): no/unknown mode means r3. Only checked for a
-        // real AnyPlay launch, so e.g. a USB-attach intent never closes a running game.
-        String wanted = runtimeFromMode(mode);
-        if (wanted == null) wanted = RT_R3;
+        // Same rules as selectRubyRuntime() (resolveRuntime), applied to the game folder
+        // of the NEW launch. Only checked for a real AnyPlay launch, so e.g. a USB-attach
+        // intent never closes a running game.
+        String wantedDir = (dir != null && !dir.isEmpty()) ? dir : GAME_PATH;
+        String wanted = anyplayLaunch ? resolveRuntime(mode, wantedDir).id : sRuntimeId;
         boolean otherRuntime = anyplayLaunch && !wanted.equals(sRuntimeId);
 
         if (otherGame || otherRuntime) {
@@ -341,6 +444,7 @@ public class MainActivity extends SDLActivity
     {
         // Must be before super.onCreate(): picks the game folder before SDL starts.
         applyGameDirFromIntent(getIntent());
+        sNativeLibDir = getApplicationInfo().nativeLibDir;
         selectRubyRuntime(getIntent());
 
         super.onCreate(savedInstanceState);

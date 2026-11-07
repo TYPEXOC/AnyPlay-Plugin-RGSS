@@ -24,6 +24,7 @@
 #include "binding-util.h"
 #include "binding-types.h"
 #include "exception.h"
+#include "runtime-tuning.h"
 
 #if RAPI_MAJOR >= 2
 #include <ruby/thread.h>
@@ -40,6 +41,7 @@ RB_METHOD(graphicsDelta) {
 RB_METHOD(graphicsUpdate)
 {
     RB_UNUSED_PARAM;
+    runtimeYjitFirstUpdate(); // r34 + YJIT only, first call only; empty elsewhere
 #if RAPI_MAJOR >= 2
     rb_thread_call_without_gvl([](void*) -> void* {
         GFX_LOCK;

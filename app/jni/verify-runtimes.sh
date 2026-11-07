@@ -10,6 +10,9 @@
 #   * the engine exports ONLY SDL_main
 #   * Phase B: libruby_r18.so exports the mkxp_legacy_* API, libruby_r3.so does not,
 #     the r18 engine imports it, the r3 engine does not
+#   * Phase D: if the APK contains r34 (Ruby 3.4), the same checks as r3 apply to it
+#     (libruby_r34.so SONAME libruby.so, engine NEEDED libruby.so / exports only SDL_main,
+#     no mkxp_legacy_*). r34 is optional; nothing is reported when it is absent.
 #   * there is NO file called libruby.so, libmkxp-z.so, libruby18.so or
 #     libmkxp-z-ruby18.so (old names; the real Ruby 1.8.7 build was removed)
 # Exit code 1 if anything is wrong. Tool: llvm-readelf from the NDK, else readelf.
@@ -119,10 +122,24 @@ for dir in "$ROOT"/lib/*/; do
 
   check_ruby "$dir" libruby_r3.so  libruby.so
   check_ruby "$dir" libruby_r18.so libruby.so
+  # Phase D: r34 (Ruby 3.4) is optional. It is only checked when the APK contains it.
+  if [ -f "$dir/libruby_r34.so" ] || [ -f "$dir/libmkxp-z-r34.so" ]; then
+    check_ruby "$dir" libruby_r34.so libruby.so
+  fi
 
   check_engine "$dir" libmkxp-z-r3.so      libruby.so   ""
   check_engine "$dir" libmkxp-z-r18.so     libruby.so   ""
 
+  if [ -f "$dir/libruby_r34.so" ] || [ -f "$dir/libmkxp-z-r34.so" ]; then
+    check_engine "$dir" libmkxp-z-r34.so libruby.so ""
+    check_legacy_ruby   "$dir" libruby_r34.so  no
+    check_legacy_engine "$dir" libmkxp-z-r34.so no
+    if [ -f "$dir/libruby_r34.so" ]; then
+      for other in libruby_r3.so libruby_r18.so; do
+        if [ -f "$dir/$other" ] && cmp -s "$dir/libruby_r34.so" "$dir/$other"; then fail "libruby_r34.so is identical to $other"; fi
+      done
+    fi
+  fi
   check_legacy_ruby   "$dir" libruby_r18.so yes
   check_legacy_ruby   "$dir" libruby_r3.so  no
   check_legacy_engine "$dir" libmkxp-z-r18.so yes

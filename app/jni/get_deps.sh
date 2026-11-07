@@ -104,4 +104,24 @@ if [[ ! -d "ruby-r18" ]]; then
   git clone $GIT_ARGS -b mkxp-z-3.1 https://github.com/mkxp-z/ruby ruby-r18
 fi
 
+# Ruby 3.4.9 for the optional "r34" runtime (BUILD_R34=1). Plain upstream Ruby 3.4.9
+# (revision 76cca827ab, the same one Kirin's r34 reports).
+# The official release tarball is used because it already contains configure, the
+# generated parser and the bundled gems (a git checkout would need autoconf, bison,
+# gperf and downloads gems during "make install"). Falls back to the git tag if the
+# download fails.
+if [[ "${BUILD_R34:-0}" == "1" && ! -d "ruby-r34" ]]; then
+  echo "Downloading Ruby 3.4.9 (r34)..."
+  if curl -fsSL --retry 3 -o ruby-3.4.9.tar.xz https://cache.ruby-lang.org/pub/ruby/3.4/ruby-3.4.9.tar.xz \
+     && tar -xf ruby-3.4.9.tar.xz && [[ -f ruby-3.4.9/configure ]]; then
+    mv ruby-3.4.9 ruby-r34
+    touch ruby-r34/configure   # never let make think configure is older than configure.ac
+    rm -f ruby-3.4.9.tar.xz
+  else
+    echo "Tarball download failed, using the git tag instead..."
+    rm -rf ruby-3.4.9 ruby-3.4.9.tar.xz
+    git clone $GIT_ARGS -b v3_4_9 https://github.com/ruby/ruby ruby-r34
+  fi
+fi
+
 echo "Done!"

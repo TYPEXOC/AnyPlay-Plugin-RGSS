@@ -37,6 +37,7 @@
 #include "binding-util.h"
 #include "binding.h"
 #include "legacy-ruby.h"
+#include "runtime-tuning.h"
 #include "ruby187-source-normalizer.h"
 
 #include "sharedstate.h"
@@ -1147,6 +1148,8 @@ static void mriBindingExecute() {
     /* AnyPlay: r18 only (no-op in r3): GC defaults for old, allocation-heavy games.
      * Must run before ruby_options(), which is where Ruby reads RUBY_GC_*. */
     legacyPrepareEnvironment();
+    /* AnyPlay: per-runtime environment defaults (r3 stack size). Same deadline. */
+    runtimeTuneEnvironment();
 
 #if RAPI_MAJOR >= 2
     /* Normally only a ruby executable would do a sysinit,
@@ -1755,7 +1758,7 @@ module AnyPlayLog
       eng = (AnyPlayCheats.engine rescue "?")
       gt  = (System.game_title rescue "?") rescue "?"
       raw("==== AnyPlay log (plugin #{VERSION}) #{Time.now.strftime('%Y-%m-%d %H:%M:%S')} ====")
-      raw("game=#{clean(gt, 80)} folder=#{Dir.pwd} engine=#{eng} runtime=#{$__anyplay_runtime || '?'} ruby=#{defined?(RUBY_VERSION_REAL) ? RUBY_VERSION_REAL : RUBY_VERSION} #{RUBY_PLATFORM}")
+      raw("game=#{clean(gt, 80)} folder=#{Dir.pwd} engine=#{eng} runtime=#{$__anyplay_runtime || '?'} pick=#{(ENV['ANYPLAY_RUNTIME_REASON'] rescue nil) || '-'}#{$__anyplay_yjit ? ' yjit=' + $__anyplay_yjit : ''} ruby=#{defined?(RUBY_VERSION_REAL) ? RUBY_VERSION_REAL : RUBY_VERSION} #{RUBY_PLATFORM}")
       raw("legacy: #{MkxpLegacy.report}") if defined?(MkxpLegacy)
       (MkxpLegacy.details rescue []).first(8).each { |d| raw("  legacy> " + d.to_s[0, 300]) } if defined?(MkxpLegacy)
       raw("screen=#{(Graphics.width rescue '?')}x#{(Graphics.height rescue '?')} fps=#{(Graphics.frame_rate rescue '?')} scripts=#{($RGSS_SCRIPTS.size rescue '?')}")
