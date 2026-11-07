@@ -1064,8 +1064,13 @@ static void runRMXPScripts(BacktraceData &btData) {
     }
     
     VALUE exc = currentRubyException();
-    if (exc != Qnil)
+    if (exc != Qnil) {
+        VALUE className = rb_class_path(rb_obj_class(exc));
+        VALUE message = rb_funcall2(exc, rb_intern("message"), 0, NULL);
+        Debug() << "[ruby] stopping before compatibility prepass; preload exception:"
+                << RSTRING_PTR(className) << RSTRING_PTR(message);
         return;
+    }
     if (tynVerboseRuntimeLogs())
         Debug() << "[ruby] preload scripts complete";
     
@@ -1078,6 +1083,8 @@ static void runRMXPScripts(BacktraceData &btData) {
     {
         static VALUE compatFix = Qnil;
         if (compatFix == Qnil) {
+            if (tynVerboseRuntimeLogs())
+                Debug() << "[ruby] compatibility fixer initialization begin";
             rb_eval_string(R"RB(
 # Ruby 1.8 accepted `return` inside a top-level `proc{ ... }`; Ruby 3 raises
 # LocalJumpError. Rewrite `return` (bare or before if/unless) in such procs to
@@ -1274,6 +1281,8 @@ lambda { |s, name|
 }
 )RB");
             rb_gc_register_address(&compatFix);
+            if (tynVerboseRuntimeLogs())
+                Debug() << "[ruby] compatibility fixer initialization complete";
         }
         if (tynVerboseRuntimeLogs())
             Debug() << "[ruby] Ruby 1.8 compatibility prepass begin; scripts:" << scriptCount;
@@ -1649,10 +1658,10 @@ class Array
   def nitems; count { |x| !x.nil? }; end unless method_defined?(:nitems)
 end
 class << File
-  alias_method :exists?, :exist? unless respond_to?(:exists?)
+  alias_method :exists?, :exist? if respond_to?(:exist?) && !respond_to?(:exists?)
 end
 class << Dir
-  alias_method :exists?, :exist? unless respond_to?(:exists?)
+  alias_method :exists?, :exist? if respond_to?(:exist?) && !respond_to?(:exists?)
 end
 Fixnum = Integer unless defined?(Fixnum)
 Bignum = Integer unless defined?(Bignum)
@@ -1964,7 +1973,7 @@ module AnyPlayFastFiles
       orig = mod.method(meth)
       tag = "#{mod.name}.#{meth}:"
       mod.define_singleton_method(meth) do |path|
-        if path.is_a?(String) && path =~ AnyPlayFastFiles::RES && !%i(directory?).include?(meth) && meth != :exists? && !(mod == Dir)
+        if path.is_a?(String) && path =~ AnyPlayFastFiles::RES && ![:directory?].include?(meth) && meth != :exists? && !(mod == Dir)
           orig.call(path)   # Graphics / Audio / Fonts: handled by the folder lists below
         else
           AnyPlayFastFiles.short_answer(tag, path, pos, neg, orig)
