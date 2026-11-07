@@ -39,6 +39,23 @@ static const char *objAsStringPtr(VALUE obj) {
     return RSTRING_PTR(str);
 }
 
+/* TYN supplies translations through TyranorText. Applying the translation at
+ * the native RGSS binding also covers games that bypass Window_Base helpers. */
+static VALUE translateBitmapDrawText(VALUE value) {
+    ID moduleId = rb_intern("TyranorText");
+    if (!rb_const_defined(rb_cObject, moduleId))
+        return rb_obj_as_string(value);
+
+    VALUE text = rb_obj_as_string(value);
+    VALUE translator = rb_const_get(rb_cObject, moduleId);
+    ID methodId = rb_intern("translate");
+    if (!rb_respond_to(translator, methodId))
+        return text;
+
+    VALUE translated = rb_funcall(translator, methodId, 1, text);
+    return TYPE(translated) == T_STRING ? translated : text;
+}
+
 void bitmapInitProps(Bitmap *b, VALUE self) {
     /* Wrap properties */
     VALUE fontKlass = rb_const_get(rb_cObject, rb_intern("Font"));
@@ -241,6 +258,7 @@ RB_METHOD(bitmapDrawText) {
     Bitmap *b = getPrivateData<Bitmap>(self);
     
     const char *str;
+    VALUE drawTextString = Qnil;
     int align = Bitmap::Left;
     
     if (argc == 2 || argc == 3) {
@@ -251,9 +269,12 @@ RB_METHOD(bitmapDrawText) {
             VALUE strObj;
             rb_get_args(argc, argv, "oo|i", &rectObj, &strObj, &align RB_ARG_END);
             
-            str = objAsStringPtr(strObj);
+            drawTextString = translateBitmapDrawText(strObj);
+            str = RSTRING_PTR(drawTextString);
         } else {
             rb_get_args(argc, argv, "oz|i", &rectObj, &str, &align RB_ARG_END);
+            drawTextString = translateBitmapDrawText(rb_str_new2(str ? str : ""));
+            str = RSTRING_PTR(drawTextString);
         }
         
         rect = getPrivateDataCheck<Rect>(rectObj, RectType);
@@ -267,10 +288,13 @@ RB_METHOD(bitmapDrawText) {
             rb_get_args(argc, argv, "iiiio|i", &x, &y, &width, &height, &strObj,
                         &align RB_ARG_END);
             
-            str = objAsStringPtr(strObj);
+            drawTextString = translateBitmapDrawText(strObj);
+            str = RSTRING_PTR(drawTextString);
         } else {
             rb_get_args(argc, argv, "iiiiz|i", &x, &y, &width, &height, &str,
                         &align RB_ARG_END);
+            drawTextString = translateBitmapDrawText(rb_str_new2(str ? str : ""));
+            str = RSTRING_PTR(drawTextString);
         }
         
         GFX_GUARD_EXC(b->drawText(x, y, width, height, str, align););

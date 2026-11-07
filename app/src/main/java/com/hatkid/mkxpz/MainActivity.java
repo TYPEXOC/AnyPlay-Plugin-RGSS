@@ -283,12 +283,14 @@ public class MainActivity extends SDLActivity
             }
             TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: copying TYN Ruby translation bridge");
 
+            File mkxpCompat = new File(mSessionDir, "tyranor_mkxp_compat.rb");
+            File win32Compat = new File(mSessionDir, "tyranor_win32_compat.rb");
+            copyAssetToFile("tyranor_mkxp_compat.rb", mkxpCompat);
+            copyAssetToFile("tyranor_win32_compat.rb", win32Compat);
+            TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: copied MKXP and Win32API compatibility preloads");
+
             File bridge = new File(mSessionDir, "tyranor_rgss_translation.rb");
-            try (InputStream input = getAssets().open("tyranor_rgss_translation.rb"); FileOutputStream output = new FileOutputStream(bridge)) {
-                byte[] buffer = new byte[8192];
-                int count;
-                while ((count = input.read(buffer)) >= 0) output.write(buffer, 0, count);
-            }
+            copyAssetToFile("tyranor_rgss_translation.rb", bridge);
             writeAtomically(new File(mSessionDir, "rgss_version"), String.valueOf(detectRgssVersion(GAME_FOLDER)));
 
             File profile = new File(mSessionDir, "tyranor_pad_profile.json");
@@ -315,11 +317,16 @@ public class MainActivity extends SDLActivity
             config.put("rgssVersion", detectRgssVersion(GAME_FOLDER));
             if (title != null && !title.trim().isEmpty()) config.put("windowTitle", title);
             applyTynRgssOptions(config);
-            JSONArray scripts = stringArray(config.opt("preloadScript"));
+            JSONArray gameScripts = stringArray(config.opt("preloadScript"));
+            JSONArray scripts = new JSONArray();
+            scripts.put(mkxpCompat.getAbsolutePath());
+            scripts.put(win32Compat.getAbsolutePath());
+            for (int i = 0; i < gameScripts.length(); i++) {
+                String path = gameScripts.optString(i, "");
+                if (!path.isEmpty() && !containsString(scripts, path)) scripts.put(path);
+            }
             String bridgePath = bridge.getAbsolutePath();
-            boolean present = false;
-            for (int i = 0; i < scripts.length(); i++) present |= bridgePath.equals(scripts.optString(i));
-            if (!present) scripts.put(bridgePath);
+            if (!containsString(scripts, bridgePath)) scripts.put(bridgePath);
             config.put("preloadScript", scripts);
             writeAtomically(new File(mSessionDir, "mkxp.json"), config.toString());
             GAME_PATH = mSessionDir.getAbsolutePath();
@@ -328,6 +335,15 @@ public class MainActivity extends SDLActivity
             Log.e(TAG, "Could not prepare private TYN session; falling back to the game folder", error);
             TynRuntimeDiagnostics.append(mSessionDir, "Private session preparation failed", error);
             GAME_PATH = GAME_FOLDER;
+        }
+    }
+
+    private void copyAssetToFile(String assetName, File destination) throws java.io.IOException
+    {
+        try (InputStream input = getAssets().open(assetName); FileOutputStream output = new FileOutputStream(destination)) {
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) >= 0) output.write(buffer, 0, count);
         }
     }
 

@@ -185,6 +185,13 @@ module TyranorText
   end
 
   def self.install_bitmap_hook
+    if defined?(System) && System.respond_to?(:native_bitmap_text_translation?) && System.native_bitmap_text_translation?
+      unless @native_bitmap_hook_logged
+        log('Bitmap text translation handled by native binding')
+        @native_bitmap_hook_logged = true
+      end
+      return
+    end
     return unless defined?(Bitmap) && Bitmap.method_defined?(:draw_text)
     return if Bitmap.method_defined?(:__tyranor_draw_text)
     Bitmap.class_eval do
@@ -204,6 +211,7 @@ module TyranorText
   end
 
   def self.install_window_hook
+    return if defined?(System) && System.respond_to?(:native_bitmap_text_translation?) && System.native_bitmap_text_translation?
     return unless defined?(Window_Base) && Window_Base.method_defined?(:draw_text)
     return if Window_Base.method_defined?(:__tyranor_draw_text)
     Window_Base.class_eval do
