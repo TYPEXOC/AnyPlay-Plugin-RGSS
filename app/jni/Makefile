@@ -143,8 +143,10 @@ CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 # The legacy Ruby generator scripts are patched for the supported CI host Ruby.
 # The Android runtimes still use the matching target headers and NDK toolchain.
 SHELL := /bin/bash
-RUBY_187_ENV := export RUBYOPT=--disable-gems && export PATH="$(BUILD_PREFIX)/bin:$$PATH"
-RUBY_193_ENV := export RUBYOPT=--disable-gems && export PATH="$(BUILD_PREFIX)/bin:$$PATH" && \
+HOST_TOOLS := $(BUILD_PREFIX)/host-tools
+HOST_RUBY := $(HOST_TOOLS)/ruby
+RUBY_187_ENV := export PATH="$(HOST_TOOLS):$(BUILD_PREFIX)/bin:$$PATH"
+RUBY_193_ENV := export PATH="$(HOST_TOOLS):$(BUILD_PREFIX)/bin:$$PATH" && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
 RUBY_31_ENV := true
@@ -240,13 +242,19 @@ ruby/configure: ruby/configure.ac
 # -------------------- Ruby 1.8.7 --------------------
 ruby187: init openssl $(LIBDIR)/libruby187.so
 
+$(HOST_RUBY): init
+	mkdir -p "$(HOST_TOOLS)"
+	host_ruby="$$(command -v ruby)"; test -n "$$host_ruby"; \
+	printf '#!/bin/sh\nexec "%s" --disable-gems "$$@"\n' "$$host_ruby" > "$@"
+	chmod +x "$@"
+
 $(LIBDIR)/libruby187.so: ruby187/Makefile
 	cd ruby187; $(RUBY_187_ENV) && make -j$(NPROC); $(RUBY_187_ENV) && make install
 	mkdir -p "$(BUILD_PREFIX)/include/ruby-1.8.7"
 	cp -f ruby187/*.h "$(BUILD_PREFIX)/include/ruby-1.8.7/"
 	cd $(LIBDIR); ln -sf libruby.so.1.8.7 libruby187.so
 
-ruby187/Makefile: ruby187/configure $(BUILD_PREFIX)/bin/bison
+ruby187/Makefile: ruby187/configure $(BUILD_PREFIX)/bin/bison $(HOST_RUBY)
 	cd ruby187; $(RUBY_187_ENV) && DLDFLAGS="-Wl,-soname,libruby187.so" \
 	CC="$(CC)" CXX="$(CXX)" AS="$(AS)" LD="$(LD)" AR="$(AR)" NM="$(NM)" \
 	RANLIB="$(RANLIB)" STRIP="$(STRIP)" OBJCOPY="$(OBJCOPY)" OBJDUMP="$(OBJDUMP)" \
@@ -266,7 +274,7 @@ $(LIBDIR)/libruby193.so: ruby193/Makefile
 	cd ruby193; $(RUBY_193_ENV) && make -j$(NPROC); $(RUBY_193_ENV) && make install
 	cd $(LIBDIR); ln -sf libruby.so.1.9.1 libruby193.so
 
-ruby193/Makefile: ruby193/configure $(BUILD_PREFIX)/bin/bison
+ruby193/Makefile: ruby193/configure $(BUILD_PREFIX)/bin/bison $(HOST_RUBY)
 	cd ruby193; $(RUBY_193_ENV) && DLDFLAGS="-Wl,-soname,libruby193.so" \
 	CC="$(CC)" CXX="$(CXX)" AS="$(AS)" LD="$(LD)" AR="$(AR)" NM="$(NM)" \
 	RANLIB="$(RANLIB)" STRIP="$(STRIP)" OBJCOPY="$(OBJCOPY)" OBJDUMP="$(OBJDUMP)" \
