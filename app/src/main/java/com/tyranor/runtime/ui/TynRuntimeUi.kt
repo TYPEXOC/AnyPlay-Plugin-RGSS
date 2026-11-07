@@ -44,6 +44,7 @@ class TynRuntimeUi(
     private val primaryColor: Int,
     private val onPrimaryColor: Int,
     cheatsEnabled: Boolean,
+    private val onExportDiagnostics: () -> Unit,
 ) {
     private val density = activity.resources.displayMetrics.density
     private val root = FrameLayout(activity)
@@ -129,7 +130,14 @@ class TynRuntimeUi(
 
     private fun openCheats() {
         val cheatController = cheats ?: return
-        val menu = cheatMenu ?: TyranorCheatPanel(activity, root, cheatController, primaryColor, onPrimaryColor).also { cheatMenu = it }
+        val menu = cheatMenu ?: TyranorCheatPanel(
+            activity,
+            root,
+            cheatController,
+            primaryColor,
+            onPrimaryColor,
+            onExportDiagnostics,
+        ).also { cheatMenu = it }
         controller.releaseAllKeys()
         menu.show()
     }

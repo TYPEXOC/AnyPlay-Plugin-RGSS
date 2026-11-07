@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.hatkid.mkxpz.BuildConfig
 import com.hatkid.mkxpz.R
+import com.tyranor.runtime.diagnostics.TynRuntimeDiagnostics
 
 /** Launcher entry used to identify the runtime package; games must be started by the host app. */
 class RuntimeInfoActivity : Activity() {
@@ -63,6 +64,43 @@ class RuntimeInfoActivity : Activity() {
                 cornerRadius = dp(12).toFloat()
             }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        root.addView(TextView(this).apply {
+            text = getString(R.string.runtime_info_export_diagnostics)
+            textSize = 16f
+            setTextColor(Color.rgb(72, 132, 212))
+            gravity = Gravity.CENTER
+            setPadding(dp(20), dp(16), dp(20), dp(16))
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(240, 246, 255))
+                cornerRadius = dp(12).toFloat()
+            }
+            setOnClickListener {
+                try {
+                    val report = TynRuntimeDiagnostics.createReport(this@RuntimeInfoActivity, null)
+                    if (report == null) {
+                        android.widget.Toast.makeText(
+                            this@RuntimeInfoActivity,
+                            R.string.runtime_diagnostics_no_logs,
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    } else {
+                        TynRuntimeDiagnostics.share(
+                            this@RuntimeInfoActivity,
+                            report,
+                            getString(R.string.runtime_diagnostics_share_title),
+                        )
+                    }
+                } catch (error: Exception) {
+                    android.widget.Toast.makeText(
+                        this@RuntimeInfoActivity,
+                        R.string.runtime_diagnostics_export_failed,
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(14)
+        })
         root.addView(View(this), LinearLayout.LayoutParams(1, 0, 2f))
         root.addView(TextView(this).apply {
             text = getString(R.string.runtime_info_source)

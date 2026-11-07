@@ -48,6 +48,7 @@ import org.libsdl.app.SDLActivity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import com.tyranor.runtime.diagnostics.TynRuntimeDiagnostics;
 import com.tyranor.runtime.ui.TynRuntimeUi;
 
 public class MainActivity extends SDLActivity
@@ -237,6 +238,17 @@ public class MainActivity extends SDLActivity
             String suffix = shortHash((mGameId == null ? GAME_FOLDER : mGameId) + System.nanoTime());
             mSessionDir = new File(getFilesDir(), "tyranor/sessions/" + suffix);
             if (!mSessionDir.isDirectory() && !mSessionDir.mkdirs()) throw new java.io.IOException("Unable to create session folder");
+            TynRuntimeDiagnostics.beginSession(
+                this,
+                mSessionDir,
+                title,
+                new File(GAME_FOLDER),
+                sRubyRuntime,
+                detectRgssVersion(GAME_FOLDER),
+                mTranslationUri != null,
+                mPadEnabled,
+                mTynRgssOptions == null ? "{}" : mTynRgssOptions.toString()
+            );
 
             File bridge = new File(mSessionDir, "tyranor_rgss_translation.rb");
             try (InputStream input = getAssets().open("tyranor_rgss_translation.rb"); FileOutputStream output = new FileOutputStream(bridge)) {
@@ -270,6 +282,7 @@ public class MainActivity extends SDLActivity
             GAME_PATH = mSessionDir.getAbsolutePath();
         } catch (Exception error) {
             Log.e(TAG, "Could not prepare private TYN session; falling back to the game folder", error);
+            TynRuntimeDiagnostics.append(mSessionDir, "Private session preparation failed", error);
             GAME_PATH = GAME_FOLDER;
         }
     }
@@ -309,6 +322,7 @@ public class MainActivity extends SDLActivity
                 return new JSONObject(text);
             } catch (Exception error) {
                 Log.w(TAG, "Ignoring invalid game mkxp.json", error);
+                TynRuntimeDiagnostics.append(mSessionDir, "Could not read the game's mkxp.json", error);
             }
         }
         return new JSONObject();
@@ -552,8 +566,24 @@ public class MainActivity extends SDLActivity
                 mPadEnabled,
                 mThemePrimaryColor,
                 mThemeOnPrimaryColor,
-                mCheatsEnabled
+                mCheatsEnabled,
+                this::exportDiagnostics
             );
+        }
+    }
+
+    private void exportDiagnostics()
+    {
+        try {
+            File report = TynRuntimeDiagnostics.createReport(this, mSessionDir);
+            if (report == null) {
+                Toast.makeText(this, R.string.runtime_diagnostics_no_logs, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            TynRuntimeDiagnostics.share(this, report, getString(R.string.runtime_diagnostics_share_title));
+        } catch (Exception error) {
+            Log.e(TAG, "Could not export runtime diagnostics", error);
+            Toast.makeText(this, R.string.runtime_diagnostics_export_failed, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -603,6 +633,7 @@ public class MainActivity extends SDLActivity
     protected void onPause()
     {
         if (mUi != null) mUi.onPause();
+        TynRuntimeDiagnostics.append(mSessionDir, "Runtime activity paused");
         super.onPause();
     }
 
@@ -633,6 +664,7 @@ public class MainActivity extends SDLActivity
     @Override
     protected void onDestroy()
     {
+        TynRuntimeDiagnostics.append(mSessionDir, "Runtime activity destroyed");
         if (mTranslationSync != null) {
             mTranslationSync.shutdownNow();
             mTranslationSync = null;

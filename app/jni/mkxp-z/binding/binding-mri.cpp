@@ -1845,7 +1845,12 @@ end
 # with the full call chain, and (4) a few notes (touch / slow frames) for context.
 module AnyPlayLog
   VERSION   = "0.1.40"
-  FILE      = "AnyPlayLog.txt"
+  FILE      = begin
+    dir = ENV["TYN_RGSS_DIAGNOSTICS_DIR"]
+    dir && !dir.empty? ? File.join(dir, "AnyPlayLog.txt") : "AnyPlayLog.txt"
+  rescue Exception
+    "AnyPlayLog.txt"
+  end
   MAX_BYTES = 250_000
   CAPS      = { error: 200, note: 400 }
   @bytes = 0
@@ -1939,7 +1944,7 @@ module AnyPlayLog
       eng = (TyranorCheats.engine rescue "?")
       gt  = (System.game_title rescue "?") rescue "?"
       raw("==== AnyPlay log (plugin #{VERSION}) #{Time.now.strftime('%Y-%m-%d %H:%M:%S')} ====")
-      raw("game=#{clean(gt, 80)} folder=#{Dir.pwd} engine=#{eng} ruby=#{RUBY_VERSION} #{RUBY_PLATFORM}")
+      raw("game=#{clean(gt, 80)} folder=#{File.basename(Dir.pwd)} engine=#{eng} ruby=#{RUBY_VERSION} #{RUBY_PLATFORM}")
       raw("screen=#{(Graphics.width rescue '?')}x#{(Graphics.height rescue '?')} fps=#{(Graphics.frame_rate rescue '?')} scripts=#{($RGSS_SCRIPTS.size rescue '?')}")
     end
 

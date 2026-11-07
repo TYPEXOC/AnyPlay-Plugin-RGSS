@@ -29,6 +29,7 @@ class TyranorCheatPanel(
     private val manager: TyranorCheatController,
     private val primaryColor: Int,
     private val onPrimaryColor: Int,
+    private val onExportDiagnostics: () -> Unit,
 ) {
     private enum class Tab { QUICK, CHARACTER, EXPLORATION, BATTLE }
 
@@ -103,6 +104,19 @@ class TyranorCheatPanel(
             typeface = Typeface.DEFAULT_BOLD
         }
         addView(title, LinearLayout.LayoutParams(0, -2, 1f))
+        val diagnostics = TextView(activity).apply {
+            text = activity.getString(R.string.tyn_runtime_export_diagnostics)
+            gravity = Gravity.CENTER
+            setTextColor(primaryColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(8), 0, dp(8), 0)
+            setOnClickListener {
+                dismiss()
+                onExportDiagnostics()
+            }
+        }
+        addView(diagnostics, LinearLayout.LayoutParams(-2, dp(40)))
         val close = TextView(activity).apply {
             text = "×"
             contentDescription = activity.getString(R.string.tyn_cheat_close)

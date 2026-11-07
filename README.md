@@ -24,11 +24,11 @@ New versions install over the old one. Nothing needs to be uninstalled.
 - Runtime loading of the translation file selected in Tyranor Next, with polling-based hot reload. The module reads the JSON through a temporary content URI grant and does not copy the bridge into the game folder.
 - Three separately built Ruby VMs: 1.8.7, 1.9.3, and 3.1.3. Tyranor Next selects the configured global default or per-game override and loads the matching Ruby and mkxp-z native libraries. This is independent of the detected RGSS1/2/3 game generation.
 - Fixes for old scripts. Many games were written for Ruby 1.8; the plugin repairs the common problems automatically when the game starts, so the game does not need to be edited.
-- `AnyPlayLog.txt`, a problem report written into the game folder (see below).
+- Private runtime diagnostics with the selected Ruby/RGSS versions, device ABI, game marker checks, and Ruby error details. Logs stay in the module's private session folder and do not modify the game folder.
 
 ## 🎯 If a game does not work
 
-When something goes wrong, the plugin writes a file called **`AnyPlayLog.txt`** into the game's folder. The file is created fresh every time the game is started, and only if there is something to report. It lists script errors, the error that stopped the game (with the script name and line), and, if the game runs slowly, which part is slow.
+When something goes wrong, open the in-game TYN panel and tap **Logs** in its header. If the game has already closed, open **TYN RGSS** from Android's app drawer and tap **Export the latest runtime log**. Share the generated text file with the report. It includes the selected Ruby runtime, detected RGSS generation, device ABI, expected game-file markers, script parse errors, and Ruby stack traces. It does not include the full game folder path or copy game files.
 
 Please report it on **[Discord](https://discord.gg/Y9Yjsn5yDP)** and attach that file, together with the game name and your phone model.
 
