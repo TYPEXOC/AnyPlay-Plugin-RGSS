@@ -44,7 +44,7 @@ class TynRuntimeUi(
     private val primaryColor: Int,
     private val onPrimaryColor: Int,
     cheatsEnabled: Boolean,
-    private val onExportDiagnostics: () -> Unit,
+    private val onExportDiagnostics: Runnable,
 ) {
     private val density = activity.resources.displayMetrics.density
     private val root = FrameLayout(activity)
@@ -136,7 +136,7 @@ class TynRuntimeUi(
             cheatController,
             primaryColor,
             onPrimaryColor,
-            onExportDiagnostics,
+            { onExportDiagnostics.run() },
         ).also { cheatMenu = it }
         controller.releaseAllKeys()
         menu.show()
