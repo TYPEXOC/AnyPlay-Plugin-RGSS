@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # This script downloads/git clones project dependencies
 # such as libogg, SDL2, Ruby, etc.
@@ -144,20 +145,19 @@ fi
 cd ruby193
 # Ruby 1.9.3's mkconfig generator still uses TRUE under modern host Ruby.
 apply_patch_once ../patches/ruby193-host-ruby-compat.patch
-apply_patch_once ../patches/ruby193files/GH-488.patch
-apply_patch_once ../patches/ruby193files/CVE-2015-1855-p484.patch
-apply_patch_once ../patches/ruby193files/update-autoconf.patch
-apply_patch_once ../patches/ruby193files/openssl3.patch
-apply_patch_once ../patches/ruby193files/ruby193-dir-seekdir-fix.patch
-cp ../patches/ruby193files/parse.h parse.h
-cp ../patches/ruby193files/parse.c parse.c
-cp ../patches/ruby193files/ripper.c ext/ripper/ripper.c
-cp ../patches/ruby193files/zlib.c zlib.c
-cp ../patches/ruby193files/inits.c inits.c
-cp ../patches/ruby193files/common.mk common.mk
-cp ../patches/ruby193files/uncommon.mk uncommon.mk
-rm -rf ext/zlib
-rm -f ext/ripper/ripper.y
+python3 ../prepare-ruby193.py .
+
+# Keep the upstream hostname-verification fix for this end-of-life Ruby branch.
+RVM_PATCHSET_COMMIT=49960b3efe5635379a64511c73a26cf9516611e1
+hostname_patch="$(mktemp)"
+curl -fsSL "https://raw.githubusercontent.com/rvm/rvm/${RVM_PATCHSET_COMMIT}/patches/ruby/1.9.3/CVE-2015-1855-p484.patch" -o "$hostname_patch"
+apply_patch_once "$hostname_patch"
+rm -f "$hostname_patch"
+
+# Use GNU's maintained host/target triplet tables instead of stale copies.
+for config_tool in config.guess config.sub; do
+  cp "/usr/share/misc/${config_tool}" "tool/${config_tool}"
+done
 cd ..
 
 echo "Done!"

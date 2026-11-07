@@ -387,17 +387,21 @@ public class MainActivity extends SDLActivity
         String versionFolder = rgssVersion == 1 ? "RPGXP" : rgssVersion == 2 ? "RPGVX" : "RPGVXACE";
         JSONArray rtps = new JSONArray();
         JSONArray configured = stringArray(config.opt("RTP"));
+        File rtpRoot = mTynRtpRoot == null || mTynRtpRoot.trim().isEmpty()
+            ? new File(Environment.getExternalStorageDirectory(), "JoiPlay/RTP")
+            : new File(mTynRtpRoot);
+        File gameRoot = new File(GAME_FOLDER);
         int skippedForeign = 0;
         int skippedMissing = 0;
         for (int i = 0; i < configured.length(); i++) {
             String entry = configured.optString(i, "").trim();
             if (entry.isEmpty()) continue;
-            if (isForeignHostRtpPath(entry)) {
+            File path = new File(entry);
+            if (!path.isAbsolute()) path = new File(GAME_FOLDER, entry);
+            if (!isInsideRoot(gameRoot, path) && !isInsideRoot(rtpRoot, path)) {
                 skippedForeign++;
                 continue;
             }
-            File path = new File(entry);
-            if (!path.isAbsolute()) path = new File(GAME_FOLDER, entry);
             if (!path.isDirectory()) {
                 skippedMissing++;
                 continue;
@@ -406,9 +410,6 @@ public class MainActivity extends SDLActivity
             if (!containsString(rtps, resolved)) rtps.put(resolved);
         }
 
-        File rtpRoot = mTynRtpRoot == null || mTynRtpRoot.trim().isEmpty()
-            ? new File(Environment.getExternalStorageDirectory(), "JoiPlay/RTP")
-            : new File(mTynRtpRoot);
         File versionRtp = new File(new File(rtpRoot, versionFolder), "app");
         boolean tynRtpAvailable = hasRtpFiles(versionRtp);
         if (tynRtpAvailable) {
@@ -420,7 +421,7 @@ public class MainActivity extends SDLActivity
         }
         if (skippedForeign > 0) {
             TynRuntimeDiagnostics.append(mSessionDir,
-                "Ignored " + skippedForeign + " stale MTool/JoiPlay RTP path(s) from runtime configuration");
+                "Ignored " + skippedForeign + " RTP path(s) outside the game folder and TYN-managed root");
         }
         if (skippedMissing > 0) {
             TynRuntimeDiagnostics.append(mSessionDir,
@@ -428,18 +429,20 @@ public class MainActivity extends SDLActivity
         }
         if (skippedForeign > 0 && !tynRtpAvailable) {
             TynRuntimeDiagnostics.append(mSessionDir,
-                "The game references an old external RTP path, but no matching RTP is imported in TYN settings");
+                "The game references an external RTP path, but no matching RTP is imported in TYN settings");
         }
         config.put("RTP", rtps);
     }
 
-    private static boolean isForeignHostRtpPath(String path)
+    private static boolean isInsideRoot(File root, File candidate)
     {
-        String normalized = path.replace('\\', '/').toLowerCase(Locale.ROOT);
-        return normalized.contains("/mtool/rtp/") || normalized.endsWith("/mtool/rtp") ||
-            normalized.startsWith("mtool/rtp/") || normalized.equals("mtool/rtp") ||
-            normalized.contains("/joiplay/rtp/") || normalized.endsWith("/joiplay/rtp") ||
-            normalized.startsWith("joiplay/rtp/") || normalized.equals("joiplay/rtp");
+        try {
+            String rootPath = root.getCanonicalPath();
+            String candidatePath = candidate.getCanonicalPath();
+            return candidatePath.equals(rootPath) || candidatePath.startsWith(rootPath + File.separator);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private static boolean hasRtpFiles(File path)

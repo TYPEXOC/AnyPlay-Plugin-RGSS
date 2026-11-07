@@ -140,13 +140,11 @@ RUBY_193_CONFIGURE_ARGS := $(RUBY_BASE_CONFIGURE_ARGS) \
 CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
 CMAKE     := $(CONFIGURE_ENV) cmake .. $(CMAKE_ARGS)
 
-# The legacy Ruby build tools require a host interpreter matching their
-# source version. The Android target runtimes are cross-compiled separately.
+# The legacy Ruby generator scripts are patched for the supported CI host Ruby.
+# The Android runtimes still use the matching target headers and NDK toolchain.
 SHELL := /bin/bash
-RVM_SCRIPT := source $(HOME)/.rvm/scripts/rvm
-RUBY_187_ENV := $(RVM_SCRIPT) && rvm use 1.8.7-p374 && export PATH="$(BUILD_PREFIX)/bin:$$PATH"
-RUBY_193_ENV := $(RVM_SCRIPT) && rvm use 1.9.3-p551 && \
-    export PATH="$(BUILD_PREFIX)/bin:$$PATH" && \
+RUBY_187_ENV := export PATH="$(BUILD_PREFIX)/bin:$$PATH"
+RUBY_193_ENV := export PATH="$(BUILD_PREFIX)/bin:$$PATH" && \
 	export CC="$(CC)" && export CFLAGS="$(CFLAGS)" && \
 	export LDFLAGS="$(LDFLAGS)" && export LDSHARED="$(CC) -shared"
 RUBY_31_ENV := true

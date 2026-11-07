@@ -31,7 +31,7 @@ New versions install over the old one. Nothing needs to be uninstalled.
 
 When something goes wrong, open the in-game TYN panel and tap **Logs** in its header. If the game has already closed, open **TYN RGSS** from Android's app drawer and tap **Export all runtime logs**. The ZIP includes every saved game session, each session's startup timeline, native engine log, and Ruby error log when available, so you can test several XP/VX/VX Ace games and send one complete archive. It identifies sessions by game title and launch time, but redacts the game and private session roots and does not copy game assets/translations.
 
-RTP files stay in the existing shared `/JoiPlay/RTP` directory for compatibility with previously imported assets, but the TYN app passes that location directly to this module. The module ignores stale MTool/JoiPlay paths embedded in mkxp configuration and unavailable paths, and its runtime-supplied RTP list takes precedence over persisted mkxp preferences. Missing Ruby resources include a hint to check the game files or import the matching RTP in TYN's RPG Maker settings. Native diagnostics record which mkxp configuration files were read and the effective RTP paths.
+Imported RTP files stay in the existing shared `/JoiPlay/RTP` directory so previously imported assets remain available. TYN passes its managed RTP root to the module; the runtime accepts RTP paths only from the game folder or that managed root. Missing Ruby resources include a hint to check the game files or import the matching RTP in TYN's RPG Maker settings. Native diagnostics record which mkxp configuration files were read and the effective RTP paths.
 
 Please report it on **[Discord](https://discord.gg/Y9Yjsn5yDP)** and attach that file, together with the game name and your phone model.
 
@@ -46,7 +46,8 @@ The release is signed with a key that is kept in the repository secrets (`ANYPLA
 - mkxp-z and its contributors.
 - [BookerRues9](https://github.com/BookerRues9) for the Android port this project started from.
 - [001-lovely-singh](https://github.com/001-lovely-singh/AnyPlay-Plugin-RGSS) for the AnyPlay RGSS base adapted by this module branch.
-- [zths/mkxp-z-android-mtool](https://github.com/zths/mkxp-z-android-mtool) for the three-Ruby build layout and legacy Ruby compatibility patches adapted by this branch.
+- Ruby 1.8.7 and 1.9.3 sources from their respective upstream projects; parser sources are generated during the build with GNU Bison.
+- The Ruby 1.9.3 hostname-verification backport from the pinned RVM patch set.
 - Ruby, SDL2, OpenAL Soft and the other libraries bundled in the build keep their own licenses.
 
 This project is licensed under the **GNU General Public License v2** (see [`app/jni/mkxp-z/COPYING`](app/jni/mkxp-z/COPYING)). The complete source of every release is this repository, at the release's tag.

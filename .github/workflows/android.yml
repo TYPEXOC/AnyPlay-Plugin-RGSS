@@ -44,48 +44,16 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
-            build-essential cmake curl gpg xxd \
+            build-essential cmake curl xxd \
             autoconf automake libtool pkg-config \
             libgdbm-dev libncurses5-dev libreadline-dev zlib1g-dev \
-            software-properties-common python3 git unzip
-          # RVM's Ubuntu PPA carries legacy OpenSSL development packages needed
-          # by its Ruby 1.8.7 host build on Jammy.
-          sudo add-apt-repository -y ppa:rael-gc/rvm
-          sudo apt-get update -y
+            autotools-dev python3 git unzip
 
       # ── 4. Ruby  ──────────────────────────────────────
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ env.RUBY_VERSION }}
-
-      # Ruby's 1.8.7 and 1.9.3 cross-build helpers validate their host Ruby
-      # version against the target source tree. Keep the same host/target split
-      # as MTool. RubyGems 2.0 for Ruby 1.9 also needs the OpenSSL extension;
-      # the RVM Ubuntu PPA above supplies the compatible legacy OpenSSL headers.
-      - name: Set up legacy Ruby build hosts
-        shell: bash
-        run: |
-          curl -sSL https://rvm.io/mpapis.asc | gpg --import -
-          curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -
-          curl -sSL https://get.rvm.io | bash -s stable --ignore-dotfiles
-          source "$HOME/.rvm/scripts/rvm"
-          # RVM's detected -j4 can race Ruby 1.9.3's generated extension makefiles.
-          printf '%s\n' 'rvm_make_flags=( -j1 )' > "$HOME/.rvmrc"
-          : > "$HOME/.rvm/gemsets/default.gems"
-          : > "$HOME/.rvm/gemsets/global.gems"
-          install_host_ruby() {
-            if ! rvm install "$@"; then
-              echo "--- RVM logs for Ruby $1 ---"
-              find "$HOME/.rvm/log" -type f \( -name make.log -o -name configure.log -o -name rubygems.install.log \) -print \
-                -exec tail -n 160 {} \;
-              return 1
-            fi
-          }
-          install_host_ruby 1.8.7-p374
-          install_host_ruby 1.9.3-p551 --rubygems 2.0.17 --autolibs=disable
-          rvm use 1.8.7-p374 && ruby -v
-          rvm use 1.9.3-p551 && ruby -v
 
       # ── 5. Android SDK ────────────────────────────────────────────────────────
       - name: Set up Android SDK
