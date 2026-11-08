@@ -34,9 +34,33 @@
 
 #include <vector>
 #include <cmath>
+#ifdef __ANDROID__
+#include <cstdlib>
+#include "util/debugwriter.h"
+#endif
 #include <unordered_map>
 #include <string.h>
 #include <assert.h>
+
+#ifdef __ANDROID__
+static bool tynVerboseInputDiagnostics()
+{
+    const char *enabled = std::getenv("TYN_RGSS_VERBOSE_LOG");
+    return enabled && enabled[0] == '1' && enabled[1] == '\0';
+}
+
+static const char *tynInputActionName(Input::ButtonCode code)
+{
+    switch (code) {
+    case Input::Up: return "Up";
+    case Input::Down: return "Down";
+    case Input::Left: return "Left";
+    case Input::Right: return "Right";
+    case Input::C: return "C/Confirm";
+    default: return "Other";
+    }
+}
+#endif
 
 #define BUTTON_CODE_COUNT 26
 
@@ -967,6 +991,20 @@ struct InputPrivate
         appendBindings(kbBindings);
         appendBindings(ctrlABindings);
         appendBindings(ctrlBBindings);
+
+#ifdef __ANDROID__
+        if (tynVerboseInputDiagnostics()) {
+            for (const KbBinding &bind : kbBindings) {
+                if (bind.target == Input::Up || bind.target == Input::Down ||
+                    bind.target == Input::Left || bind.target == Input::Right ||
+                    bind.target == Input::C) {
+                    Debug() << "[TYNInput] binding action:" << tynInputActionName(bind.target)
+                            << "scancode:" << (int) bind.source
+                            << "key:" << SDL_GetScancodeName(bind.source);
+                }
+            }
+        }
+#endif
     }
     
     void initStaticKbBindings()
@@ -1205,6 +1243,21 @@ void Input::update()
     
     /* Poll all bindings */
     p->pollBindings(repeatCand);
+
+#ifdef __ANDROID__
+    if (tynVerboseInputDiagnostics()) {
+        static const ButtonCode trackedButtons[] = { Up, Down, Left, Right, C };
+        for (ButtonCode code : trackedButtons) {
+            const ButtonState &state = p->getState(code);
+            if (state.triggered || state.released) {
+                Debug() << "[TYNInput] action:" << tynInputActionName(code)
+                        << "triggered:" << state.triggered
+                        << "pressed:" << state.pressed
+                        << "released:" << state.released;
+            }
+        }
+    }
+#endif
     
     // Update raw keys, controller buttons and axes
     p->updateRaw();
