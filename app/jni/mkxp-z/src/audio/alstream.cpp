@@ -205,6 +205,7 @@ struct ALStreamOpenHandler : FileSystem::OpenHandler
 	bool looped;
 	ALDataSource *source;
 	std::string errorMsg;
+	std::string candidateInfo;
 
 	ALStreamOpenHandler(SDL_RWops &srcOps, bool looped)
 	    : srcOps(&srcOps), looped(looped), source(0)
@@ -220,6 +221,7 @@ struct ALStreamOpenHandler : FileSystem::OpenHandler
 		char sig[5] = { 0 };
 		SDL_RWread(srcOps, sig, 1, 4);
 		SDL_RWseek(srcOps, 0, RW_SEEK_SET);
+		candidateInfo = std::string("extension .") + ext + " signature " + sig;
 
 		try
 		{
@@ -246,7 +248,7 @@ struct ALStreamOpenHandler : FileSystem::OpenHandler
 		{
 			/* All source constructors will close the passed ops
 			 * before throwing errors */
-			errorMsg = e.msg;
+			errorMsg = candidateInfo + ": " + e.msg;
 			return false;
 		}
 

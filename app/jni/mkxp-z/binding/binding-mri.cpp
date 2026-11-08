@@ -2514,6 +2514,17 @@ module AnyPlayMenu
     def item_count(w)
       n = (w.item_max rescue nil)
       n = (w.itemCount rescue nil) unless n.is_a?(Integer)
+      unless n.is_a?(Integer) && n > 0 && n <= 300
+        n = (w.instance_variable_get(:@item_max) rescue nil)
+      end
+      unless n.is_a?(Integer) && n > 0 && n <= 300
+        commands = (w.instance_variable_get(:@commands) rescue nil)
+        n = commands.length if commands.respond_to?(:length)
+      end
+      unless n.is_a?(Integer) && n > 0 && n <= 300
+        list = (w.instance_variable_get(:@list) rescue nil)
+        n = list.length if list.respond_to?(:length)
+      end
       n.is_a?(Integer) && n > 0 && n <= 300 ? n : nil
     end
 
@@ -2802,6 +2813,7 @@ module AnyPlayTouch
         alias_method :__ap_trigger, :trigger?
         def trigger?(b)
           if AnyPlayTouch.press_c > 0 && (b == Input::C)
+            AnyPlayLog.write("  confirm consumed by Input.trigger? frame=#{(Graphics.frame_count rescue '?')} pending=#{AnyPlayTouch.press_c}")
             AnyPlayTouch.press_c = 0
             AnyPlayLog.write("  confirm sent" + AnyPlayMenu.apply_pin.to_s)
             return true
@@ -2813,6 +2825,7 @@ module AnyPlayTouch
           alias_method :__ap_repeat, :repeat?
           def repeat?(b)
             if AnyPlayTouch.press_c > 0 && (b == Input::C)
+              AnyPlayLog.write("  confirm consumed by Input.repeat? frame=#{(Graphics.frame_count rescue '?')} pending=#{AnyPlayTouch.press_c}")
               AnyPlayTouch.press_c = 0
               return true
             end
@@ -2821,6 +2834,7 @@ module AnyPlayTouch
           end
         end
       end
+      AnyPlayLog.write("  touch input hook installed (dir4/trigger?/repeat?)")
     end
 
     def screen_to_tile(mx, my)
@@ -2983,10 +2997,14 @@ module AnyPlayTouch
       unless map_free?
         diag_not_free
         r = AnyPlayMenu.tap(mx, my)     # menus: pick the tapped entry first
+        AnyPlayLog.write("  tap menu result=#{r.inspect}")
         if r.is_a?(Hash)
           @pan = r            # walk the highlight to that panel, then confirm (see tick)
         elsif r != :ignore
           @press_c = 4        # dialogs, text, title: tap = confirm
+          AnyPlayLog.write("  confirm queued from tap; press_c=#{@press_c}")
+        else
+          AnyPlayLog.write("  tap ignored by menu handler")
         end
         return
       end
@@ -3054,6 +3072,7 @@ module AnyPlayTouch
       hook_input
       if @press_c > 0
         @press_c -= 1
+        AnyPlayLog.write("  queued touch confirm expired before Input consumed it frame=#{(Graphics.frame_count rescue '?')}") if @press_c == 0
       end
       unless @keys.empty?
         @key_age += 1

@@ -1,6 +1,7 @@
 #include "fluid-fun.h"
 
 #include <string.h>
+#include <SDL_error.h>
 #include <SDL_loadso.h>
 #include <SDL_platform.h>
 
@@ -57,7 +58,7 @@ FLUID_FUNCS2
 
 #ifndef SHARED_FLUID
 fail:
-	Debug() << "Failed to load " FLUID_LIB ". Midi playback is disabled.";
+	Debug() << "Failed to load " FLUID_LIB ": " << SDL_GetError() << ". MIDI playback is disabled.";
 
 	memset(&fluid, 0, sizeof(fluid));
 	SDL_UnloadObject(so);

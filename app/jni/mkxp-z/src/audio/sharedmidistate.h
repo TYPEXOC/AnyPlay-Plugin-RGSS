@@ -79,6 +79,11 @@ struct SharedMidiState
 		if (!HAVE_FLUID)
 			return;
 
+		if (soundFont.empty())
+			Debug() << "No MIDI SoundFont path configured; MIDI playback may be silent.";
+		else
+			Debug() << "MIDI SoundFont configured: " << soundFont;
+
 		flSettings = fluid.new_settings();
 		fluid.settings_setnum(flSettings, "synth.gain", 1.0f);
 		fluid.settings_setnum(flSettings, "synth.sample-rate", SYNTH_SAMPLERATE);
@@ -133,9 +138,11 @@ private:
 		fluid_synth_t *syn = fluid.new_synth(flSettings);
 
 		if (!soundFont.empty())
-			fluid.synth_sfload(syn, soundFont.c_str(), 1);
-		else
-			Debug() << "Warning: No soundfont specified, sound might be mute";
+		{
+			int soundFontId = fluid.synth_sfload(syn, soundFont.c_str(), 1);
+			if (soundFontId < 0)
+				Debug() << "Failed to load MIDI SoundFont " << soundFont << " (FluidSynth error " << soundFontId << ")";
+		}
 
 		Synth synth;
 		synth.inUse = usedNow;
