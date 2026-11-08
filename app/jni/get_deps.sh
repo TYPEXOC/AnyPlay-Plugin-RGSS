@@ -110,6 +110,24 @@ if [[ ! -d "fluidsynth" ]]; then
   git clone $GIT_ARGS --recurse-submodules -b v2.6.2 https://github.com/FluidSynth/fluidsynth fluidsynth
 fi
 
+# libsndfile enables FluidSynth's SF3/Vorbis SoundFont decoder. Keep its Xiph
+# codec dependencies pinned to upstream tags; they are built as static PIC
+# archives into libsndfile.so for each Android ABI.
+if [[ ! -d "libsndfile" ]]; then
+  echo "Downloading libsndfile..."
+  git clone $GIT_ARGS -b 1.2.2 https://github.com/libsndfile/libsndfile libsndfile
+fi
+
+if [[ ! -d "flac" ]]; then
+  echo "Downloading FLAC..."
+  git clone $GIT_ARGS -b 1.4.3 https://github.com/xiph/flac flac
+fi
+
+if [[ ! -d "opus" ]]; then
+  echo "Downloading Opus..."
+  git clone $GIT_ARGS -b v1.5.2 https://github.com/xiph/opus opus
+fi
+
 # Bison 2.7.1 is used by the legacy Ruby source builds.
 if [[ ! -d "bison-2.7.1" ]]; then
   echo "Downloading Bison 2.7.1..."

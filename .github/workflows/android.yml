@@ -97,7 +97,10 @@ jobs:
           test -f build-arm64-v8a/lib/libruby.so
           test -f build-arm64-v8a/lib/libruby187.so
           test -f build-arm64-v8a/lib/libruby193.so
+          test -f build-arm64-v8a/lib/libsndfile.a
           test -f build-arm64-v8a/lib/libfluidsynth.so
+          grep -Eq '^#define LIBSNDFILE_SUPPORT 1$' fluidsynth/cmakebuild-arm64-v8a/config.h
+          grep -Eq '^#define LIBSNDFILE_HASVORBIS 1$' fluidsynth/cmakebuild-arm64-v8a/config.h
 
       # ── 8b. Compile native deps (armeabi-v7a, 32-bit phones) ─────────────────
       # AnyPlay: added so the APK also runs on 32-bit ARM phones.
@@ -119,7 +122,10 @@ jobs:
           test -f build-armeabi-v7a/lib/libruby.so
           test -f build-armeabi-v7a/lib/libruby187.so
           test -f build-armeabi-v7a/lib/libruby193.so
+          test -f build-armeabi-v7a/lib/libsndfile.a
           test -f build-armeabi-v7a/lib/libfluidsynth.so
+          grep -Eq '^#define LIBSNDFILE_SUPPORT 1$' fluidsynth/cmakebuild-armeabi-v7a/config.h
+          grep -Eq '^#define LIBSNDFILE_HASVORBIS 1$' fluidsynth/cmakebuild-armeabi-v7a/config.h
           test -d build-arm64-v8a/lib
 
       # ── 9. Make Gradle wrapper executable ────────────────────────────────────

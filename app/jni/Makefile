@@ -122,6 +122,67 @@ OPENAL_CONFIGURE_ARGS := \
 	-DALSOFT_EXAMPLES=OFF \
 	-DALSOFT_UTILS=OFF
 
+# FluidSynth only enables SF3 decoding when libsndfile is built with its Xiph
+# codecs. libsndfile 1.2.2 checks for Vorbis, FLAC, and Opus together, so build
+# these pinned upstream libraries as static PIC archives and link them into
+# FluidSynth. The APK needs no additional decoder libraries at runtime.
+CODEC_CMAKE_ARGS := \
+	-DCMAKE_TOOLCHAIN_FILE="$(NDK)/build/cmake/android.toolchain.cmake" \
+	-DCMAKE_SYSTEM_NAME=Android \
+	-DCMAKE_SYSTEM_VERSION=$(API) \
+	-DANDROID_PLATFORM=android-$(API) \
+	-DANDROID_ABI=$(ABI) \
+	-DCMAKE_ANDROID_ARCH_ABI=$(ABI) \
+	-DCMAKE_INSTALL_PREFIX="$(BUILD_PREFIX)" \
+	-DCMAKE_INSTALL_LIBDIR=lib \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+	-DCMAKE_PREFIX_PATH="$(BUILD_PREFIX)" \
+	-DBUILD_SHARED_LIBS=OFF \
+	-G "Unix Makefiles"
+
+OGG_BUILD_DIR := libogg/cmakebuild-$(ABI)
+VORBIS_BUILD_DIR := libvorbis/cmakebuild-$(ABI)
+FLAC_BUILD_DIR := flac/cmakebuild-$(ABI)
+OPUS_BUILD_DIR := opus/cmakebuild-$(ABI)
+SNDFILE_BUILD_DIR := libsndfile/cmakebuild-$(ABI)
+OGG_CMAKE_ARGS := $(CODEC_CMAKE_ARGS) -DBUILD_TESTING=OFF -DINSTALL_DOCS=OFF
+VORBIS_CMAKE_ARGS := $(CODEC_CMAKE_ARGS) -DBUILD_TESTING=OFF
+FLAC_CMAKE_ARGS := $(CODEC_CMAKE_ARGS) \
+	-DBUILD_CXXLIBS=OFF \
+	-DBUILD_PROGRAMS=OFF \
+	-DBUILD_EXAMPLES=OFF \
+	-DBUILD_TESTING=OFF \
+	-DBUILD_DOCS=OFF \
+	-DBUILD_UTILS=OFF \
+	-DWITH_OGG=ON
+OPUS_CMAKE_ARGS := $(CODEC_CMAKE_ARGS) \
+	-DOPUS_BUILD_TESTING=OFF \
+	-DOPUS_BUILD_PROGRAMS=OFF \
+	-DOPUS_INSTALL_CMAKE_CONFIG_MODULE=ON \
+	-DOPUS_INSTALL_PKG_CONFIG_MODULE=ON
+SNDFILE_CMAKE_ARGS := \
+	-DCMAKE_TOOLCHAIN_FILE="$(NDK)/build/cmake/android.toolchain.cmake" \
+	-DCMAKE_SYSTEM_NAME=Android \
+	-DCMAKE_SYSTEM_VERSION=$(API) \
+	-DANDROID_PLATFORM=android-$(API) \
+	-DANDROID_ABI=$(ABI) \
+	-DCMAKE_ANDROID_ARCH_ABI=$(ABI) \
+	-DCMAKE_INSTALL_PREFIX="$(BUILD_PREFIX)" \
+	-DCMAKE_INSTALL_LIBDIR=lib \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+	-DCMAKE_PREFIX_PATH="$(BUILD_PREFIX)" \
+	-DBUILD_SHARED_LIBS=OFF \
+	-DENABLE_EXTERNAL_LIBS=ON \
+	-DENABLE_MPEG=OFF \
+	-DBUILD_PROGRAMS=OFF \
+	-DBUILD_EXAMPLES=OFF \
+	-DBUILD_TESTING=OFF \
+	-DENABLE_CPACK=OFF \
+	-DINSTALL_MANPAGES=OFF \
+	-G "Unix Makefiles"
+
 # FluidSynth is used as a synthesizer only: mkxp-z renders its PCM output into
 # its existing OpenAL stream, so platform audio/MIDI drivers are unnecessary.
 FLUIDSYNTH_BUILD_DIR := fluidsynth/cmakebuild-$(ABI)
@@ -144,7 +205,8 @@ FLUIDSYNTH_CMAKE_ARGS := \
 	-Denable-jack=OFF \
 	-Denable-ladspa=OFF \
 	-Denable-libinstpatch=OFF \
-	-Denable-libsndfile=OFF \
+	-Denable-libsndfile=ON \
+	-DSndFile_DIR="$(BUILD_PREFIX)/lib/cmake/SndFile" \
 	-Denable-midishare=OFF \
 	-Denable-native-dls=OFF \
 	-Denable-network=OFF \
@@ -206,7 +268,7 @@ else ifeq ($(ABI), x86_64)
 	HOST_193 := x86_64-linux-gnu
 endif
 
-.PHONY: all init clean cpufeatures pixman iconv openal openssl fluidsynth ruby ruby187 ruby193 bison clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-ruby-artifacts clean-bison
+.PHONY: all init clean cpufeatures pixman iconv openal openssl ogg-codec vorbis-codec flac-codec opus-codec soundfont-codecs libsndfile fluidsynth ruby ruby187 ruby193 bison clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-ruby-artifacts clean-bison clean-soundfont-codecs
 
 default: all
 
@@ -254,11 +316,49 @@ openal/cmakebuild/Makefile: openal/CMakeLists.txt
 	cd openal; mkdir cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DLIBTYPE=SHARED $(OPENAL_CONFIGURE_ARGS)
 
-# -------------------- FluidSynth --------------------
-fluidsynth: init $(LIBDIR)/libfluidsynth.so
+# -------------------- SF3 SoundFont decoder dependencies --------------------
+ogg-codec: init
+	PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)" cmake -S libogg -B $(OGG_BUILD_DIR) $(OGG_CMAKE_ARGS)
+	cmake --build $(OGG_BUILD_DIR) --parallel $(NPROC)
+	cmake --install $(OGG_BUILD_DIR)
+	test -f "$(LIBDIR)/libogg.a"
 
-$(LIBDIR)/libfluidsynth.so: fluidsynth/CMakeLists.txt
-	cmake -S fluidsynth -B $(FLUIDSYNTH_BUILD_DIR) $(FLUIDSYNTH_CMAKE_ARGS)
+vorbis-codec: ogg-codec
+	PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)" cmake -S libvorbis -B $(VORBIS_BUILD_DIR) $(VORBIS_CMAKE_ARGS)
+	cmake --build $(VORBIS_BUILD_DIR) --parallel $(NPROC)
+	cmake --install $(VORBIS_BUILD_DIR)
+	test -f "$(LIBDIR)/libvorbis.a"
+	test -f "$(LIBDIR)/libvorbisenc.a"
+
+flac-codec: ogg-codec
+	PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)" cmake -S flac -B $(FLAC_BUILD_DIR) $(FLAC_CMAKE_ARGS)
+	cmake --build $(FLAC_BUILD_DIR) --parallel $(NPROC)
+	cmake --install $(FLAC_BUILD_DIR)
+	test -f "$(LIBDIR)/libFLAC.a"
+
+opus-codec: init
+	PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)" cmake -S opus -B $(OPUS_BUILD_DIR) $(OPUS_CMAKE_ARGS)
+	cmake --build $(OPUS_BUILD_DIR) --parallel $(NPROC)
+	cmake --install $(OPUS_BUILD_DIR)
+	test -f "$(LIBDIR)/libopus.a"
+
+soundfont-codecs: vorbis-codec flac-codec opus-codec
+
+libsndfile: soundfont-codecs
+	PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)" cmake -S libsndfile -B $(SNDFILE_BUILD_DIR) $(SNDFILE_CMAKE_ARGS)
+	cmake --build $(SNDFILE_BUILD_DIR) --parallel $(NPROC)
+	cmake --install $(SNDFILE_BUILD_DIR)
+	test -f "$(LIBDIR)/libsndfile.a"
+	grep -Fq 'SndFile_WITH_EXTERNAL_LIBS 1' "$(LIBDIR)/cmake/SndFile/SndFileConfig.cmake"
+	@echo "SF3 Vorbis decoding dependencies are enabled for $(ABI)."
+
+# -------------------- FluidSynth --------------------
+fluidsynth: init libsndfile $(LIBDIR)/libfluidsynth.so
+
+$(LIBDIR)/libfluidsynth.so: fluidsynth/CMakeLists.txt libsndfile
+	PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)" cmake -S fluidsynth -B $(FLUIDSYNTH_BUILD_DIR) $(FLUIDSYNTH_CMAKE_ARGS)
+	grep -Eq '^#define LIBSNDFILE_SUPPORT 1$$' $(FLUIDSYNTH_BUILD_DIR)/config.h
+	grep -Eq '^#define LIBSNDFILE_HASVORBIS 1$$' $(FLUIDSYNTH_BUILD_DIR)/config.h
 	cmake --build $(FLUIDSYNTH_BUILD_DIR) --target libfluidsynth --parallel $(NPROC)
 	cmake --install $(FLUIDSYNTH_BUILD_DIR) --component fluidsynth_runtime
 	test -f "$@"
@@ -387,6 +487,9 @@ clean-ruby-artifacts:
 clean-bison:
 	-cd bison-2.7.1; make clean
 
-clean: clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-ruby-artifacts clean-bison
+clean-soundfont-codecs:
+	-rm -rf $(OGG_BUILD_DIR) $(VORBIS_BUILD_DIR) $(FLAC_BUILD_DIR) $(OPUS_BUILD_DIR) $(SNDFILE_BUILD_DIR)
+
+clean: clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-ruby-artifacts clean-bison clean-soundfont-codecs
 
 all: pixman iconv openal openssl fluidsynth ruby ruby187 ruby193 bison

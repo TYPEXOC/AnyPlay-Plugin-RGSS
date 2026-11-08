@@ -13,6 +13,7 @@ New versions install over the old one.
 - TYN-owned virtual pad/editor and cheat panel are connected to the RGSS process.
 - The selected TYN translation table loads at runtime and can be hot-reloaded without adding files to the game directory.
 - MIDI BGM uses FluidSynth built from upstream for both Android ABIs and the bundled GMGSx SoundFont when a game has no explicit SoundFont setting; no game files are changed.
+- FluidSynth now has libsndfile's Ogg/Vorbis decoder enabled, allowing games to use SF3 SoundFonts as well as SF2.
 - Tyranor Next exposes the translation-file picker for games handled by this module.
 - Audio scripts written for newer mkxp-z (extra position argument, `bgm_position`) no longer cause errors.
 - New problem report: `AnyPlayLog.txt` in the game folder (created only when needed, fresh on every start). Attach it when you report a problem.
