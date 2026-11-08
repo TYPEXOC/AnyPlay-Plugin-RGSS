@@ -2821,6 +2821,16 @@ module AnyPlayTouch
           return true if AnyPlayTouch.next_key(b)
           __ap_trigger(b)
         end
+        if Input.respond_to?(:press?)
+          alias_method :__ap_press, :press?
+          def press?(b)
+            if AnyPlayTouch.press_c > 0 && (b == Input::C)
+              AnyPlayLog.write("  confirm observed by Input.press? frame=#{(Graphics.frame_count rescue '?')} pending=#{AnyPlayTouch.press_c}")
+              return true
+            end
+            __ap_press(b)
+          end
+        end
         if Input.respond_to?(:repeat?)
           alias_method :__ap_repeat, :repeat?
           def repeat?(b)
@@ -2834,7 +2844,7 @@ module AnyPlayTouch
           end
         end
       end
-      AnyPlayLog.write("  touch input hook installed (dir4/trigger?/repeat?)")
+      AnyPlayLog.write("  touch input hook installed (dir4/press?/trigger?/repeat?)")
     end
 
     def screen_to_tile(mx, my)
