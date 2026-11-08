@@ -412,6 +412,92 @@ final class RuntimeProbe
         return v.matches("\\d[\\d.,\\s]*") ? v : null;
     }
 
+
+    // ------------------------------------------------------- folder facts (log)
+
+    /**
+     * One short line about what is really inside the game folder, for AnyPlayLog's header.
+     * It answers questions like "is there a Game.rgssad?", "does Data/ have Scripts.rxdata?",
+     * "is Map003.rxdata there, and with which spelling?". Never throws.
+     */
+    static String describeFolder(File gameDir)
+    {
+        try {
+            return describeFolderInner(gameDir);
+        } catch (Throwable t) {
+            return "folder facts unavailable (" + t.getClass().getSimpleName() + ")";
+        }
+    }
+
+    private static String describeFolderInner(File gameDir)
+    {
+        if (gameDir == null || !gameDir.isDirectory()) return "folder facts: game folder missing";
+        File[] files = gameDir.listFiles();
+        if (files == null) return "folder facts: game folder not readable";
+
+        File[] sorted = files.clone();
+        Arrays.sort(sorted, new Comparator<File>() {
+            @Override public int compare(File a, File b) {
+                return a.getName().compareToIgnoreCase(b.getName());
+            }
+        });
+
+        StringBuilder top = new StringBuilder();
+        StringBuilder archives = new StringBuilder();
+        File data = null;
+        int shown = 0;
+        for (File f : sorted) {
+            String n = f.getName();
+            String lower = n.toLowerCase(Locale.ROOT);
+            if (lower.equals("data") && f.isDirectory()) data = f;
+            if (lower.endsWith(".rgssad") || lower.endsWith(".rgss2a") || lower.endsWith(".rgss3a")
+                    || lower.endsWith(".kpak")) {
+                if (archives.length() > 0) archives.append(',');
+                archives.append(printable(n)).append(' ').append(f.length() >> 20).append("MB");
+            }
+            if (shown < 12) {
+                if (top.length() > 0) top.append(',');
+                top.append(printable(n)).append(f.isDirectory() ? "/" : "");
+                shown++;
+            }
+        }
+
+        StringBuilder sb = new StringBuilder("folder facts: ");
+        sb.append(files.length).append(" entries [").append(top);
+        if (files.length > shown) sb.append(",...");
+        sb.append("]; archives=").append(archives.length() == 0 ? "none" : archives.toString());
+
+        if (data == null) {
+            sb.append("; no Data/ folder");
+            return sb.toString();
+        }
+        File[] inside = data.listFiles();
+        if (inside == null) {
+            sb.append("; Data/ not readable");
+            return sb.toString();
+        }
+        int maps = 0;
+        int odd = 0;           // names that do not have the usual spelling ("Map003.rxdata")
+        boolean scripts = false;
+        String m003 = "no", m178 = "no";
+        for (File f : inside) {
+            String n = f.getName();
+            String lower = n.toLowerCase(Locale.ROOT);
+            if (lower.equals("scripts.rxdata")) scripts = true;
+            if (lower.matches("map\\d+\\.rxdata")) {
+                maps++;
+                if (!n.matches("Map\\d+\\.rxdata")) odd++;
+            }
+            if (lower.equals("map003.rxdata")) m003 = n.equals("Map003.rxdata") ? "yes" : "as " + printable(n);
+            if (lower.equals("map178.rxdata")) m178 = n.equals("Map178.rxdata") ? "yes" : "as " + printable(n);
+        }
+        sb.append("; Data/ has ").append(inside.length).append(" files, ").append(maps).append(" Map*.rxdata");
+        if (odd > 0) sb.append(" (").append(odd).append(" with unusual spelling)");
+        sb.append(", Scripts.rxdata=").append(scripts ? "yes" : "no");
+        sb.append(", Map003=").append(m003).append(", Map178=").append(m178);
+        return sb.toString();
+    }
+
     // ----------------------------------------------------------------- helpers
 
     private static byte[] utf16le(String s)
