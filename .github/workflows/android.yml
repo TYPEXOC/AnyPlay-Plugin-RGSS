@@ -134,7 +134,23 @@ jobs:
         run: |
           for log in "$RUNNER_TEMP/sf3-native-arm64.log" "$RUNNER_TEMP/sf3-native-armv7.log"; do
             if [ -f "$log" ]; then
-              details=$(grep -Ei 'CMake Error|error:|Error:|FAILED|failed|not found' "$log" | tail -n 8 | paste -sd ' ' -)
+              details=$(python3 - "$log" <<'PY'
+          import re
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8", errors="replace") as log_file:
+              lines = log_file.readlines()
+          markers = re.compile(r"CMake Error at|error:|undefined reference|No such file or directory|make(?:\[[0-9]+\])?: \*\*\*")
+          matching_lines = [index for index, line in enumerate(lines) if markers.search(line)]
+          if matching_lines:
+              start = max(0, matching_lines[-1] - 2)
+              end = min(len(lines), matching_lines[-1] + 14)
+              print("".join(lines[start:end]).strip())
+          else:
+              print("".join(lines[-40:]).strip())
+          PY
+              )
+              details=$(printf '%s' "$details" | tr '\n' ' ' | sed 's/%/%25/g' | sed 's/\r/%0D/g')
               if [ -n "$details" ]; then
                 echo "::error file=.github/workflows/android.yml,line=1,title=Native build failure::$details"
               fi
