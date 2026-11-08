@@ -57,12 +57,14 @@ static const char *tynInputActionName(Input::ButtonCode code)
     case Input::Left: return "Left";
     case Input::Right: return "Right";
     case Input::C: return "C/Confirm";
+    case Input::E: return "E";
+    case Input::F: return "F";
     default: return "Other";
     }
 }
 #endif
 
-#define BUTTON_CODE_COUNT 26
+#define BUTTON_CODE_COUNT 28
 
 #define m(vk,sc) { vk, SDL_SCANCODE_##sc }
 std::unordered_map<int, int> vKeyToScancode{
@@ -659,7 +661,7 @@ static const int mapToIndex[] =
     0,
     16, 17, 18, 19, 20,
     0, 0, 0, 0, 0, 0, 0, 0,
-    21, 22, 23, 24, 25
+    21, 22, 23, 24, 25, 26, 27
 };
 
 static elementsN(mapToIndex);

@@ -74,7 +74,9 @@ struct VButton
   BTN_STRING(C),
 	BTN_STRING(X),
 	BTN_STRING(Y),
-  BTN_STRING(Z)
+  BTN_STRING(Z),
+  BTN_STRING(E),
+  BTN_STRING(F)
 };
 
 static elementsN(vButtons);
@@ -922,6 +924,8 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
         SET_BUTTON_NAME(9, x);
         SET_BUTTON_NAME(10, y);
         SET_BUTTON_NAME(11, z);
+        SET_BUTTON_NAME(12, e);
+        SET_BUTTON_NAME(13, f);
 #undef SET_BUTTON_NAME
     }
     
@@ -941,22 +945,23 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 
 	p->rgb = p->winSurf->format;
 
-	const size_t layoutW = 4;
-	const size_t layoutH = 3;
-	assert(layoutW*layoutH == vButtonsN);
+    const int layoutW = 4;
+    const int layoutH = 4;
+    assert(vButtonsN <= static_cast<size_t>(layoutW*layoutH));
 
 	const int bWidgetW = winSize.x / layoutH;
 	const int bWidgetH = 64;
 	const int bWidgetY = winSize.y - layoutW*bWidgetH - 48;
 
-	for (int y = 0; y < 4; ++y)
-		for (int x = 0; x < 3; ++x)
-		{
-			int i = y*3+x;
-			BindingWidget w(i, p, IntRect(x*bWidgetW, bWidgetY+y*bWidgetH,
-			                              bWidgetW, bWidgetH));
-			p->bWidgets.push_back(w);
-		}
+    for (size_t index = 0; index < vButtonsN; ++index)
+    {
+        int i = static_cast<int>(index);
+        int x = i % layoutH;
+        int y = i / layoutH;
+        BindingWidget w(i, p, IntRect(x*bWidgetW, bWidgetY+y*bWidgetH,
+                                      bWidgetW, bWidgetH));
+        p->bWidgets.push_back(w);
+    }
 
 	for (size_t i = 0; i< p->bWidgets.size(); ++i)
 		p->widgets.push_back(&p->bWidgets[i]);
