@@ -140,14 +140,23 @@ jobs:
 
           with open(sys.argv[1], encoding="utf-8", errors="replace") as log_file:
               lines = log_file.readlines()
-          markers = re.compile(r"CMake Error at|error:|undefined reference|No such file or directory|make(?:\[[0-9]+\])?: \*\*\*")
-          matching_lines = [index for index, line in enumerate(lines) if markers.search(line)]
+          marker_groups = (
+              re.compile(r"CMake Error at|CMake Error:"),
+              re.compile(r"fatal error:|error:|undefined reference"),
+              re.compile(r"make(?:\[[0-9]+\])?: \*\*\*|No such file or directory"),
+          )
+          matching_lines = []
+          for markers in marker_groups:
+              matching_lines = [index for index, line in enumerate(lines) if markers.search(line)]
+              if matching_lines:
+                  break
           if matching_lines:
-              start = max(0, matching_lines[-1] - 2)
-              end = min(len(lines), matching_lines[-1] + 14)
-              print("".join(lines[start:end]).strip())
+              start = max(0, matching_lines[-1] - 8)
+              end = min(len(lines), matching_lines[-1] + 16)
+              details = "".join(lines[start:end]).strip()
           else:
-              print("".join(lines[-40:]).strip())
+              details = "".join(lines[-40:]).strip()
+          print(details[-6000:])
           PY
               )
               details=$(printf '%s' "$details" | tr '\n' ' ' | sed 's/%/%25/g' | sed 's/\r/%0D/g')
