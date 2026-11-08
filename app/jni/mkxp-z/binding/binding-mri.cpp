@@ -4130,7 +4130,7 @@ module AnyPlayPerf
     @t0 ||= t1
     script_ms = @last_end ? ((t1 - @last_end) * 1000).to_i : 0
     where = nil
-    where = (caller(2, 3) || []).map { |c| AnyPlayLog.label(c) }.join(" < ") if script_ms > 120
+    where = (caller(2) || []).slice(0, 3).map { |c| AnyPlayLog.label(c) }.join(" < ") if script_ms > 120
     AnyPlayLog.watch
     AnyPlayLog.runtime_checkpoint
     start_sampler
