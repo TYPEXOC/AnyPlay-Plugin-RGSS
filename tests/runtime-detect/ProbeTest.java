@@ -104,6 +104,33 @@ public class ProbeTest {
         return root;
     }
 
+
+    /** RGSS archive v1 writer (same algorithm as the engine's reader in src/crypto/rgssad.cpp). */
+    static byte[] rgssad(String[] names, int[] sizes) {
+        ByteArrayOutputStream o = new ByteArrayOutputStream();
+        byte[] head = { 'R', 'G', 'S', 'S', 'A', 'D', 0, 1 };
+        o.write(head, 0, 8);
+        int magic = 0xDEADCAFE;
+        for (int i = 0; i < names.length; i++) {
+            byte[] n = names[i].replace('/', '\\').getBytes(StandardCharsets.ISO_8859_1);
+            le32(o, n.length ^ magic); magic = magic * 7 + 3;
+            for (byte b : n) { o.write((b ^ (magic & 0xff)) & 0xff); magic = magic * 7 + 3; }
+            le32(o, sizes[i] ^ magic); magic = magic * 7 + 3;
+            byte[] data = new byte[sizes[i]];
+            new Random(i).nextBytes(data);
+            o.write(data, 0, data.length);
+        }
+        return o.toByteArray();
+    }
+
+    static void le32(ByteArrayOutputStream o, int v) {
+        o.write(v & 0xff); o.write((v >> 8) & 0xff); o.write((v >> 16) & 0xff); o.write((v >> 24) & 0xff);
+    }
+
+    static File oneFile(String name, byte[] data) throws Exception {
+        return new File(game(name, data), name);
+    }
+
     static byte[] scriptsWith(String versionLine) {
         return scriptsRxdata(new String[] { "Main", "Settings", "Other" },
                 new String[] { filler(30), "# settings\n" + versionLine + "\n" + filler(10), filler(20) }, 6);
@@ -237,6 +264,45 @@ public class ProbeTest {
         eq("facts: no Data folder", true, RuntimeProbe.describeFolder(game("Game.exe", exe1)).contains("no Data/ folder"));
         eq("facts: null folder", "folder facts: game folder missing", RuntimeProbe.describeFolder(null));
         eq("facts: missing folder", "folder facts: game folder missing", RuntimeProbe.describeFolder(new File("/does/not/exist")));
+
+
+        // RGSS archive name lister
+        byte[] arc = rgssad(new String[] { "Data/Scripts.rxdata", "Data/Map001.rxdata", "Data/Map003.rxdata",
+                "Data/Map070.rxdata", "Graphics/Icons/a.png", "Data/MapInfos.rxdata" },
+                new int[] { 50, 20, 33, 7, 1000, 5 });
+        String a1 = RuntimeProbe.describeArchive(oneFile("Game.rgssad", arc));
+        System.out.println("   " + a1);
+        eq("archive: entry count", true, a1.contains("holds 6 files"));
+        eq("archive: Data count", true, a1.contains("5 in Data/ (3 Map*.rxdata)"));
+        eq("archive: Scripts yes", true, a1.contains("Scripts.rxdata=yes"));
+        eq("archive: Map003 yes", true, a1.contains("Map003=yes"));
+        eq("archive: Map178 no", true, a1.contains("Map178=no"));
+        eq("archive: lowest maps", true, a1.contains("lowest map numbers 1,3,70"));
+
+        String a2 = RuntimeProbe.describeArchive(oneFile("Game.rgssad", rgssad(
+                new String[] { "Data/Map001.rxdata", "Data/Map178.rxdata", "DATA/MAP002.RXDATA" }, new int[] { 10, 10, 10 })));
+        eq("archive: Map003 absent", true, a2.contains("Map003=no"));
+        eq("archive: Map178 present", true, a2.contains("Map178=yes"));
+        eq("archive: names are case-insensitive", true, a2.contains("3 in Data/ (3 Map*.rxdata)") && a2.contains("1,2,178"));
+
+        byte[] cut = new byte[arc.length - 600];
+        System.arraycopy(arc, 0, cut, 0, cut.length);
+        String a3 = RuntimeProbe.describeArchive(oneFile("Game.rgssad", cut));
+        System.out.println("   " + a3);
+        eq("archive: truncated is reported", true, a3.contains("runs past the end"));
+
+        eq("archive: not RGSS", "Game.rgssad: not an RGSS archive", RuntimeProbe.describeArchive(oneFile("Game.rgssad", new byte[100])));
+        byte[] v3 = { 'R', 'G', 'S', 'S', 'A', 'D', 0, 3, 1, 2, 3, 4 };
+        eq("archive: v3 reported", "Game.rgss3a: format v3 (names not read)", RuntimeProbe.describeArchive(oneFile("Game.rgss3a", v3)));
+        eq("archive: empty file", "Game.rgssad: not an RGSS archive", RuntimeProbe.describeArchive(oneFile("Game.rgssad", new byte[0])));
+        eq("archive: header only", true, RuntimeProbe.describeArchive(oneFile("Game.rgssad", new byte[] { 'R', 'G', 'S', 'S', 'A', 'D', 0, 1 })).contains("holds 0 files"));
+
+        String f3 = RuntimeProbe.describeFolder(game("Game.exe", exe1, "Game.rgssad", arc, ".kirin-update.lock", "x", ".nomedia", "x",
+                "Data/Misc.dat", "x"));
+        System.out.println("   " + f3);
+        eq("facts: archive described in folder line", true, f3.contains("Game.rgssad holds 6 files") && f3.contains("Map003=yes"));
+        eq("facts: kirin leftovers flagged", true, f3.contains(".kirin* entries=1"));
+        eq("facts: small Data/ lists names", true, f3.contains("Data/ has 1 files (Misc.dat)"));
 
         System.out.println();
         System.out.println(runs + " checks, " + fails + " failed");
