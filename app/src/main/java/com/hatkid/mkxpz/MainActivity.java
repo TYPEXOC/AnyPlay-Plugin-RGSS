@@ -352,6 +352,7 @@ public class MainActivity extends SDLActivity
                 "Runtime setup: copied MKXP, Win32API, and input-update compatibility preloads");
 
             File rubyConfigPreload = prepareBundledRubyConfigPreload();
+            File discordCompatPreload = prepareWindowsDiscordCompatPreload();
 
             File bridge = new File(mSessionDir, "tyranor_rgss_translation.rb");
             copyAssetToFile("tyranor_rgss_translation.rb", bridge);
@@ -385,6 +386,7 @@ public class MainActivity extends SDLActivity
             JSONArray gameScripts = stringArray(config.opt("preloadScript"));
             JSONArray scripts = new JSONArray();
             if (rubyConfigPreload != null) scripts.put(rubyConfigPreload.getAbsolutePath());
+            if (discordCompatPreload != null) scripts.put(discordCompatPreload.getAbsolutePath());
             scripts.put(mkxpCompat.getAbsolutePath());
             scripts.put(win32Compat.getAbsolutePath());
             scripts.put(inputCompat.getAbsolutePath());
@@ -717,6 +719,58 @@ public class MainActivity extends SDLActivity
         return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'";
     }
 
+    /**
+     * A Windows MKXP-Z package can ship a PE Discord extension named discord.so.
+     * Android cannot load that binary, while the game's rich-presence script is
+     * optional. Install a no-op API only when both that script and PE extension
+     * are present, so the unsupported feature cannot abort game startup.
+     */
+    private File prepareWindowsDiscordCompatPreload()
+    {
+        File discordScript = new File(GAME_FOLDER, "Scripts/Online/DiscordRichPresence.rb");
+        File discordExtension = new File(GAME_FOLDER, "gems/discord.so");
+        if (!discordScript.isFile() || !discordExtension.isFile()) return null;
+
+        try (InputStream input = new java.io.FileInputStream(discordExtension)) {
+            int first = input.read();
+            int second = input.read();
+            if (first != 0x4d || second != 0x5a) {
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Discord compatibility: bundled discord.so is not a Windows PE binary; left unchanged");
+                return null;
+            }
+
+            File preload = new File(mSessionDir, "tyranor_optional_discord_compat.rb");
+            String script = "# TYN Android stub for the optional Windows-only Discord Rich Presence extension.\n"
+                + "$tyn_android_disable_discord_rpc = true\n"
+                + "module Discord\n"
+                + "  def self.update; nil; end\n"
+                + "  def self.connected?; false; end\n"
+                + "  def self.connect(*arguments); nil; end\n"
+                + "  def self.disconnect; nil; end\n"
+                + "  def self.update_activity(*arguments); nil; end\n"
+                + "end\n"
+                + "module Kernel\n"
+                + "  unless private_method_defined?(:tyn_require_without_discord_rpc)\n"
+                + "    alias_method :tyn_require_without_discord_rpc, :require\n"
+                + "  end\n"
+                + "  def require(feature, *arguments)\n"
+                + "    return false if $tyn_android_disable_discord_rpc && feature.to_s == 'discord'\n"
+                + "    tyn_require_without_discord_rpc(feature, *arguments)\n"
+                + "  end\n"
+                + "  private :require\n"
+                + "end\n";
+            writeAtomically(preload, script);
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Discord compatibility: detected a Windows PE extension; disabled optional Discord Rich Presence for Android");
+            return preload;
+        } catch (Exception error) {
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Discord compatibility: could not inspect or prepare the optional extension stub", error);
+            return null;
+        }
+    }
+
     private JSONObject readGameConfig()
     {
         File source = new File(GAME_FOLDER, "mkxp.json");
@@ -725,7 +779,12 @@ public class MainActivity extends SDLActivity
                 byte[] bytes = readBytes(source, 1024 * 1024);
                 String text = new String(bytes, StandardCharsets.UTF_8).replace("\uFEFF", "").trim();
                 TynRuntimeDiagnostics.append(mSessionDir, "Game-folder mkxp.json found; reading its settings");
-                return new JSONObject(text);
+                String normalized = stripJsonTrailingCommas(text);
+                if (!normalized.equals(text)) {
+                    TynRuntimeDiagnostics.append(mSessionDir,
+                        "Game-folder mkxp.json contains trailing commas; removed them before parsing");
+                }
+                return new JSONObject(normalized);
             } catch (Exception error) {
                 Log.w(TAG, "Ignoring invalid game mkxp.json", error);
                 TynRuntimeDiagnostics.append(mSessionDir, "Could not read the game's mkxp.json", error);
@@ -733,6 +792,39 @@ public class MainActivity extends SDLActivity
         }
         TynRuntimeDiagnostics.append(mSessionDir, "No game-folder mkxp.json found; using TYN runtime settings");
         return new JSONObject();
+    }
+
+    private static String stripJsonTrailingCommas(String json)
+    {
+        StringBuilder normalized = new StringBuilder(json.length());
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = 0; i < json.length(); i++) {
+            char current = json.charAt(i);
+            if (inString) {
+                normalized.append(current);
+                if (escaped) {
+                    escaped = false;
+                } else if (current == '\\') {
+                    escaped = true;
+                } else if (current == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (current == '"') {
+                inString = true;
+                normalized.append(current);
+                continue;
+            }
+            if (current == ',') {
+                int next = i + 1;
+                while (next < json.length() && Character.isWhitespace(json.charAt(next))) next++;
+                if (next < json.length() && (json.charAt(next) == '}' || json.charAt(next) == ']')) continue;
+            }
+            normalized.append(current);
+        }
+        return normalized.toString();
     }
 
     private JSONArray stringArray(Object value)
