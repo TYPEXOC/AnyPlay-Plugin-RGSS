@@ -102,6 +102,14 @@ if [[ ! -d "openssl" ]]; then
   git clone $GIT_ARGS -b openssl-3.0.12 https://github.com/openssl/openssl openssl
 fi
 
+# FluidSynth provides the software synthesizer used by mkxp-z's existing MIDI
+# event renderer. Keep the upstream tag pinned and include its required GCEM
+# submodule for reproducible Android builds.
+if [[ ! -d "fluidsynth" ]]; then
+  echo "Downloading FluidSynth..."
+  git clone $GIT_ARGS --recurse-submodules -b v2.6.2 https://github.com/FluidSynth/fluidsynth fluidsynth
+fi
+
 # Bison 2.7.1 is used by the legacy Ruby source builds.
 if [[ ! -d "bison-2.7.1" ]]; then
   echo "Downloading Bison 2.7.1..."

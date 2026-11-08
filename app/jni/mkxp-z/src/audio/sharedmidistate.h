@@ -142,6 +142,8 @@ private:
 			int soundFontId = fluid.synth_sfload(syn, soundFont.c_str(), 1);
 			if (soundFontId < 0)
 				Debug() << "Failed to load MIDI SoundFont " << soundFont << " (FluidSynth error " << soundFontId << ")";
+			else
+				Debug() << "Loaded MIDI SoundFont " << soundFont << " (FluidSynth ID " << soundFontId << ")";
 		}
 
 		Synth synth;

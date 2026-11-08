@@ -22,6 +22,7 @@ New versions install over the old one. Nothing needs to be uninstalled.
 - TYN's configurable on-screen pad and pad-layout editor; virtual keys are sent to SDL in the runtime process.
 - TYN cheat panel backed by Ruby-side RGSS control code for supported XP / VX / VX Ace games and Pokémon Essentials variants.
 - Runtime loading of the translation file selected in Tyranor Next, with polling-based hot reload. The module reads the JSON through a temporary content URI grant and does not copy the bridge into the game folder.
+- MIDI playback through upstream FluidSynth 2.6.2. Each Android ABI builds and packages the synthesizer; when a game's `mkxp.json` does not name a SoundFont, the module copies the bundled `GMGSx.SF2` into its private session and passes that path to mkxp-z. MIDI PCM stays on mkxp-z's existing OpenAL audio path.
 - Three separately built Ruby VMs: 1.8.7, 1.9.3, and 3.1.3. Tyranor Next selects the effective global or per-game choice before loading native libraries. Auto uses the detected RGSS generation; explicitly selected versions override that mapping.
 - Tyranor Next's RPG Maker runtime options are applied to the private mkxp session: automatic Ruby selection uses 1.8.7 for XP/VX and 1.9.3 for VX Ace (unknown generations fall back to 3.1.3); rendering and frame pacing, path caches, fast resource enumeration, resolution and screen alignment, speed-up toggle, font scale/custom/CJK fonts, dialogue copy, cheat panel, debug mode, and configured postload scripts are wired to the runtime. Options can have global defaults and per-game overrides. The dialogue-copy action covers standard RGSS message events; custom plugin drawing paths may not expose their text.
 - Fixes for old scripts. Many games were written for Ruby 1.8; the plugin repairs the common problems automatically when the game starts, so the game does not need to be edited.
@@ -48,6 +49,8 @@ The release is signed with a key that is kept in the repository secrets (`ANYPLA
 - [001-lovely-singh](https://github.com/001-lovely-singh/AnyPlay-Plugin-RGSS) for the AnyPlay RGSS base adapted by this module branch.
 - Ruby 1.8.7 and 1.9.3 sources from their respective upstream projects; parser sources are generated during the build with GNU Bison.
 - The Ruby 1.9.3 hostname-verification backport from the pinned RVM patch set.
+- [FluidSynth](https://github.com/FluidSynth/fluidsynth) 2.6.2, licensed under LGPL-2.1; its shared library is built from the pinned upstream tag for both Android ABIs.
+- `GMGSx.SF2` was supplied by the project maintainer. Its embedded SoundFont INFO metadata labels it “Public Domain”.
 - Ruby, SDL2, OpenAL Soft and the other libraries bundled in the build keep their own licenses.
 
 This project is licensed under the **GNU General Public License v2** (see [`app/jni/mkxp-z/COPYING`](app/jni/mkxp-z/COPYING)). The complete source of every release is this repository, at the release's tag.

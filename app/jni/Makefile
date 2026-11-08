@@ -122,6 +122,42 @@ OPENAL_CONFIGURE_ARGS := \
 	-DALSOFT_EXAMPLES=OFF \
 	-DALSOFT_UTILS=OFF
 
+# FluidSynth is used as a synthesizer only: mkxp-z renders its PCM output into
+# its existing OpenAL stream, so platform audio/MIDI drivers are unnecessary.
+FLUIDSYNTH_BUILD_DIR := fluidsynth/cmakebuild-$(ABI)
+FLUIDSYNTH_CMAKE_ARGS := \
+	-DCMAKE_TOOLCHAIN_FILE="$(NDK)/build/cmake/android.toolchain.cmake" \
+	-DCMAKE_SYSTEM_VERSION=$(API) \
+	-DANDROID_PLATFORM=android-$(API) \
+	-DANDROID_ABI=$(ABI) \
+	-DCMAKE_ANDROID_ARCH_ABI=$(ABI) \
+	-DCMAKE_ANDROID_STL_TYPE=c++_shared \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_INSTALL_PREFIX="$(BUILD_PREFIX)" \
+	-DCMAKE_INSTALL_LIBDIR=lib \
+	-DCMAKE_CXX_STANDARD=17 \
+	-DBUILD_SHARED_LIBS=ON \
+	-Dosal=cpp11 \
+	-Denable-alsa=OFF \
+	-Denable-aufile=OFF \
+	-Denable-dbus=OFF \
+	-Denable-jack=OFF \
+	-Denable-ladspa=OFF \
+	-Denable-libinstpatch=OFF \
+	-Denable-libsndfile=OFF \
+	-Denable-midishare=OFF \
+	-Denable-native-dls=OFF \
+	-Denable-network=OFF \
+	-Denable-oboe=OFF \
+	-Denable-openmp=OFF \
+	-Denable-opensles=OFF \
+	-Denable-oss=OFF \
+	-Denable-pipewire=OFF \
+	-Denable-pulseaudio=OFF \
+	-Denable-readline=OFF \
+	-Denable-sdl3=OFF \
+	-Denable-signalsmith=OFF
+
 # Ruby configure arguments to build
 RUBY_BASE_CONFIGURE_ARGS := \
 	--prefix="$(RUBY_PREFIX)" \
@@ -170,7 +206,7 @@ else ifeq ($(ABI), x86_64)
 	HOST_193 := x86_64-linux-gnu
 endif
 
-.PHONY: all init clean cpufeatures pixman iconv openal openssl ruby ruby187 ruby193 bison clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-ruby-artifacts clean-bison
+.PHONY: all init clean cpufeatures pixman iconv openal openssl fluidsynth ruby ruby187 ruby193 bison clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-ruby-artifacts clean-bison
 
 default: all
 
@@ -217,6 +253,15 @@ $(LIBDIR)/libopenal.so: openal/cmakebuild/Makefile
 openal/cmakebuild/Makefile: openal/CMakeLists.txt
 	cd openal; mkdir cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DLIBTYPE=SHARED $(OPENAL_CONFIGURE_ARGS)
+
+# -------------------- FluidSynth --------------------
+fluidsynth: init $(LIBDIR)/libfluidsynth.so
+
+$(LIBDIR)/libfluidsynth.so: fluidsynth/CMakeLists.txt
+	cmake -S fluidsynth -B $(FLUIDSYNTH_BUILD_DIR) $(FLUIDSYNTH_CMAKE_ARGS)
+	cmake --build $(FLUIDSYNTH_BUILD_DIR) --target libfluidsynth --parallel $(NPROC)
+	cmake --install $(FLUIDSYNTH_BUILD_DIR) --component fluidsynth_runtime
+	test -f "$@"
 
 # -------------------- OpenSSL --------------------
 openssl: init $(LIBDIR)/libssl.a
@@ -344,4 +389,4 @@ clean-bison:
 
 clean: clean-pixman clean-iconv clean-openal clean-openssl clean-ruby clean-ruby187 clean-ruby193 clean-ruby-artifacts clean-bison
 
-all: pixman iconv openal openssl ruby ruby187 ruby193 bison
+all: pixman iconv openal openssl fluidsynth ruby ruby187 ruby193 bison

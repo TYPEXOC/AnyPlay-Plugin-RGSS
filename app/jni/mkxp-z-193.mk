@@ -114,7 +114,7 @@ LOCAL_SRC_FILES := \
 	$(LOCAL_PATH)/binding/miniffi-binding.cpp \
 	$(LOCAL_PATH)/binding/module_rpg.cpp
 
-LOCAL_SHARED_LIBRARIES := SDL2 SDL2_ttf SDL2_image SDL2_sound openal ruby193
+LOCAL_SHARED_LIBRARIES := SDL2 SDL2_ttf SDL2_image SDL2_sound openal fluidsynth ruby193
 
 LOCAL_STATIC_LIBRARIES := libogg libvorbis libtheora physfs pixman uchardet libiconv openssl
 

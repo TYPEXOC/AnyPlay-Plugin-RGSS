@@ -26,6 +26,13 @@ include $(L_PATH)/ruby.mk
 include $(L_PATH)/ruby187.mk
 include $(L_PATH)/ruby193.mk
 
+# FluidSynth is built from its pinned upstream source by the JNI Makefile.
+include $(CLEAR_VARS)
+LOCAL_PATH := $(L_PATH)
+LOCAL_MODULE := fluidsynth
+LOCAL_SRC_FILES := build-$(TARGET_ARCH_ABI)/lib/libfluidsynth.so
+include $(PREBUILT_SHARED_LIBRARY)
+
 # Include main library
 include $(L_PATH)/mkxp-z.mk
 include $(L_PATH)/mkxp-z-187.mk

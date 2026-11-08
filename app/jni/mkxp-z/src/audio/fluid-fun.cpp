@@ -7,7 +7,9 @@
 
 #include "debugwriter.h"
 
-#if __LINUX__ || __ANDROID__
+#if __ANDROID__
+#define FLUID_LIB "libfluidsynth.so"
+#elif __LINUX__
 #define FLUID_LIB "libfluidsynth.so.3"
 #elif MKXPZ_BUILD_XCODE
 #define FLUID_LIB "@rpath/libfluidsynth.dylib"
@@ -54,6 +56,7 @@ void initFluidFunctions()
 FLUID_FUNCS
 FLUID_FUNCS2
 
+	Debug() << "Loaded FluidSynth library " FLUID_LIB << "; MIDI synthesis is available.";
 	return;
 
 #ifndef SHARED_FLUID

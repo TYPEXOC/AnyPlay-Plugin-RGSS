@@ -87,13 +87,13 @@ public class MainActivity extends SDLActivity
     private static final String TYN_EXTRA_THEME_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_PRIMARY_COLOR";
     private static final String TYN_EXTRA_THEME_ON_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_ON_PRIMARY_COLOR";
     private static final String[] RUBY_187_LIBRARIES = {
-        "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "ruby187", "mkxp-z-187"
+        "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "fluidsynth", "ruby187", "mkxp-z-187"
     };
     private static final String[] RUBY_193_LIBRARIES = {
-        "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "ruby193", "mkxp-z-193"
+        "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "fluidsynth", "ruby193", "mkxp-z-193"
     };
     private static final String[] RUBY_313_LIBRARIES = {
-        "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "ruby", "mkxp-z"
+        "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "fluidsynth", "ruby", "mkxp-z"
     };
     private static int sRubyRuntime = 313;
     private boolean mCustomGameDir = false;
@@ -376,6 +376,7 @@ public class MainActivity extends SDLActivity
             config.put("rgssVersion", detectRgssVersion(GAME_FOLDER));
             if (title != null && !title.trim().isEmpty()) config.put("windowTitle", title);
             applyTynRgssOptions(config);
+            configureMidiSoundFont(config);
             JSONArray gameScripts = stringArray(config.opt("preloadScript"));
             JSONArray scripts = new JSONArray();
             scripts.put(mkxpCompat.getAbsolutePath());
@@ -459,6 +460,7 @@ public class MainActivity extends SDLActivity
             config.put("gameFolder", GAME_FOLDER);
             config.put("rgssVersion", rgssVersion);
             if (title != null && !title.trim().isEmpty()) config.put("windowTitle", title);
+            configureMidiSoundFont(config);
             writeAtomically(new File(mSessionDir, "mkxp.json"), config.toString());
             GAME_PATH = mSessionDir.getAbsolutePath();
             TynRuntimeDiagnostics.append(mSessionDir,
@@ -477,6 +479,34 @@ public class MainActivity extends SDLActivity
             int count;
             while ((count = input.read(buffer)) >= 0) output.write(buffer, 0, count);
         }
+    }
+
+    private void configureMidiSoundFont(JSONObject config) throws Exception
+    {
+        Object configuredValue = config.opt("midiSoundFont");
+        String configuredPath = configuredValue instanceof String ? ((String) configuredValue).trim() : "";
+        if (!configuredPath.isEmpty()) {
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "MIDI setup: preserving configured SoundFont path " + configuredPath);
+            return;
+        }
+
+        File soundFontDir = new File(getFilesDir(), "tyranor/soundfonts");
+        if (!soundFontDir.isDirectory() && !soundFontDir.mkdirs()) {
+            throw new java.io.IOException("Unable to create private MIDI SoundFont folder");
+        }
+        File soundFont = new File(soundFontDir, "GMGSx-4b1b1e07.SF2");
+        if (!soundFont.isFile() || soundFont.length() != 4_140_692L) {
+            copyAssetToFile("GMGSx.SF2", soundFont);
+        }
+        if (!soundFont.isFile() || soundFont.length() != 4_140_692L) {
+            throw new java.io.IOException("Bundled GMGSx SoundFont has an unexpected size");
+        }
+        config.put("midiSoundFont", soundFont.getAbsolutePath());
+        TynRuntimeDiagnostics.append(mSessionDir,
+            "MIDI setup: configured bundled GMGSx SoundFont from the module's private files at "
+                + soundFont.getAbsolutePath()
+                + " (" + soundFont.length() + " bytes)");
     }
 
     /** Applies TYN RPG Maker settings to the private mkxp session, never to the game folder. */
