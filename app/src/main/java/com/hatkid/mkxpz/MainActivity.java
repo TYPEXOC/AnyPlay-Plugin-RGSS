@@ -344,9 +344,12 @@ public class MainActivity extends SDLActivity
 
             File mkxpCompat = new File(mSessionDir, "tyranor_mkxp_compat.rb");
             File win32Compat = new File(mSessionDir, "tyranor_win32_compat.rb");
+            File inputCompat = new File(mSessionDir, "tyranor_input_compat.rb");
             copyAssetToFile("tyranor_mkxp_compat.rb", mkxpCompat);
             copyAssetToFile("tyranor_win32_compat.rb", win32Compat);
-            TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: copied MKXP and Win32API compatibility preloads");
+            copyAssetToFile("tyranor_input_compat.rb", inputCompat);
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Runtime setup: copied MKXP, Win32API, and input-update compatibility preloads");
 
             File bridge = new File(mSessionDir, "tyranor_rgss_translation.rb");
             copyAssetToFile("tyranor_rgss_translation.rb", bridge);
@@ -381,6 +384,7 @@ public class MainActivity extends SDLActivity
             JSONArray scripts = new JSONArray();
             scripts.put(mkxpCompat.getAbsolutePath());
             scripts.put(win32Compat.getAbsolutePath());
+            scripts.put(inputCompat.getAbsolutePath());
             for (int i = 0; i < gameScripts.length(); i++) {
                 String path = gameScripts.optString(i, "");
                 if (!path.isEmpty() && !containsString(scripts, path)) scripts.put(path);
