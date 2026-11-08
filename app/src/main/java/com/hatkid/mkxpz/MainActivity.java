@@ -495,11 +495,11 @@ public class MainActivity extends SDLActivity
         if (!soundFontDir.isDirectory() && !soundFontDir.mkdirs()) {
             throw new java.io.IOException("Unable to create private MIDI SoundFont folder");
         }
-        File soundFont = new File(soundFontDir, "GMGSx-4b1b1e07.SF2");
-        if (!soundFont.isFile() || soundFont.length() != 4_140_692L) {
+        File soundFont = new File(soundFontDir, "GMGSx-614ffa8e.SF2");
+        if (!soundFont.isFile() || soundFont.length() != 4_146_440L) {
             copyAssetToFile("GMGSx.SF2", soundFont);
         }
-        if (!soundFont.isFile() || soundFont.length() != 4_140_692L) {
+        if (!soundFont.isFile() || soundFont.length() != 4_146_440L) {
             throw new java.io.IOException("Bundled GMGSx SoundFont has an unexpected size");
         }
         config.put("midiSoundFont", soundFont.getAbsolutePath());
