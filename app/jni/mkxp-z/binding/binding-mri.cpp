@@ -1147,7 +1147,8 @@ static void runRMXPScripts(BacktraceData &btData) {
 # a catch/throw pair, without changing line numbers.
 $__anyplay_fix_proc_return = lambda { |s|
   next s unless s.include?("return") && s =~ /\b(?:proc|Proc\.new)\s*\{/
-  out = +""
+  # String unary plus is not available in Ruby 1.8; strings are mutable there.
+  out = ""
   pos = 0
   while (m = s.match(/\b(?:proc|Proc\.new)\s*\{/, pos))
     open = m.end(0)
@@ -1748,6 +1749,13 @@ Bignum = Integer unless defined?(Bignum)
 # 2) game screen is resized to the game's own size (fills the screen)
 # 3) touch: tap = walk there / talk to NPC / confirm
 module AnyPlayCompat
+  # define_singleton_method was added after Ruby 1.8. Define methods on the
+  # singleton class so the same prelude works with all three embedded Rubies.
+  def self.define_singleton_method_compat(object, name, &block)
+    singleton = class << object; self; end
+    singleton.send(:define_method, name, &block)
+  end
+
   def self.safe_dispose_patch
     [:Plane, :Sprite, :Viewport, :Window, :Tilemap].each do |n|
       begin
@@ -1852,6 +1860,7 @@ end
 begin
   class Array
     def nitems; count { |x| !x.nil? }; end unless method_defined?(:nitems)
+    def sample; empty? ? nil : self[rand(length)]; end unless method_defined?(:sample)
     def choice; sample; end unless method_defined?(:choice)
   end
   class Hash
@@ -1859,6 +1868,60 @@ begin
   end
   module Enumerable
     def enum_with_index(*a, &b); each_with_index(*a, &b); end unless method_defined?(:enum_with_index)
+    def max_by
+      first = true
+      best_item = nil
+      best_key = nil
+      each do |item|
+        key = yield(item)
+        if first || (key <=> best_key) > 0
+          first = false
+          best_item = item
+          best_key = key
+        end
+      end
+      best_item
+    end unless method_defined?(:max_by)
+    def min_by
+      first = true
+      best_item = nil
+      best_key = nil
+      each do |item|
+        key = yield(item)
+        if first || (key <=> best_key) < 0
+          first = false
+          best_item = item
+          best_key = key
+        end
+      end
+      best_item
+    end unless method_defined?(:min_by)
+  end
+  class String
+    def bytesize; length; end unless method_defined?(:bytesize)
+    def getbyte(index); self[index]; end unless method_defined?(:getbyte)
+    def ascii_only?
+      each_byte { |byte| return false if byte > 127 }
+      true
+    end unless method_defined?(:ascii_only?)
+    def start_with?(*prefixes)
+      prefixes.any? { |prefix| self[0, prefix.length] == prefix }
+    end unless method_defined?(:start_with?)
+    def end_with?(*suffixes)
+      suffixes.any? { |suffix| self[-suffix.length, suffix.length] == suffix }
+    end unless method_defined?(:end_with?)
+    def match?(pattern); !!(self =~ pattern); end unless method_defined?(:match?)
+  end
+  class << Dir
+    def children(path)
+      entries(path).reject { |entry| entry == "." || entry == ".." }
+    end unless respond_to?(:children)
+  end
+  unless Process.respond_to?(:clock_gettime)
+    Process.const_set(:CLOCK_MONOTONIC, 1) unless Process.const_defined?(:CLOCK_MONOTONIC)
+    class << Process
+      def clock_gettime(clock); Time.now.to_f; end
+    end
   end
   # "require 'jcode'" (Japanese string helpers) no longer exists; the game does not need it.
   module Kernel
@@ -1926,8 +1989,8 @@ end
 
 # Games written for newer mkxp-z ask for the music position when pausing.
 if defined?(Audio)
-  Audio.define_singleton_method(:bgm_position) { 0.0 } unless Audio.respond_to?(:bgm_position)
-  Audio.define_singleton_method(:bgs_position) { 0.0 } unless Audio.respond_to?(:bgs_position)
+  AnyPlayCompat.define_singleton_method_compat(Audio, :bgm_position) { 0.0 } unless Audio.respond_to?(:bgm_position)
+  AnyPlayCompat.define_singleton_method_compat(Audio, :bgs_position) { 0.0 } unless Audio.respond_to?(:bgs_position)
 end
 
 # Speed: many games ask "does this picture / sound exist?" hundreds of times
@@ -2034,7 +2097,7 @@ module AnyPlayFastFiles
     singles.each do |mod, meth, pos, neg|
       orig = mod.method(meth)
       tag = "#{mod.name}.#{meth}:"
-      mod.define_singleton_method(meth) do |path|
+      AnyPlayCompat.define_singleton_method_compat(mod, meth) do |path|
         if path.is_a?(String) && path =~ AnyPlayFastFiles::RES && ![:directory?].include?(meth) && meth != :exists? && !(mod == Dir)
           orig.call(path)   # Graphics / Audio / Fonts: handled by the folder lists below
         else
@@ -2047,17 +2110,36 @@ module AnyPlayFastFiles
      [File, :write], [File, :binwrite], [IO, :write], [IO, :binwrite]].each do |mod, meth|
       next unless mod.respond_to?(meth)
       orig = mod.method(meth)
-      mod.define_singleton_method(meth) do |*a, **kw, &b|
-        AnyPlayFastFiles.forget
-        kw.empty? ? orig.call(*a, &b) : orig.call(*a, **kw, &b)
+      if RUBY_VERSION >= "2.0"
+        eval(<<'TYN_RUBY')
+          AnyPlayCompat.define_singleton_method_compat(mod, meth) do |*a, **kw, &b|
+            AnyPlayFastFiles.forget
+            kw.empty? ? orig.call(*a, &b) : orig.call(*a, **kw, &b)
+          end
+TYN_RUBY
+      else
+        AnyPlayCompat.define_singleton_method_compat(mod, meth) do |*a, &b|
+          AnyPlayFastFiles.forget
+          orig.call(*a, &b)
+        end
       end
     end
     fopen = File.method(:open)
-    File.define_singleton_method(:open) do |*a, **kw, &b|
-      m = a[1]
-      m = kw[:mode] if m.nil?
-      AnyPlayFastFiles.forget if m.is_a?(Integer) || (m.is_a?(String) && m =~ /[wa+]/)
-      kw.empty? ? fopen.call(*a, &b) : fopen.call(*a, **kw, &b)
+    if RUBY_VERSION >= "2.0"
+      eval(<<'TYN_RUBY')
+        AnyPlayCompat.define_singleton_method_compat(File, :open) do |*a, **kw, &b|
+          m = a[1]
+          m = kw[:mode] if m.nil?
+          AnyPlayFastFiles.forget if m.is_a?(Integer) || (m.is_a?(String) && m =~ /[wa+]/)
+          kw.empty? ? fopen.call(*a, &b) : fopen.call(*a, **kw, &b)
+        end
+TYN_RUBY
+    else
+      AnyPlayCompat.define_singleton_method_compat(File, :open) do |*a, &b|
+        m = a[1]
+        AnyPlayFastFiles.forget if m.is_a?(Integer) || (m.is_a?(String) && m =~ /[wa+]/)
+        fopen.call(*a, &b)
+      end
     end
   rescue Exception
   end
@@ -2065,7 +2147,7 @@ module AnyPlayFastFiles
   [[File, :exist?], [File, :file?], [FileTest, :exist?], [FileTest, :file?]].each do |mod, meth|
     orig = mod.method(meth)
     tag = "#{mod.name}.#{meth}:"
-    mod.define_singleton_method(meth) do |path|
+    AnyPlayCompat.define_singleton_method_compat(mod, meth) do |path|
       k = AnyPlayFastFiles.known(path)
       if k.nil?
         orig.call(path)
@@ -2104,7 +2186,7 @@ module AnyPlayLog
     "AnyPlayLog.txt"
   end
   MAX_BYTES = 250_000
-  CAPS      = { error: 200, note: 400 }
+  CAPS      = { :error => 200, :note => 400 }
   @bytes = 0
   @started = false
   @full = false
@@ -2139,7 +2221,10 @@ module AnyPlayLog
     end
 
     def clean(x, n = 400)
-      x.to_s.dup.force_encoding("UTF-8").scrub("?")[0, n]
+      text = x.to_s.dup
+      text.force_encoding("UTF-8") if text.respond_to?(:force_encoding)
+      text = text.scrub("?") if text.respond_to?(:scrub)
+      text[0, n]
     rescue Exception
       "?"
     end
@@ -2630,7 +2715,7 @@ module AnyPlayMenu
       say("  menu: panel #{ti} tapped, highlighted=#{ci.inspect}")
       return nil unless ci
       return :confirm if ci == ti
-      { target: hit[0], vertical: panel_vertical?(panels), steps: 0, stall: 0, last: nil }
+      { :target => hit[0], :vertical => panel_vertical?(panels), :steps => 0, :stall => 0, :last => nil }
     rescue Exception => e
       AnyPlayLog.write("  menu failed: #{e.class} #{e.message[0, 80]}")
       nil
@@ -3606,7 +3691,8 @@ module TyranorCheats
       txt = (File.read(CMD) rescue nil)
       File.delete(CMD) rescue nil
       return if txt.nil? || txt.empty?
-      txt = txt.dup.force_encoding("UTF-8")
+      txt = txt.dup
+      txt.force_encoding("UTF-8") if txt.respond_to?(:force_encoding)
       id, cmd, a, b = txt.chomp.split("\t", 4)
       reply = handle(cmd.to_s, a.to_s, b.to_s)
       File.open(REPLY + ".tmp", "wb") { |f| f.write("#{id}\t#{reply}") }
