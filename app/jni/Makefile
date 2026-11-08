@@ -244,7 +244,15 @@ openssl/Makefile: openssl/Configure
 	--prefix="$(BUILD_PREFIX)" --openssldir="$(BUILD_PREFIX)"
 
 # -------------------- Ruby --------------------
-ruby: init openssl $(LIBDIR)/libruby.so.3.1.0
+ruby: init openssl $(LIBDIR)/libruby_r3.so
+
+# ndk-build installs a PREBUILT library under the FILE name given in LOCAL_SRC_FILES, not
+# under the module name. Two modules that both point at ".../lib/libruby.so" therefore
+# collide ("overriding recipe for target libruby.so") and the engines get the wrong Ruby.
+# So every Ruby gets its own file name here. The content is identical; the internal
+# SONAME stays "libruby.so", which is what the engines record as NEEDED.
+$(LIBDIR)/libruby_r3.so: $(LIBDIR)/libruby.so.3.1.0
+	cp -L $(LIBDIR)/libruby.so.3.1.0 $@
 
 $(LIBDIR)/libruby.so.3.1.0: ruby/Makefile
 	cd ruby; make -j$(NPROC); make install
@@ -262,7 +270,11 @@ ruby/configure: ruby/configure.ac
 # (ruby-legacy/, see `legacy-patches`). The SONAME is "libruby.so" on purpose: it is the same SONAME
 # for r3 and r18, and the APK keeps the two files apart by FILE NAME
 # (libruby_r3.so / libruby_r18.so, see ruby.mk).
-ruby-r18: init openssl $(R18_LIBDIR)/libruby.so.3.1.0
+ruby-r18: init openssl $(R18_LIBDIR)/libruby_r18.so
+
+# Own file name for ndk-build, see the comment at "ruby:" above (SONAME stays libruby.so).
+$(R18_LIBDIR)/libruby_r18.so: $(R18_LIBDIR)/libruby.so.3.1.0
+	cp -L $(R18_LIBDIR)/libruby.so.3.1.0 $@
 
 $(R18_LIBDIR)/libruby.so.3.1.0: ruby-r18/Makefile $(LEGACY_STAMP)
 	cd ruby-r18; make -j$(NPROC); make install
@@ -290,7 +302,11 @@ ruby-r18/configure: ruby-r18/configure.ac
 # build-r34-<abi>/ (headers in include/ruby-3.4.0, library lib/libruby.so). Same SONAME
 # "libruby.so" as r3 and r18, the APK keeps them apart by file name (libruby_r34.so).
 # Not part of `all` unless BUILD_R34=1.
-ruby-r34: init openssl $(R34_LIBDIR)/libruby.so.3.4.0
+ruby-r34: init openssl $(R34_LIBDIR)/libruby_r34.so
+
+# Own file name for ndk-build, see the comment at "ruby:" above (SONAME stays libruby.so).
+$(R34_LIBDIR)/libruby_r34.so: $(R34_LIBDIR)/libruby.so.3.4.0
+	cp -L $(R34_LIBDIR)/libruby.so.3.4.0 $@
 
 $(R34_LIBDIR)/libruby.so.3.4.0: ruby-r34/Makefile
 	cd ruby-r34; make -j$(NPROC); make install
