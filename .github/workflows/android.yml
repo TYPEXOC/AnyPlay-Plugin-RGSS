@@ -1,20 +1,13 @@
-name: Build Tyranor RGSS Runtime
+name: Build Tyranor RGSS Diagnostic APK
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
     branches:
       - rgss-module
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: 'Optional release tag (leave empty to build an artifact only)'
-        required: false
-        default: ''
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -142,29 +135,7 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      # ── 11. Signing key (kept in GitHub Secrets, never in the repo) ───────────
-      - name: Prepare signing key
-        env:
-          KS_B64: ${{ secrets.ANYPLAY_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$KS_B64" ]; then
-            echo "$KS_B64" | base64 --decode > "$RUNNER_TEMP/anyplay-release.keystore"
-            echo "ANYPLAY_KEYSTORE_FILE=$RUNNER_TEMP/anyplay-release.keystore" >> "$GITHUB_ENV"
-            echo "ANYPLAY_STORE_PASSWORD=${{ secrets.ANYPLAY_STORE_PASSWORD }}" >> "$GITHUB_ENV"
-            echo "ANYPLAY_KEY_ALIAS=${{ secrets.ANYPLAY_KEY_ALIAS }}" >> "$GITHUB_ENV"
-            echo "ANYPLAY_KEY_PASSWORD=${{ secrets.ANYPLAY_KEY_PASSWORD }}" >> "$GITHUB_ENV"
-          else
-            echo "No signing secrets found: the APK will be signed with a temporary debug key."
-          fi
-
-      # ── 12. Build release APK ─────────────────────────────────────────────────
-      - name: Build release APK
-        run: |
-          ./gradlew assembleRelease \
-            -Pandroid.suppressUnsupportedCompileSdk=34 \
-            --no-daemon \
-            --stacktrace
-
+      # ── 11. Build diagnostic APK only ─────────────────────────────────────────
       - name: Build diagnostic APK
         run: |
           ./gradlew assembleDebug \
@@ -172,15 +143,7 @@ jobs:
             --no-daemon \
             --stacktrace
 
-      # ── 12b. Pick the universal APK (64-bit + 32-bit) and give it its final name
-      - name: Name the APK
-        run: |
-          find app/build/outputs/apk/release -name "*.apk"
-          APK=$(find app/build/outputs/apk/release -name "*universal*.apk" | head -1)
-          if [ -z "$APK" ]; then APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1); fi
-          cp "$APK" Tyranor-RGSS-Runtime.apk
-          echo "APK_PATH=Tyranor-RGSS-Runtime.apk" >> "$GITHUB_ENV"
-
+      # ── 12. Name the diagnostic APK ────────────────────────────────────────────
       - name: Name the diagnostic APK
         run: |
           find app/build/outputs/apk/debug -name "*.apk"
@@ -191,55 +154,19 @@ jobs:
 
       - name: Verify Ruby runtimes in APK
         run: |
-          for apk in "$APK_PATH" "$DEBUG_APK_PATH"; do
-            for abi in arm64-v8a armeabi-v7a; do
-              for library in libruby.so libruby187.so libruby193.so; do
-                unzip -Z1 "$apk" | grep -Fxq "lib/$abi/$library" || {
-                  echo "Missing lib/$abi/$library from $apk"
-                  exit 1
-                }
-              done
+          for abi in arm64-v8a armeabi-v7a; do
+            for library in libruby.so libruby187.so libruby193.so; do
+              unzip -Z1 "$DEBUG_APK_PATH" | grep -Fxq "lib/$abi/$library" || {
+                echo "Missing lib/$abi/$library from $DEBUG_APK_PATH"
+                exit 1
+              }
             done
           done
 
-      # ── 13. Upload APK as artifact (always) ───────────────────────────────────
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Tyranor-RGSS-Runtime
-          path: ${{ env.APK_PATH }}
-          retention-days: 30
-
+      # ── 13. Upload diagnostic APK artifact ───────────────────────────────────
       - name: Upload diagnostic APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Tyranor-RGSS-Debug
           path: ${{ env.DEBUG_APK_PATH }}
           retention-days: 30
-
-      # ── 14. Determine release tag ─────────────────────────────────────────────
-      - name: Resolve release tag
-        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.release_tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
-
-      # ── 15. Create GitHub Release and upload APK ──────────────────────────────
-      # The text of the release comes from RELEASE_NOTES.md in the repo: edit that
-      # file before you create a new tag.
-      - name: Create GitHub Release
-        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: "Tyranor RGSS Runtime ${{ steps.tag.outputs.tag }}"
-          body_path: RELEASE_NOTES.md
-          files: ${{ env.APK_PATH }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
