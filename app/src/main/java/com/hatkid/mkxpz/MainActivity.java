@@ -113,6 +113,7 @@ public class MainActivity extends SDLActivity
     private File mSessionDir;
     private boolean mWaitingForStoragePermission;
     private boolean mRtpScanNeedsRefresh;
+    private String mTynGameTitle;
     private ScheduledExecutorService mTranslationSync;
     private volatile long mLastTranslationFailureLogAt;
     private boolean mDiagnosticsExporting;
@@ -185,7 +186,13 @@ public class MainActivity extends SDLActivity
                 finish();
                 return;
             }
-            if (mRtpScanNeedsRefresh) refreshTynRtpPathsAfterPermission();
+            if (mTynLaunch) {
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Storage access granted; rebuilding the private runtime session before native startup");
+                preparePrivateSession(mTynGameTitle);
+            } else if (mRtpScanNeedsRefresh) {
+                refreshTynRtpPathsAfterPermission();
+            }
             mWaitingForStoragePermission = false;
             TynRuntimeDiagnostics.append(mSessionDir,
                 "All-files access granted; continuing with refreshed runtime paths");
@@ -278,8 +285,8 @@ public class MainActivity extends SDLActivity
             mThemeOnPrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_ON_PRIMARY_COLOR, mThemeOnPrimaryColor);
             mTranslationUri = intent.getStringExtra(TYN_EXTRA_TRANSLATION_URI);
             mGameId = intent.getStringExtra(TYN_EXTRA_GAME_ID);
-            String title = intent.getStringExtra(TYN_EXTRA_TITLE);
-            preparePrivateSession(title);
+            mTynGameTitle = intent.getStringExtra(TYN_EXTRA_TITLE);
+            preparePrivateSession(mTynGameTitle);
             Log.i(TAG, "TYN runtime game folder: " + GAME_FOLDER + ", session: " + GAME_PATH);
             return;
         }
@@ -311,24 +318,32 @@ public class MainActivity extends SDLActivity
     private void preparePrivateSession(String title)
     {
         try {
-            String suffix = shortHash((mGameId == null ? GAME_FOLDER : mGameId) + System.nanoTime());
-            mSessionDir = new File(getFilesDir(), "tyranor/sessions/" + suffix);
+            boolean initializeDiagnostics = mSessionDir == null;
+            if (initializeDiagnostics) {
+                String suffix = shortHash((mGameId == null ? GAME_FOLDER : mGameId) + System.nanoTime());
+                mSessionDir = new File(getFilesDir(), "tyranor/sessions/" + suffix);
+            }
             if (!mSessionDir.isDirectory() && !mSessionDir.mkdirs()) throw new java.io.IOException("Unable to create session folder");
             writeAtomically(new File(mSessionDir, "fast_forward"), "0");
             writeAtomically(new File(mSessionDir, "tyranor_copy_text.txt"), "");
-            TynRuntimeDiagnostics.beginSession(
-                this,
-                mSessionDir,
-                title,
-                new File(GAME_FOLDER),
-                sRubyRuntime,
-                detectRgssVersion(GAME_FOLDER),
-                mTranslationUri != null,
-                mPadEnabled,
-                mTynRgssOptions == null ? "{}" : mTynRgssOptions.toString(),
-                mLaunchRequestedAtMillis,
-                mLaunchRequestedAtElapsedRealtime
-            );
+            if (initializeDiagnostics) {
+                TynRuntimeDiagnostics.beginSession(
+                    this,
+                    mSessionDir,
+                    title,
+                    new File(GAME_FOLDER),
+                    sRubyRuntime,
+                    detectRgssVersion(GAME_FOLDER),
+                    mTranslationUri != null,
+                    mPadEnabled,
+                    mTynRgssOptions == null ? "{}" : mTynRgssOptions.toString(),
+                    mLaunchRequestedAtMillis,
+                    mLaunchRequestedAtElapsedRealtime
+                );
+            } else {
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Re-reading game files and rebuilding the private mkxp configuration after storage access was granted");
+            }
             try {
                 Os.setenv("TYN_RGSS_MISSING_RESOURCE_HINT", getString(R.string.tyn_runtime_missing_resource_hint), true);
                 Os.setenv("TYN_RGSS_MANAGED_RTP", "1", true);
