@@ -218,6 +218,26 @@ public class ProbeTest {
         System.out.println("   sample reason: " + RuntimeProbe.probeRgss1(game("Data/Scripts.rxdata", scriptsWith("ESSENTIALS_VERSION = \"16.2\""))).reason);
         System.out.println("   sample reason: " + RuntimeProbe.probeRgss1(game("Data/Scripts.rxdata", scriptsWith("# x"), "Game.exe", exe1)).reason);
 
+
+        // folder facts (for the log header)
+        String f1 = RuntimeProbe.describeFolder(game("Game.exe", exe1, "Game.ini", "x", "Game.rgssad", new byte[3 * 1024 * 1024],
+                "Data/Map001.rxdata", "x", "Data/Map003.rxdata", "x", "Data/Scripts.rxdata", "x"));
+        System.out.println("   " + f1);
+        eq("facts: archive listed", true, f1.contains("archives=Game.rgssad 3MB"));
+        eq("facts: Map003 present", true, f1.contains("Map003=yes"));
+        eq("facts: Map178 absent", true, f1.contains("Map178=no"));
+        eq("facts: Scripts present", true, f1.contains("Scripts.rxdata=yes"));
+        eq("facts: map count", true, f1.contains("2 Map*.rxdata"));
+        String f2 = RuntimeProbe.describeFolder(game("Game.exe", exe1, "Data/MAP003.RXDATA", "x", "Data/map178.rxdata", "x"));
+        System.out.println("   " + f2);
+        eq("facts: odd spelling shown", true, f2.contains("Map003=as MAP003.RXDATA") && f2.contains("Map178=as map178.rxdata"));
+        eq("facts: no archive", true, f2.contains("archives=none"));
+        eq("facts: no Scripts", true, f2.contains("Scripts.rxdata=no"));
+        eq("facts: unusual spelling counted", true, f2.contains("2 with unusual spelling"));
+        eq("facts: no Data folder", true, RuntimeProbe.describeFolder(game("Game.exe", exe1)).contains("no Data/ folder"));
+        eq("facts: null folder", "folder facts: game folder missing", RuntimeProbe.describeFolder(null));
+        eq("facts: missing folder", "folder facts: game folder missing", RuntimeProbe.describeFolder(new File("/does/not/exist")));
+
         System.out.println();
         System.out.println(runs + " checks, " + fails + " failed");
         if (fails != 0) System.exit(1);
