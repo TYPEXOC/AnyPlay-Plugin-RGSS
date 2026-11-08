@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -444,6 +445,8 @@ final class RuntimeProbe
 
         StringBuilder top = new StringBuilder();
         StringBuilder archives = new StringBuilder();
+        StringBuilder archiveInfo = new StringBuilder();
+        int kirinLeftovers = 0;
         File data = null;
         int shown = 0;
         for (File f : sorted) {
@@ -454,8 +457,10 @@ final class RuntimeProbe
                     || lower.endsWith(".kpak")) {
                 if (archives.length() > 0) archives.append(',');
                 archives.append(printable(n)).append(' ').append(f.length() >> 20).append("MB");
+                archiveInfo.append("; ").append(describeArchive(f));
             }
-            if (shown < 12) {
+            if (lower.startsWith(".kirin")) kirinLeftovers++;
+            if (shown < 30) {
                 if (top.length() > 0) top.append(',');
                 top.append(printable(n)).append(f.isDirectory() ? "/" : "");
                 shown++;
@@ -466,6 +471,8 @@ final class RuntimeProbe
         sb.append(files.length).append(" entries [").append(top);
         if (files.length > shown) sb.append(",...");
         sb.append("]; archives=").append(archives.length() == 0 ? "none" : archives.toString());
+        if (kirinLeftovers > 0) sb.append("; .kirin* entries=").append(kirinLeftovers);
+        sb.append(archiveInfo);
 
         if (data == null) {
             sb.append("; no Data/ folder");
@@ -491,11 +498,111 @@ final class RuntimeProbe
             if (lower.equals("map003.rxdata")) m003 = n.equals("Map003.rxdata") ? "yes" : "as " + printable(n);
             if (lower.equals("map178.rxdata")) m178 = n.equals("Map178.rxdata") ? "yes" : "as " + printable(n);
         }
-        sb.append("; Data/ has ").append(inside.length).append(" files, ").append(maps).append(" Map*.rxdata");
+        sb.append("; Data/ has ").append(inside.length).append(" files");
+        if (inside.length > 0 && inside.length <= 4) {
+            sb.append(" (");
+            for (int k = 0; k < inside.length; k++) {
+                if (k > 0) sb.append(',');
+                sb.append(printable(inside[k].getName()));
+            }
+            sb.append(')');
+        }
+        sb.append(", ").append(maps).append(" Map*.rxdata");
         if (odd > 0) sb.append(" (").append(odd).append(" with unusual spelling)");
         sb.append(", Scripts.rxdata=").append(scripts ? "yes" : "no");
         sb.append(", Map003=").append(m003).append(", Map178=").append(m178);
         return sb.toString();
+    }
+
+
+    /**
+     * Lists the file NAMES stored in an RGSS archive (not their contents), reading the table
+     * the same way the engine's own reader does (src/crypto/rgssad.cpp, format version 1:
+     * .rgssad / .rgss2a). Answers "is Data/Map003.rxdata inside Game.rgssad?".
+     * Format v3 (.rgss3a) and unknown files are only reported, not parsed. Never throws.
+     */
+    static String describeArchive(File archive)
+    {
+        String name = printable(archive.getName());
+        RandomAccessFile in = null;
+        try {
+            in = new RandomAccessFile(archive, "r");
+            long length = in.length();
+            byte[] header = new byte[8];
+            if (in.read(header) != 8 || header[0] != 'R' || header[1] != 'G' || header[2] != 'S'
+                    || header[3] != 'S' || header[4] != 'A' || header[5] != 'D' || header[6] != 0) {
+                return name + ": not an RGSS archive";
+            }
+            if (header[7] != 1) return name + ": format v" + header[7] + " (names not read)";
+
+            int magic = 0xDEADCAFE;
+            int entries = 0, dataEntries = 0, mapEntries = 0;
+            boolean scripts = false, m003 = false, m178 = false;
+            StringBuilder lowest = new StringBuilder();
+            int lowestShown = 0;
+            java.util.TreeSet<Integer> mapNumbers = new java.util.TreeSet<Integer>();
+            String problem = "";
+            byte[] b4 = new byte[4];
+            while (entries < 200000) {
+                if (in.read(b4) != 4) break;                      // clean end of the table
+                int nameLen = le32(b4) ^ magic;
+                magic = magic * 7 + 3;
+                if (nameLen < 0 || nameLen > 1024) { problem = "table broken at entry " + entries; break; }
+                byte[] raw = new byte[nameLen];
+                in.readFully(raw);
+                char[] chars = new char[nameLen];
+                for (int i = 0; i < nameLen; i++) {
+                    int c = (raw[i] ^ (magic & 0xff)) & 0xff;
+                    magic = magic * 7 + 3;
+                    chars[i] = c == '\\' ? '/' : (char) c;
+                }
+                in.readFully(b4);
+                long size = (le32(b4) ^ magic) & 0xFFFFFFFFL;
+                magic = magic * 7 + 3;
+                long next = in.getFilePointer() + size;
+                if (next > length) { problem = "entry " + entries + " runs past the end of the file"; entries++; break; }
+
+                String lower = new String(chars).toLowerCase(Locale.ROOT);
+                entries++;
+                if (lower.startsWith("data/")) {
+                    dataEntries++;
+                    if (lower.equals("data/scripts.rxdata")) scripts = true;
+                    if (lower.matches("data/map\\d+\\.rxdata")) {
+                        mapEntries++;
+                        if (lower.equals("data/map003.rxdata")) m003 = true;
+                        if (lower.equals("data/map178.rxdata")) m178 = true;
+                        try {
+                            mapNumbers.add(Integer.parseInt(lower.substring(8, lower.length() - 7)));
+                        } catch (NumberFormatException ignored) { }
+                    }
+                }
+                in.seek(next);
+            }
+            for (Integer n : mapNumbers) {
+                if (lowestShown >= 8) break;
+                if (lowest.length() > 0) lowest.append(',');
+                lowest.append(n);
+                lowestShown++;
+            }
+            StringBuilder sb = new StringBuilder(name).append(" holds ").append(entries).append(" files, ")
+                    .append(dataEntries).append(" in Data/ (").append(mapEntries).append(" Map*.rxdata), Scripts.rxdata=")
+                    .append(scripts ? "yes" : "no").append(", Map003=").append(m003 ? "yes" : "no")
+                    .append(", Map178=").append(m178 ? "yes" : "no");
+            if (lowest.length() > 0) sb.append(", lowest map numbers ").append(lowest);
+            if (problem.length() > 0) sb.append(" [").append(problem).append(']');
+            return sb.toString();
+        } catch (Throwable t) {
+            return name + ": could not read (" + t.getClass().getSimpleName() + ")";
+        } finally {
+            if (in != null) {
+                try { in.close(); } catch (IOException ignored) { }
+            }
+        }
+    }
+
+    private static int le32(byte[] b)
+    {
+        return (b[0] & 0xff) | ((b[1] & 0xff) << 8) | ((b[2] & 0xff) << 16) | ((b[3] & 0xff) << 24);
     }
 
     // ----------------------------------------------------------------- helpers
