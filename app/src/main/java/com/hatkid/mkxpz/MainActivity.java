@@ -111,6 +111,8 @@ public class MainActivity extends SDLActivity
     private String mTynRtpRoot;
     private JSONObject mTynRgssOptions;
     private File mSessionDir;
+    private boolean mWaitingForStoragePermission;
+    private boolean mRtpScanNeedsRefresh;
     private ScheduledExecutorService mTranslationSync;
     private volatile long mLastTranslationFailureLogAt;
     private boolean mDiagnosticsExporting;
@@ -176,11 +178,37 @@ public class MainActivity extends SDLActivity
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data)
     {
+        super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == 110) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
                 // Close the App because the User did not allow the all files access permission to be used.
-                mSingleton.finish();
+                finish();
+                return;
             }
+            if (mRtpScanNeedsRefresh) refreshTynRtpPathsAfterPermission();
+            mWaitingForStoragePermission = false;
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "All-files access granted; continuing with refreshed runtime paths");
+            startRuntimeWhenReady();
+        }
+    }
+
+    /** Re-scan the TYN RTP root after first-time all-files access is granted. */
+    private void refreshTynRtpPathsAfterPermission()
+    {
+        if (!mTynLaunch || mSessionDir == null) return;
+        File configFile = new File(mSessionDir, "mkxp.json");
+        try {
+            byte[] bytes = readBytes(configFile, 1024 * 1024);
+            JSONObject config = new JSONObject(new String(bytes, StandardCharsets.UTF_8).replace("\uFEFF", "").trim());
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Refreshing RTP paths after storage permission; rescanning the configured TYN RTP root");
+            configureRtpPaths(config);
+            writeAtomically(configFile, config.toString());
+            mRtpScanNeedsRefresh = false;
+            TynRuntimeDiagnostics.append(mSessionDir, "RTP paths refreshed before native runtime startup");
+        } catch (Exception error) {
+            TynRuntimeDiagnostics.append(mSessionDir, "Could not refresh RTP paths after storage permission", error);
         }
     }
 
@@ -503,6 +531,8 @@ public class MainActivity extends SDLActivity
     /** Uses the RTP directory supplied by TYN and rejects stale paths from other hosts. */
     private void configureRtpPaths(JSONObject config) throws JSONException
     {
+        mRtpScanNeedsRefresh = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            && !Environment.isExternalStorageManager();
         int rgssVersion = detectRgssVersion(GAME_FOLDER);
         String versionFolder = rgssVersion == 1 ? "RPGXP" : rgssVersion == 2 ? "RPGVX" : "RPGVXACE";
         JSONArray rtps = new JSONArray();
@@ -838,6 +868,9 @@ public class MainActivity extends SDLActivity
         // Check for all files access permission (Android 11+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
+                mWaitingForStoragePermission = true;
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Waiting for this runtime module's all-files permission before starting the game");
                 // Request all files access permission
                 // TODO: AlertDialog: polite notice that mkxp-z requires All Files Access permission.
                 Uri uri = Uri.parse("package:" + getPackageName());
@@ -971,6 +1004,16 @@ public class MainActivity extends SDLActivity
     protected void onStart()
     {
         super.onStart();
+        startRuntimeWhenReady();
+    }
+
+    private void startRuntimeWhenReady()
+    {
+        if (mWaitingForStoragePermission) {
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Native startup held until the all-files permission result is handled");
+            return;
+        }
         TynRuntimeDiagnostics.append(mSessionDir, mStarted
             ? "Runtime activity entered onStart after a previous start"
             : "Runtime activity entered onStart; native runtime startup is next");
