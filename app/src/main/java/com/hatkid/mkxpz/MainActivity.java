@@ -21,9 +21,7 @@ import android.util.Log;
 import android.widget.Toast;
 import java.util.Locale;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.io.File;
-import java.io.RandomAccessFile;
 
 import org.libsdl.app.SDL;
 import org.libsdl.app.SDLActivity;
@@ -67,12 +65,13 @@ public class MainActivity extends SDLActivity
     private static String sNativeLibDir = null;    // set in onCreate / onNewIntent
     private static String sRuntimeReason = "";
 
-    // Phase C: which runtime "auto" picks for an RGSS1 (RPG Maker XP, Ruby 1.8) game.
-    // RGSS2/RGSS3 games and games that cannot be identified always get RT_R3.
-    // If the r18 runtime ever misbehaves on a device, change this one line to RT_R3
-    // and every game goes back to the clean Ruby 3.1 runtime (explicit runtime_mode and
-    // anyplay_runtime.txt still work).
-    private static final String RGSS1_AUTO_RUNTIME = RT_R18;
+    // Which runtime "auto" gives to every game that does NOT need Ruby 1.8 behaviour
+    // (RGSS2/RGSS3 games, modern Essentials, unidentified games). Games that need Ruby 1.8
+    // behaviour always get RT_R18 (see RuntimeProbe for how that is decided).
+    // Default is RT_R3. Set it to RT_R34 to send those games to Ruby 3.4 instead; that only
+    // works when the APK was built with r34 (workflow option build_r34). Without r34 in the
+    // APK the choice falls back to r3 and AnyPlayLog says so.
+    private static final String MODERN_AUTO_RUNTIME = RT_R3;
 
     protected boolean mStarted = false;
 
@@ -215,8 +214,11 @@ public class MainActivity extends SDLActivity
      * Decides the runtime for a game folder. Order (first match wins):
      *   1. runtime_mode extra from the launcher, when it names a runtime (not "auto")
      *   2. anyplay_runtime.txt in the game folder (r3 / r18 / auto), per-game override
-     *   3. auto-detect: RGSS1 -> RGSS1_AUTO_RUNTIME, RGSS2/RGSS3 -> r3
-     *   4. anything unknown -> r3 (the safe default)
+     *   3. auto-detect. RGSS2/RGSS3 and unknown games -> MODERN_AUTO_RUNTIME. RGSS1 games are
+     *      probed by RuntimeProbe: Essentials version in the scripts (<= 18 legacy, >= 19
+     *      modern), else the exe ProductVersion (1.x = legacy, Kirin's rule), else modern.
+     *      "legacy" = r18, "modern" = MODERN_AUTO_RUNTIME.
+     *   4. nothing identifiable -> MODERN_AUTO_RUNTIME (the safe default)
      * Used both at start-up and by onNewIntent, so both always agree.
      */
     private static RuntimeChoice resolveRuntime(String requestedMode, String gameDir)
@@ -269,12 +271,15 @@ public class MainActivity extends SDLActivity
         // 3. auto-detect
         RuntimeDetector.Detection d = RuntimeDetector.detect(dir);
         if (d.rgss == 1) {
-            return new RuntimeChoice(RGSS1_AUTO_RUNTIME, "auto: " + d.reason + warn);
+            // RPG Maker XP format. Old (Ruby 1.8) and modern (Ruby 3) games share it, so look closer.
+            RuntimeProbe.Verdict v = RuntimeProbe.probeRgss1(dir);
+            return new RuntimeChoice(v.legacy ? RT_R18 : MODERN_AUTO_RUNTIME,
+                    "auto: " + d.reason + "; " + v.reason + warn);
         }
         if (d.rgss == 2 || d.rgss == 3) {
-            return new RuntimeChoice(RT_R3, "auto: " + d.reason + warn);
+            return new RuntimeChoice(MODERN_AUTO_RUNTIME, "auto: " + d.reason + warn);
         }
-        return new RuntimeChoice(RT_R3, "auto: unknown, safe default (" + d.reason + ")" + warn);
+        return new RuntimeChoice(MODERN_AUTO_RUNTIME, "auto: unknown, safe default (" + d.reason + ")" + warn);
     }
 
     /**
@@ -343,67 +348,6 @@ public class MainActivity extends SDLActivity
                 throw e;
             }
         }
-    }
-
-    private static boolean isRuby18ProductVersion(String version)
-    {
-        if (version == null) return false;
-        String v = version.trim().replaceAll("\\s+", "");
-        return v.equals("1") || v.startsWith("1.") || v.startsWith("1,");
-    }
-
-    private static File findGameExecutable(File gameDir)
-    {
-        File preferred = new File(gameDir, "Game.exe");
-        if (preferred.isFile()) return preferred;
-        File[] files = gameDir.listFiles();
-        if (files == null) return null;
-        Arrays.sort(files, new Comparator<File>() {
-            @Override public int compare(File a, File b) {
-                return a.getName().compareToIgnoreCase(b.getName());
-            }
-        });
-        for (File file : files) {
-            if (file.isFile() && file.getName().toLowerCase(Locale.ROOT).endsWith(".exe")) return file;
-        }
-        return null;
-    }
-
-    /** Read the UTF-16LE ProductVersion string from a Windows version resource. */
-    private static String readProductVersion(File exe)
-    {
-        final byte[] key = new byte[] {
-            'P', 0, 'r', 0, 'o', 0, 'd', 0, 'u', 0, 'c', 0, 't', 0,
-            'V', 0, 'e', 0, 'r', 0, 's', 0, 'i', 0, 'o', 0, 'n', 0
-        };
-        try (RandomAccessFile input = new RandomAccessFile(exe, "r")) {
-            long length = input.length();
-            if (length <= 0 || length > 64L * 1024L * 1024L) return null;
-            byte[] data = new byte[(int) length];
-            input.readFully(data);
-            for (int i = 0; i <= data.length - key.length; i++) {
-                boolean found = true;
-                for (int j = 0; j < key.length; j++) {
-                    if (data[i + j] != key[j]) { found = false; break; }
-                }
-                if (!found) continue;
-                int p = i + key.length;
-                while (p + 1 < data.length && data[p] == 0 && data[p + 1] == 0) p += 2;
-                StringBuilder value = new StringBuilder();
-                while (p + 1 < data.length && data[p + 1] == 0) {
-                    int ch = data[p] & 0xff;
-                    if (ch == 0) break;
-                    if (ch < 0x20 || ch > 0x7e) break;
-                    value.append((char) ch);
-                    p += 2;
-                }
-                String candidate = value.toString().trim();
-                if (!candidate.isEmpty()) return candidate;
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Could not read ProductVersion from " + exe.getName(), e);
-        }
-        return null;
     }
 
     /**
