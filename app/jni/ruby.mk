@@ -61,6 +61,11 @@ LOCAL_EXPORT_C_INCLUDES := $(RUBY_PB_INC) $(RUBY_PB_ARCH_INC)
 
 endif
 
-LOCAL_SRC_FILES := $(LOCAL_BUILD_PATH)/lib/libruby.so
+# IMPORTANT: ndk-build names the installed prebuilt library after the FILE in
+# LOCAL_SRC_FILES, not after the module. The Makefile therefore creates one file per
+# Ruby (libruby_r3.so, libruby_r18.so, libruby_r34.so = lib<module>.so) and this must
+# point at that file. Pointing every module at ".../libruby.so" made them overwrite each
+# other and linked the r18 engine against the r3 Ruby (undefined mkxp_legacy_*).
+LOCAL_SRC_FILES := $(LOCAL_BUILD_PATH)/lib/lib$(RUBY_PB_MODULE).so
 
 include $(PREBUILT_SHARED_LIBRARY)
