@@ -2361,7 +2361,8 @@ module AnyPlayLog
     end
 
     BUG = [NoMethodError, TypeError, ArgumentError, ZeroDivisionError, FloatDomainError,
-           RangeError, IndexError, EncodingError, NotImplementedError, LocalJumpError, SyntaxError]
+           RangeError, IndexError, NotImplementedError, LocalJumpError, SyntaxError]
+    BUG << Object.const_get(:EncodingError) if Object.const_defined?(:EncodingError)
 
     def bug?(e)
       return true if BUG.any? { |k| e.is_a?(k) }
