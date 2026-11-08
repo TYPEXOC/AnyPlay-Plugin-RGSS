@@ -259,6 +259,45 @@ static void anyplayLogMissingWin32Api(const char *library, const char *function,
     }
 }
 
+static void anyplayLogInputApiArgumentsOnce(const std::string &function,
+                                           VALUE args, int count) {
+    if (!anyplayVerboseWin32Diagnostics() ||
+        (function != "getkeyboardlayout" && function != "mapvirtualkeyex" &&
+         function != "tounicodeex"))
+        return;
+
+    std::string signature = function;
+    for (int i = 0; i < count; ++i) {
+        VALUE value = rb_ary_entry(args, i);
+        signature += ":";
+        if (FIXNUM_P(value))
+            signature += std::to_string(NUM2LONG(value));
+        else if (NIL_P(value))
+            signature += "nil";
+        else if (TYPE(value) == T_STRING)
+            signature += "string-" + std::to_string(RSTRING_LEN(value));
+        else
+            signature += "type-" + std::to_string(TYPE(value));
+    }
+
+    static std::set<std::string> loggedCalls;
+    if (loggedCalls.size() >= 48 || !loggedCalls.insert(signature).second)
+        return;
+
+    Debug() << "[Win32API] input call" << function << "argc:" << count;
+    for (int i = 0; i < count; ++i) {
+        VALUE value = rb_ary_entry(args, i);
+        if (FIXNUM_P(value))
+            Debug() << "[Win32API] arg" << i << "integer:" << NUM2LONG(value);
+        else if (NIL_P(value))
+            Debug() << "[Win32API] arg" << i << "nil";
+        else if (TYPE(value) == T_STRING)
+            Debug() << "[Win32API] arg" << i << "string bytes:" << RSTRING_LEN(value);
+        else
+            Debug() << "[Win32API] arg" << i << "Ruby type:" << TYPE(value);
+    }
+}
+
 // AnyPlay: map a Windows virtual-key code to an SDL scancode (0 = unknown).
 static int anyplayVkToScancode(int vk) {
     if (vk >= 0x41 && vk <= 0x5A) return SDL_SCANCODE_A + (vk - 0x41);
@@ -341,6 +380,7 @@ RB_METHOD(MiniFFI_call) {
             VALUE fn = rb_iv_get(self, "_funcname");
             std::string f = NIL_P(fn) ? "" : RSTRING_PTR(fn);
             for (auto &c : f) c = (char)tolower((unsigned char)c);
+            anyplayLogInputApiArgumentsOnce(f, args, items);
             if (f == "getasynckeystate" || f == "getkeystate") {
                 int vk = items > 0 ? NUM2INT(rb_ary_entry(args, 0)) : 0;
                 return MVAL2RB(anyplayVkDown(vk) ? 0x8000 : 0);

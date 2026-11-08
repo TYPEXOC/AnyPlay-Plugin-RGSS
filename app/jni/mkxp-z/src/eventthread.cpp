@@ -32,6 +32,9 @@
 #include <alc.h>
 #include <alext.h>
 #include <cmath>
+#ifdef __ANDROID__
+#include <cstdlib>
+#endif
 
 #include "sharedstate.h"
 #include "graphics.h"
@@ -110,6 +113,26 @@ enum
 };
 
 static uint32_t usrIdStart;
+
+#ifdef __ANDROID__
+static bool tynVerboseInputDiagnostics()
+{
+	const char *enabled = std::getenv("TYN_RGSS_VERBOSE_LOG");
+	return enabled && enabled[0] == '1' && enabled[1] == '\0';
+}
+
+static void tynLogKeyboardEvent(const char *action, const SDL_KeyboardEvent &key)
+{
+	if (!tynVerboseInputDiagnostics())
+		return;
+
+	Debug() << "[TYNInput]" << action
+	        << "scancode:" << (int) key.keysym.scancode
+	        << "keycode:" << (int) key.keysym.sym
+	        << "repeat:" << (int) key.repeat
+	        << "window:" << key.windowID;
+}
+#endif
 
 bool EventThread::allocUserEvents()
 {
@@ -310,6 +333,9 @@ void EventThread::process(RGSSThreadData &rtData)
 				break;
 
 			case SDL_KEYDOWN:
+#ifdef __ANDROID__
+				tynLogKeyboardEvent("SDL_KEYDOWN", event.key);
+#endif
 				// Alt+Enter: fullscreen switch
 				if (event.key.keysym.scancode == SDL_SCANCODE_RETURN && (event.key.keysym.mod & toggleFSMod)) {
 					setFullscreen(win, !fullscreen);
@@ -381,6 +407,9 @@ void EventThread::process(RGSSThreadData &rtData)
 				break;
 
 			case SDL_KEYUP:
+#ifdef __ANDROID__
+				tynLogKeyboardEvent("SDL_KEYUP", event.key);
+#endif
 				if (event.key.keysym.scancode == SDL_SCANCODE_F12) {
 					if (!rtData.config.enableReset)
 						break;

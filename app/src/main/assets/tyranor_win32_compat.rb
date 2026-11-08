@@ -285,12 +285,23 @@ module Win32API_Impl
 			PRESSED_BIT = 0x80
 			def call(args)
 				out_states = args[0]
+				pressed_keys = []
 
 				Scancodes::WIN32.each do |name, val|
 					pressed = common_keystate(val) == 1
 
 					set_string_byte(out_states, val, pressed ? PRESSED_BIT : 0)
+					pressed_keys << "#{name}=0x#{val.to_s(16)}" if pressed
 				end
+
+				if ENV["TYN_RGSS_VERBOSE_LOG"] == "1"
+					state = pressed_keys.uniq.sort.join(",")
+					if state != $tyranorLastLoggedWin32Keys
+						System.puts("[TYNInput] Win32 GetKeyboardState pressed: #{state.empty? ? 'none' : state}")
+						$tyranorLastLoggedWin32Keys = state
+					end
+				end
+
 				return 1
 			end
 		end
