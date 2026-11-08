@@ -188,6 +188,16 @@ SNDFILE_CMAKE_ARGS := \
 	-DBUILD_TESTING=OFF \
 	-DENABLE_CPACK=OFF \
 	-DINSTALL_MANPAGES=OFF \
+	-DOGG_INCLUDE_DIR="$(INCDIR)" \
+	-DOGG_LIBRARY="$(LIBDIR)/libogg.a" \
+	-DVorbis_Vorbis_INCLUDE_DIR="$(INCDIR)" \
+	-DVorbis_Vorbis_LIBRARY="$(LIBDIR)/libvorbis.a" \
+	-DVorbis_Enc_INCLUDE_DIR="$(INCDIR)" \
+	-DVorbis_Enc_LIBRARY="$(LIBDIR)/libvorbisenc.a" \
+	-DFLAC_INCLUDE_DIR="$(INCDIR)" \
+	-DFLAC_LIBRARY="$(LIBDIR)/libFLAC.a" \
+	-DOPUS_INCLUDE_DIR="$(INCDIR)" \
+	-DOPUS_LIBRARY="$(LIBDIR)/libopus.a" \
 	-G "Unix Makefiles"
 
 # FluidSynth is used as a synthesizer only: mkxp-z renders its PCM output into
@@ -356,7 +366,11 @@ libsndfile: soundfont-codecs
 	cmake --build $(SNDFILE_BUILD_DIR) --parallel $(NPROC)
 	cmake --install $(SNDFILE_BUILD_DIR)
 	test -f "$(LIBDIR)/libsndfile.a"
-	grep -Fq 'SndFile_WITH_EXTERNAL_LIBS 1' "$(LIBDIR)/cmake/SndFile/SndFileConfig.cmake"
+	grep -Eq '^#define HAVE_EXTERNAL_XIPH_LIBS 1$$' "$(SNDFILE_BUILD_DIR)/src/config.h" || { \
+		echo "libsndfile did not enable its Ogg/Vorbis/FLAC/Opus codecs"; \
+		grep -E 'HAVE_EXTERNAL_XIPH_LIBS|ENABLE_EXTERNAL_LIBS' "$(SNDFILE_BUILD_DIR)/src/config.h" "$(SNDFILE_BUILD_DIR)/CMakeCache.txt" || true; \
+		exit 1; \
+	}
 	@echo "SF3 Vorbis decoding dependencies are enabled for $(ABI)."
 
 # -------------------- FluidSynth --------------------
