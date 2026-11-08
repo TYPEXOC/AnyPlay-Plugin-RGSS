@@ -294,8 +294,11 @@ public class MainActivity extends SDLActivity
         sRuntimeId = c.id;
         sRuntimeReason = c.reason;
         Log.i(TAG, "Runtime " + c.id + " chosen: " + c.reason);
+        // Facts about the game folder go into the same log header line (AnyPlayLog prints it).
+        String facts = RuntimeProbe.describeFolder(GAME_PATH == null ? null : new File(GAME_PATH));
+        Log.i(TAG, facts);
         try {
-            android.system.Os.setenv("ANYPLAY_RUNTIME_REASON", c.reason, true);
+            android.system.Os.setenv("ANYPLAY_RUNTIME_REASON", c.reason + " | " + facts, true);
         } catch (Exception e) {
             Log.w(TAG, "Could not export ANYPLAY_RUNTIME_REASON: " + e);
         }
