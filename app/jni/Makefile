@@ -210,6 +210,7 @@ FLUIDSYNTH_CMAKE_ARGS := \
 	-DANDROID_ABI=$(ABI) \
 	-DCMAKE_ANDROID_ARCH_ABI=$(ABI) \
 	-DCMAKE_ANDROID_STL_TYPE=c++_shared \
+	-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_PREFIX="$(BUILD_PREFIX)" \
 	-DCMAKE_INSTALL_LIBDIR=lib \
@@ -378,8 +379,16 @@ fluidsynth: init libsndfile $(LIBDIR)/libfluidsynth.so
 
 $(LIBDIR)/libfluidsynth.so: fluidsynth/CMakeLists.txt libsndfile
 	PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)" cmake -S fluidsynth -B $(FLUIDSYNTH_BUILD_DIR) $(FLUIDSYNTH_CMAKE_ARGS)
-	grep -Eq '^#define LIBSNDFILE_SUPPORT 1$$' $(FLUIDSYNTH_BUILD_DIR)/config.h
-	grep -Eq '^#define LIBSNDFILE_HASVORBIS 1$$' $(FLUIDSYNTH_BUILD_DIR)/config.h
+	grep -Eq '^#define LIBSNDFILE_SUPPORT 1$$' $(FLUIDSYNTH_BUILD_DIR)/config.h || { \
+		echo "FluidSynth did not detect the bundled libsndfile package"; \
+		grep -E 'SndFile|SNDFILE|LIBSNDFILE' $(FLUIDSYNTH_BUILD_DIR)/CMakeCache.txt $(FLUIDSYNTH_BUILD_DIR)/config.h || true; \
+		exit 1; \
+	}
+	grep -Eq '^#define LIBSNDFILE_HASVORBIS 1$$' $(FLUIDSYNTH_BUILD_DIR)/config.h || { \
+		echo "FluidSynth detected libsndfile without Vorbis support"; \
+		grep -E 'SndFile|SNDFILE|LIBSNDFILE' $(FLUIDSYNTH_BUILD_DIR)/CMakeCache.txt $(FLUIDSYNTH_BUILD_DIR)/config.h || true; \
+		exit 1; \
+	}
 	cmake --build $(FLUIDSYNTH_BUILD_DIR) --target libfluidsynth --parallel $(NPROC)
 	cmake --install $(FLUIDSYNTH_BUILD_DIR) --component fluidsynth_runtime
 	test -f "$@"
