@@ -3,12 +3,15 @@
 
 #include <string>
 #include <cctype>
+#include <cstdlib>
+#include <set>
 #include <SDL.h>
 #include <cstdint>
 
 #include "filesystem/filesystem.h"
 #include "miniffi.h"
 #include "binding-util.h"
+#include "util/debugwriter.h"
 
 #if RAPI_MAJOR >= 2
 #include <ruby/thread.h>
@@ -45,6 +48,11 @@ static void *MiniFFI_GetFunctionHandle(void *libhandle, const char *func) {
     return SDL_LoadFunction(libhandle, func);
 }
 
+#ifdef __ANDROID__
+static void anyplayLogMissingWin32Api(const char *library, const char *function,
+                                     const char *loaderError);
+#endif
+
 // MiniFFI.new(library, function[, imports[, exports]])
 // Yields itself in blocks
 
@@ -73,6 +81,7 @@ RB_METHOD(MiniFFI_initialize) {
     // "dummy" function: calling it does nothing and returns 0 / "".
     if (!hfunc) {
         rb_iv_set(self, "_dummy", Qtrue);
+        anyplayLogMissingWin32Api(RSTRING_PTR(libname), RSTRING_PTR(func), SDL_GetError());
         hfunc = 0;
     }
 #else
@@ -208,6 +217,48 @@ void* miniffi_call_cb(void *args) {
 #endif
 
 #ifdef __ANDROID__
+static bool anyplayVerboseWin32Diagnostics() {
+    const char *enabled = std::getenv("TYN_RGSS_VERBOSE_LOG");
+    return enabled && enabled[0] == '1' && enabled[1] == '\0';
+}
+
+static std::string anyplayWin32FallbackKind(const std::string &library,
+                                             const std::string &function) {
+    std::string normalizedLibrary = library;
+    std::string normalizedFunction = function;
+    for (auto &c : normalizedLibrary) c = (char)tolower((unsigned char)c);
+    for (auto &c : normalizedFunction) c = (char)tolower((unsigned char)c);
+
+    if (normalizedFunction == "getasynckeystate" || normalizedFunction == "getkeystate")
+        return "keyboard/mouse state from SDL";
+    if (normalizedFunction == "getforegroundwindow" || normalizedFunction == "getactivewindow" ||
+        normalizedFunction == "getfocus" || normalizedFunction == "findwindow" ||
+        normalizedFunction == "findwindowex" || normalizedFunction == "findwindowa" ||
+        normalizedFunction == "findwindowexa" || normalizedFunction == "getwindowthreadprocessid" ||
+        normalizedFunction == "getcurrentthreadid" || normalizedFunction == "getcurrentprocessid")
+        return "active-window placeholder (returns 1)";
+    if (normalizedLibrary.find("wininet") != std::string::npos ||
+        normalizedLibrary.find("winhttp") != std::string::npos)
+        return "network placeholder (returns success/empty data)";
+    return "generic stub (returns zero/empty data; behavior may be incompatible)";
+}
+
+static void anyplayLogMissingWin32Api(const char *library, const char *function,
+                                     const char *loaderError) {
+    if (!anyplayVerboseWin32Diagnostics())
+        return;
+
+    static std::set<std::string> loggedApis;
+    const std::string key = std::string(library ? library : "?") + ":" +
+                            (function ? function : "?");
+    if (loggedApis.insert(key).second) {
+        Debug() << "[Win32API] Android could not resolve" << key
+                << "fallback:" << anyplayWin32FallbackKind(
+                       library ? library : "", function ? function : "")
+                << "loader detail:" << (loaderError && *loaderError ? loaderError : "none");
+    }
+}
+
 // AnyPlay: map a Windows virtual-key code to an SDL scancode (0 = unknown).
 static int anyplayVkToScancode(int vk) {
     if (vk >= 0x41 && vk <= 0x5A) return SDL_SCANCODE_A + (vk - 0x41);

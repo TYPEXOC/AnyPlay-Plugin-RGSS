@@ -374,6 +374,14 @@ class Win32API
 				dll_impl = Win32API_Impl.const_get(dll)
 				if dll_impl.const_defined?(func)
 					@mkxp_wrap_impl = dll_impl.const_get(func).new
+					if ENV["TYN_RGSS_VERBOSE_LOG"] == "1"
+						$tyranorWin32CompatLogged ||= {}
+						key = "#{@dll}:#{@func}"
+						if !$tyranorWin32CompatLogged[key]
+							System.puts("[Win32API] [#{@dll}:#{@func}] handled by TYN compatibility implementation")
+							$tyranorWin32CompatLogged[key] = true
+						end
+					end
 					return
 				end
 			end
