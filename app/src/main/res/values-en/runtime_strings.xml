@@ -3,6 +3,17 @@
     <string name="app_name">TYN RGSS</string>
     <string name="runtime_info_version">Version: %1$s</string>
     <string name="runtime_info_message">This is TYN\'s RGSS runtime module. Start XP, VX, or VX Ace games from the TYN game library; do not launch this module by itself.</string>
+    <string name="runtime_info_debug_message">The diagnostic build can launch games directly to isolate engine issues. Choose an XP, VX, or VX Ace game folder; export logs from this page.</string>
+    <string name="runtime_info_diagnostic_launch">Choose a game and test launch</string>
+    <string name="runtime_info_select_ruby">Select Ruby runtime</string>
+    <string name="runtime_info_storage_permission_required">Allow access to the game folder before launching a diagnostic session.</string>
+    <string name="runtime_info_invalid_game_folder">The selected folder does not look like an RPG Maker XP, VX, or VX Ace game.</string>
+    <string-array name="runtime_diagnostic_ruby_choices">
+        <item>Automatic</item>
+        <item>Ruby 1.8.7</item>
+        <item>Ruby 1.9.3</item>
+        <item>Ruby 3.1.3</item>
+    </string-array>
     <string name="runtime_info_export_diagnostics">Export all runtime logs</string>
     <string name="runtime_info_exporting_diagnostics">Preparing all runtime logs…</string>
     <string name="tyn_runtime_export_diagnostics">Logs</string>

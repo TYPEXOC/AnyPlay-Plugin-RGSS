@@ -69,7 +69,10 @@ public class MainActivity extends SDLActivity
     // ---- Runtime module launch ------------------------------------------
     // Tyranor Next supplies a game folder plus optional URI grants. The legacy
     // AnyPlay game_dir extra remains accepted for source compatibility.
-    private static final String EXTRA_GAME_DIR = "game_dir";
+    public static final String EXTRA_GAME_DIR = "game_dir";
+    public static final String EXTRA_STANDALONE_DIAGNOSTIC = "com.tyranor.runtime.extra.STANDALONE_DIAGNOSTIC";
+    public static final String EXTRA_DIAGNOSTIC_RUBY_RUNTIME = "com.tyranor.runtime.extra.DIAGNOSTIC_RUBY_RUNTIME";
+    public static final String EXTRA_DIAGNOSTIC_GAME_TITLE = "com.tyranor.runtime.extra.DIAGNOSTIC_GAME_TITLE";
     private static final String TYN_ACTION_LAUNCH = "com.tyranor.runtime.action.LAUNCH";
     private static final String TYN_EXTRA_FOLDER = "com.tyranor.runtime.extra.FOLDER_PATH";
     private static final String TYN_EXTRA_TITLE = "com.tyranor.runtime.extra.GAME_TITLE";
@@ -189,6 +192,29 @@ public class MainActivity extends SDLActivity
     private void applyGameDirFromIntent(Intent intent)
     {
         if (intent == null) return;
+
+        if (intent.getBooleanExtra(EXTRA_STANDALONE_DIAGNOSTIC, false)) {
+            mLaunchRequestedAtMillis = System.currentTimeMillis();
+            mLaunchRequestedAtElapsedRealtime = SystemClock.elapsedRealtime();
+            String dir = intent.getStringExtra(EXTRA_GAME_DIR);
+            if (dir == null || dir.isEmpty() || !new File(dir).isDirectory()) {
+                Log.e(TAG, "Standalone diagnostic launch has no readable game folder");
+                return;
+            }
+            GAME_FOLDER = new File(dir).getAbsolutePath();
+            GAME_PATH = GAME_FOLDER;
+            sRubyRuntime = resolveRubyRuntime(
+                intent.getStringExtra(EXTRA_DIAGNOSTIC_RUBY_RUNTIME), GAME_FOLDER);
+            mCustomGameDir = true;
+            mPadEnabled = true;
+            mCheatsEnabled = false;
+            mDebugEnabled = false;
+            mCopyTextEnabled = false;
+            mSpeedUp = 1;
+            prepareStandaloneDiagnosticSession(intent.getStringExtra(EXTRA_DIAGNOSTIC_GAME_TITLE));
+            Log.i(TAG, "Standalone diagnostic game folder: " + GAME_FOLDER + ", session: " + GAME_PATH);
+            return;
+        }
 
         if (TYN_ACTION_LAUNCH.equals(intent.getAction())) {
             mTynLaunch = true;
@@ -339,6 +365,79 @@ public class MainActivity extends SDLActivity
         } catch (Exception error) {
             Log.e(TAG, "Could not prepare private TYN session; falling back to the game folder", error);
             TynRuntimeDiagnostics.append(mSessionDir, "Private session preparation failed", error);
+            GAME_PATH = GAME_FOLDER;
+        }
+    }
+
+    private JSONObject readStandaloneGameConfig()
+    {
+        File source = new File(GAME_FOLDER, "mkxp.json");
+        if (source.isFile() && source.length() <= 1024 * 1024) {
+            try {
+                byte[] bytes = readBytes(source, 1024 * 1024);
+                String text = new String(bytes, StandardCharsets.UTF_8).replace("\uFEFF", "").trim();
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Optional game-folder mkxp.json found; preserving its engine settings");
+                return new JSONObject(text);
+            } catch (Exception error) {
+                Log.w(TAG, "Ignoring invalid game mkxp.json in standalone diagnostic", error);
+                TynRuntimeDiagnostics.append(mSessionDir, "Could not read optional game mkxp.json", error);
+            }
+        }
+        TynRuntimeDiagnostics.append(mSessionDir,
+            "No game-folder mkxp.json found; continuing with native engine defaults (the file is optional)");
+        return new JSONObject();
+    }
+
+    /** Creates an isolated mkxp config for direct engine diagnosis without TYN preload scripts. */
+    private void prepareStandaloneDiagnosticSession(String title)
+    {
+        try {
+            String suffix = shortHash(GAME_FOLDER + System.nanoTime());
+            mSessionDir = new File(getFilesDir(), "tyranor/sessions/diagnostic-" + suffix);
+            if (!mSessionDir.isDirectory() && !mSessionDir.mkdirs()) {
+                throw new java.io.IOException("Unable to create diagnostic session folder");
+            }
+            writeAtomically(new File(mSessionDir, "fast_forward"), "0");
+            writeAtomically(new File(mSessionDir, "tyranor_copy_text.txt"), "");
+            int rgssVersion = detectRgssVersion(GAME_FOLDER);
+            TynRuntimeDiagnostics.beginSession(
+                this,
+                mSessionDir,
+                title,
+                new File(GAME_FOLDER),
+                sRubyRuntime,
+                rgssVersion,
+                false,
+                true,
+                "{\"launchMode\":\"standalone-diagnostic\"}",
+                mLaunchRequestedAtMillis,
+                mLaunchRequestedAtElapsedRealtime
+            );
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Standalone launch target: " + GAME_FOLDER + "; detected RGSS generation=" + rgssVersion
+                    + "; selected Ruby=" + sRubyRuntime);
+            try {
+                Os.setenv("TYN_RGSS_MISSING_RESOURCE_HINT", getString(R.string.tyn_runtime_missing_resource_hint), true);
+                Os.setenv("TYN_RGSS_MANAGED_RTP", "0", true);
+                Os.setenv("TYN_RGSS_VERBOSE_LOG", "1", true);
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Standalone diagnostic mode: verbose logging on; no TYN Ruby preloads or UI integrations");
+            } catch (Exception error) {
+                TynRuntimeDiagnostics.append(mSessionDir, "Could not set standalone diagnostic environment flags", error);
+            }
+
+            JSONObject config = readStandaloneGameConfig();
+            config.put("gameFolder", GAME_FOLDER);
+            config.put("rgssVersion", rgssVersion);
+            if (title != null && !title.trim().isEmpty()) config.put("windowTitle", title);
+            writeAtomically(new File(mSessionDir, "mkxp.json"), config.toString());
+            GAME_PATH = mSessionDir.getAbsolutePath();
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Standalone diagnostic config ready; game scripts will be loaded without TYN compatibility preloads");
+        } catch (Exception error) {
+            Log.e(TAG, "Could not prepare standalone diagnostic session", error);
+            TynRuntimeDiagnostics.append(mSessionDir, "Standalone diagnostic session preparation failed", error);
             GAME_PATH = GAME_FOLDER;
         }
     }

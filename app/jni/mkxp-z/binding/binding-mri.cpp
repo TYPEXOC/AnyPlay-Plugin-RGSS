@@ -1247,8 +1247,9 @@ lambda { |s, name|
     # so x[0] fails. Only after split/scan/chars/... so attributes like "spriteset.map" stay as they are.
     s = s.gsub(/(\.(?:split|scan|each_char|each_byte)\([^()\n]*\)|\.(?:chars|bytes|keys|values|to_a))\.(?:map|collect)(?=[ \t]*(?:;|#[^\n]*)?\r?$)/) { "#{$1}.to_a" } if s.include?("map") || s.include?("collect")
     # BOM check ("line[0]==0xEF") and the MP3 header scan ("rstr[0]==0xFB"): in Ruby 1.8 str[i] was a number,
-    # now it is text and never equal. __anyplay_byte gives the number for strings.
-    s = s.gsub(/(?<![.\w@$\])])(line|rstr)\[(\w+)\][ \t]*(==|!=|<=|>=|<|>)[ \t]*(0x[0-9A-Fa-f]+)\b/) { "__anyplay_byte(#{$1},#{$2})#{$3}#{$4}" } if s =~ /\]\s*(?:==|!=|<=|>=|<|>)\s*0x/
+    # now it is text and never equal. __anyplay_byte gives the number for strings. Ruby 1.8 has no lookbehind,
+    # so capture and restore the preceding character instead of using a negative lookbehind assertion.
+    s = s.gsub(/(^|[^.\w@\$])(line|rstr)\[(\w+)\][ \t]*(==|!=|<=|>=|<|>)[ \t]*(0x[0-9A-Fa-f]+)\b/) { "#{$1}__anyplay_byte(#{$2},#{$3})#{$4}#{$5}" } if s =~ /\]\s*(?:==|!=|<=|>=|<|>)\s*0x/
     # MP3 play-time scan (Essentials AudioUtilities): the 3 bytes after the 0xFF marker are used as numbers
     s = s.gsub(/\brstr\s*=\s*file\.read\(3\)/, 'rstr = file.read(3).unpack("C*")') if s.include?("def getPlayTime2")
     if s.include?("class StringInput")

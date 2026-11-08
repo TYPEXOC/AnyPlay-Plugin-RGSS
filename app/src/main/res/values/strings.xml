@@ -4,6 +4,17 @@
     <string name="app_name">TYN RGSS</string>
     <string name="runtime_info_version">版本：%1$s</string>
     <string name="runtime_info_message">这是 TYN 的 RGSS 运行时模块。请从 TYN 游戏库启动 XP、VX 或 VX Ace 游戏，不要单独启动本模块。</string>
+    <string name="runtime_info_debug_message">诊断版可直接启动游戏，用于单独排查引擎。选择游戏目录后可测试 XP、VX、VX Ace；日志可从本页导出。</string>
+    <string name="runtime_info_diagnostic_launch">选择游戏并测试启动</string>
+    <string name="runtime_info_select_ruby">选择 Ruby 运行时</string>
+    <string name="runtime_info_storage_permission_required">需要允许访问游戏目录，才能直接测试启动。</string>
+    <string name="runtime_info_invalid_game_folder">所选目录不像 RPG Maker XP、VX 或 VX Ace 游戏目录。</string>
+    <string-array name="runtime_diagnostic_ruby_choices">
+        <item>自动选择</item>
+        <item>Ruby 1.8.7</item>
+        <item>Ruby 1.9.3</item>
+        <item>Ruby 3.1.3</item>
+    </string-array>
     <string name="runtime_info_export_diagnostics">导出全部运行日志</string>
     <string name="runtime_info_exporting_diagnostics">正在整理全部运行日志…</string>
     <string name="tyn_runtime_export_diagnostics">诊断</string>

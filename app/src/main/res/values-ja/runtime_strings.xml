@@ -3,6 +3,17 @@
     <string name="app_name">TYN RGSS</string>
     <string name="runtime_info_version">バージョン：%1$s</string>
     <string name="runtime_info_message">これは TYN の RGSS ランタイムモジュールです。XP、VX、VX Ace のゲームは TYN のゲームライブラリから起動してください。このモジュール単体では起動しないでください。</string>
+    <string name="runtime_info_debug_message">診断版ではエンジンを個別に確認できます。XP、VX、VX Ace のゲームフォルダーを選択して起動し、この画面からログを出力してください。</string>
+    <string name="runtime_info_diagnostic_launch">ゲームを選択して起動テスト</string>
+    <string name="runtime_info_select_ruby">Ruby ランタイムを選択</string>
+    <string name="runtime_info_storage_permission_required">診断起動にはゲームフォルダーへのアクセス許可が必要です。</string>
+    <string name="runtime_info_invalid_game_folder">選択したフォルダーは RPG Maker XP、VX、VX Ace のゲームフォルダーではないようです。</string>
+    <string-array name="runtime_diagnostic_ruby_choices">
+        <item>自動選択</item>
+        <item>Ruby 1.8.7</item>
+        <item>Ruby 1.9.3</item>
+        <item>Ruby 3.1.3</item>
+    </string-array>
     <string name="runtime_info_export_diagnostics">すべての実行ログを出力</string>
     <string name="runtime_info_exporting_diagnostics">すべての実行ログを整理中…</string>
     <string name="tyn_runtime_export_diagnostics">ログ</string>
