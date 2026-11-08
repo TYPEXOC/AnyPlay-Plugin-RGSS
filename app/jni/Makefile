@@ -146,6 +146,7 @@ VORBIS_BUILD_DIR := libvorbis/cmakebuild-$(ABI)
 FLAC_BUILD_DIR := flac/cmakebuild-$(ABI)
 OPUS_BUILD_DIR := opus/cmakebuild-$(ABI)
 SNDFILE_BUILD_DIR := libsndfile/cmakebuild-$(ABI)
+SNDFILE_CMAKE_CONFIG_DIR := $(BUILD_PREFIX)/tyn-cmake/SndFile
 OGG_CMAKE_ARGS := $(CODEC_CMAKE_ARGS) -DBUILD_TESTING=OFF -DINSTALL_DOCS=OFF
 VORBIS_CMAKE_ARGS := $(CODEC_CMAKE_ARGS) \
 	-DBUILD_TESTING=OFF \
@@ -224,7 +225,7 @@ FLUIDSYNTH_CMAKE_ARGS := \
 	-Denable-ladspa=OFF \
 	-Denable-libinstpatch=OFF \
 	-Denable-libsndfile=ON \
-	-DSndFile_DIR="$(BUILD_PREFIX)/lib/cmake/SndFile" \
+	-DSndFile_DIR="$(SNDFILE_CMAKE_CONFIG_DIR)" \
 	-Denable-midishare=OFF \
 	-Denable-native-dls=OFF \
 	-Denable-network=OFF \
@@ -372,6 +373,8 @@ libsndfile: soundfont-codecs
 		grep -E 'HAVE_EXTERNAL_XIPH_LIBS|ENABLE_EXTERNAL_LIBS' "$(SNDFILE_BUILD_DIR)/src/config.h" "$(SNDFILE_BUILD_DIR)/CMakeCache.txt" || true; \
 		exit 1; \
 	}
+	mkdir -p "$(SNDFILE_CMAKE_CONFIG_DIR)"
+	cp cmake/SndFileConfig.cmake cmake/SndFileConfigVersion.cmake "$(SNDFILE_CMAKE_CONFIG_DIR)/"
 	@echo "SF3 Vorbis decoding dependencies are enabled for $(ABI)."
 
 # -------------------- FluidSynth --------------------
