@@ -29,16 +29,21 @@ The plugin has two runtimes: **r3** (clean Ruby 3.1) and **r18** (Ruby 3.1 with 
 
 1. The `runtime_mode` that AnyPlay sends (`r3` or `r18`; `auto` or nothing means "decide below").
 2. A file called **`anyplay_runtime.txt`** inside the game folder, with one word: `r3`, `r18` or `auto`. Use this to force a runtime for one game.
-3. Automatic detection of the RPG Maker generation, using the same signals as the engine: `mkxp.json` `rgssVersion`, then `Game.ini` `Scripts=` (`.rxdata`/`.rvdata`/`.rvdata2`), then `Game.ini` `Library=` (`RGSS1xx`/`RGSS2xx`/`RGSS3xx`), then `Data/Scripts.*`, then `.rgssad`/`.rgss2a`/`.rgss3a`. **RPG Maker XP (RGSS1) games get r18, VX and VX Ace get r3.** The Windows `.exe` version is not used.
+3. **Automatic detection.** First the RPG Maker generation, using the same signals as the engine: `mkxp.json` `rgssVersion`, then `Game.ini` `Scripts=` (`.rxdata`/`.rvdata`/`.rvdata2`), then `Game.ini` `Library=` (`RGSS1xx`/`RGSS2xx`/`RGSS3xx`), then `Data/Scripts.*`, then `.rgssad`/`.rgss2a`/`.rgss3a`.
+   - **VX and VX Ace games** get the modern runtime (r3).
+   - **RPG Maker XP (RGSS1) games** share one file format with very old (Ruby 1.8) and very new (Ruby 3) games, so they are looked at more closely (`RuntimeProbe.java`):
+     1. the **Essentials version** written inside `Data/Scripts.rxdata` (`ESSENTIALS_VERSION = "16.2"`, `Essentials::VERSION = "21.1"`): version 18 and older = Ruby 1.8 era = **r18**, version 19 and newer = modern = r3;
+     2. otherwise the **`ProductVersion` of the game's `.exe`**, the same rule the Kirin reference app uses: `1`, `1.x` or `1,x` = **r18**, any other value = r3;
+     3. otherwise r3.
 4. If nothing can be recognised the game gets r3.
 
-`AnyPlayLog.txt` shows the result: `runtime=r18 pick=auto: RGSS1 via Game.ini Scripts=...`. To send every XP game back to r3, change `RGSS1_AUTO_RUNTIME` in `MainActivity.java`.
+`AnyPlayLog.txt` shows the result and the evidence, for example `runtime=r18 pick=auto: RGSS1 via Game.ini Scripts=...; Essentials 16.2 in scripts (v18 and older = Ruby 1.8 era)`. A game that is detected wrongly can be fixed for good with `anyplay_runtime.txt`. "Modern" games get `MODERN_AUTO_RUNTIME` in `MainActivity.java` (r3 by default; see the r34 section).
 
 The detection can be tested on a PC with a JDK: `sh tests/runtime-detect/run.sh`.
 
 ### Optional third runtime: r34 (Ruby 3.4, optional YJIT)
 
-`r34` is Ruby 3.4.9. It is **not** in a normal build and is **never picked automatically**: you choose it per game with `runtime_mode=r34` or `anyplay_runtime.txt` containing `r34`. If the APK was built without it, the game simply runs on r3 and `AnyPlayLog.txt` says so (`pick=wanted r34 ... does not contain it, using r3`).
+`r34` is Ruby 3.4.9. It is **not** in a normal build and, by default, **never picked automatically**: you choose it per game with `runtime_mode=r34` or `anyplay_runtime.txt` containing `r34`. (Kirin works the same way. To send every game that does not need Ruby 1.8 to r34, set `MODERN_AUTO_RUNTIME = RT_R34` in `MainActivity.java`. Games that need Ruby 1.8 behaviour still get r18.) If the APK was built without it, the game simply runs on r3 and `AnyPlayLog.txt` says so (`pick=wanted r34 ... does not contain it, using r3`).
 
 To build it, start the GitHub workflow by hand and tick **build_r34** (the build gets slower). Tick **r34_yjit** as well to build Ruby 3.4 with **YJIT**, Ruby's JIT compiler. YJIT only exists on 64-bit ARM, so only the `arm64-v8a` build gets it. It is switched on at the first `Graphics.update`, after all scripts have loaded; `AnyPlayLog.txt` then shows `yjit=on`. Tag pushes never build r34.
 
