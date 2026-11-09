@@ -304,6 +304,20 @@ public class ProbeTest {
         eq("facts: kirin leftovers flagged", true, f3.contains(".kirin* entries=1"));
         eq("facts: small Data/ lists names", true, f3.contains("Data/ has 1 files (Misc.dat)"));
 
+
+        // stored spelling + mkxp.json settings
+        String a4 = RuntimeProbe.describeArchive(oneFile("Game.rgssad", rgssad(
+                new String[] { "Data/Map001.rxdata", "Data/map003.rxdata", "DATA/MAP178.RXDATA" }, new int[] { 4, 4, 4 })));
+        System.out.println("   " + a4);
+        eq("archive: odd spelling of Map003 shown", true, a4.contains("Map003=yes (stored as Data/map003.rxdata)"));
+        eq("archive: odd spelling of Map178 shown", true, a4.contains("Map178=yes (stored as DATA/MAP178.RXDATA)"));
+        eq("archive: usual spelling not repeated", true, a1.contains("Map003=yes,") && !a1.contains("stored as"));
+        String f4 = RuntimeProbe.describeFolder(game("mkxp.json", "{ // c\n \"pathCache\": false,\n \"rgssVersion\" : 1 }", "Game.exe", exe1));
+        System.out.println("   " + f4);
+        eq("facts: mkxp.json pathCache=false", true, f4.contains("mkxp.json: pathCache=false rgssVersion=1"));
+        eq("facts: mkxp.json without keys", true, RuntimeProbe.describeFolder(game("mkxp.json", "{ \"fps\": 40 }")).contains("mkxp.json: no pathCache/rgssVersion keys"));
+        eq("facts: no mkxp.json adds nothing", false, RuntimeProbe.describeFolder(game("Game.exe", exe1)).contains("mkxp.json"));
+
         System.out.println();
         System.out.println(runs + " checks, " + fails + " failed");
         if (fails != 0) System.exit(1);
