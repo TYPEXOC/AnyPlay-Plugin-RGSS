@@ -696,7 +696,24 @@ void FileSystem::openRead(OpenHandler &handler, const char *filename) {
 void FileSystem::openReadRaw(SDL_RWops &ops, const char *filename,
                              bool freeOnClose) {
 
-  PHYSFS_File *handle = PHYSFS_openRead(normalize(filename, 0, 0).c_str());
+  std::string path = normalize(filename, 0, 0);
+  PHYSFS_File *handle = PHYSFS_openRead(path.c_str());
+
+  /* AnyPlay: Windows does not care about upper/lower case in file names, but RGSS
+   * archives (and some Android folders) do. A game can ask for "Data/Map003.rxdata"
+   * while the archive stores "Data/map003.rxdata". If the exact name is not found,
+   * look it up ignoring case in the file index and open that spelling instead. */
+  if (!handle && p->havePathCache) {
+    std::string lower(path);
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c){
+      return std::tolower(c);
+    });
+    if (p->pathCache.contains(lower)) {
+      const std::string &actual = p->pathCache[lower];
+      if (actual != path)
+        handle = PHYSFS_openRead(actual.c_str());
+    }
+  }
 
   if (!handle)
     throw Exception(Exception::NoFileError, "%s", filename);
