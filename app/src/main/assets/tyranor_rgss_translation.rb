@@ -383,16 +383,20 @@ module TyranorText
   end
 
   def self.refresh_windows
-    return unless defined?(Window) && defined?(ObjectSpace)
+    return 0 unless defined?(Window) && defined?(ObjectSpace)
+    refreshed = 0
     ObjectSpace.each_object(Window) do |window|
       next if window.class.to_s =~ /Window_Message/
       next unless window.respond_to?(:refresh)
       begin
         window.refresh
+        refreshed += 1
       rescue Exception
       end
     end
+    refreshed
   rescue Exception
+    0
   end
 
   def self.apply_window_title
@@ -550,6 +554,13 @@ module TyranorText
     update_fast_forward
     reload
     install_hooks
+    unless @startup_windows_refreshed
+      refreshed = refresh_windows
+      if refreshed > 0
+        @startup_windows_refreshed = true
+        log("initial runtime windows refreshed after text hooks: #{refreshed}")
+      end
+    end
   rescue Exception
   end
 end
