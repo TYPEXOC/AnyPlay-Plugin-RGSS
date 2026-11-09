@@ -22,6 +22,7 @@
 #include "eventthread.h"
 
 #include <SDL_events.h>
+#include <SDL_keyboard.h>
 #include <SDL_messagebox.h>
 #include <SDL_timer.h>
 #include <SDL_thread.h>
@@ -125,10 +126,19 @@ static void tynLogKeyboardEvent(const char *action, const SDL_KeyboardEvent &key
 {
 	if (!tynVerboseInputDiagnostics())
 		return;
+	const SDL_Scancode scancode = key.keysym.scancode;
+	const bool printable =
+	    (scancode >= SDL_SCANCODE_A && scancode <= SDL_SCANCODE_Z) ||
+	    (scancode >= SDL_SCANCODE_1 && scancode <= SDL_SCANCODE_0) ||
+	    (scancode >= SDL_SCANCODE_KP_1 && scancode <= SDL_SCANCODE_KP_0) ||
+	    scancode == SDL_SCANCODE_SPACE ||
+	    (scancode >= SDL_SCANCODE_MINUS && scancode <= SDL_SCANCODE_SLASH) ||
+	    (scancode >= SDL_SCANCODE_KP_DIVIDE && scancode <= SDL_SCANCODE_KP_PERIOD);
+	const char *keyName = printable ? "PRINTABLE_REDACTED" : SDL_GetScancodeName(scancode);
+	if (!keyName || !keyName[0]) keyName = "UNKNOWN";
 
 	Debug() << "[TYNInput]" << action
-	        << "scancode:" << (int) key.keysym.scancode
-	        << "keycode:" << (int) key.keysym.sym
+	        << "key:" << keyName
 	        << "repeat:" << (int) key.repeat
 	        << "window:" << key.windowID;
 }

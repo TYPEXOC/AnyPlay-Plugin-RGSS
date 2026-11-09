@@ -22,6 +22,7 @@
 #include <SDL_joystick.h>
 #include <SDL_scancode.h>
 #include <string>
+#include <unordered_map>
 #ifdef __ANDROID__
 #include <cstdlib>
 #include "util/debugwriter.h"
@@ -43,11 +44,77 @@ static bool tynVerboseInputDiagnostics()
     return enabled && enabled[0] == '1' && enabled[1] == '\0';
 }
 
-static void tynLogEnterQuery(int code, bool isVKey, const char *query, bool result)
+static const char *tynInputButtonName(int code)
 {
-    if (!result || !tynVerboseInputDiagnostics()) return;
-    const bool isEnter = isVKey ? code == 0x0D : code == SDL_SCANCODE_RETURN;
-    if (isEnter) Debug() << "[TYNInput] Ruby Input." << query << "(VK_RETURN) -> true";
+    switch (code) {
+    case Input::Up: return "Up";
+    case Input::Down: return "Down";
+    case Input::Left: return "Left";
+    case Input::Right: return "Right";
+    case Input::A: return "A";
+    case Input::B: return "B/Cancel";
+    case Input::C: return "C/Confirm";
+    case Input::X: return "X";
+    case Input::Y: return "Y";
+    case Input::Z: return "Z";
+    case Input::L: return "L";
+    case Input::R: return "R";
+    case Input::Shift: return "Shift";
+    case Input::Ctrl: return "Ctrl";
+    case Input::Alt: return "Alt";
+    case Input::F5: return "F5";
+    case Input::F6: return "F6";
+    case Input::F7: return "F7";
+    case Input::F8: return "F8";
+    case Input::F9: return "F9";
+    case Input::D: return "D";
+    case Input::E: return "E";
+    case Input::F: return "F";
+    default: return 0;
+    }
+}
+
+static void tynLogRubyInputQuery(const char *key, const char *query, bool result, bool logFalse)
+{
+    if (!tynVerboseInputDiagnostics()) return;
+    if (!result && !logFalse) return;
+
+    const std::string queryKey = std::string(query) + ":" + key;
+    struct QueryLogState {
+        bool initialized = false;
+        bool result = false;
+        unsigned long long lastLogAt = 0;
+    };
+    static std::unordered_map<std::string, QueryLogState> states;
+    QueryLogState &state = states[queryKey];
+    const unsigned long long now = shState->runTime();
+    if (state.initialized && state.result == result && now - state.lastLogAt < 500)
+        return;
+
+    Debug() << "[TYNInput] Ruby Input." << query << "(" << key << ") -> " << (result ? "true" : "false")
+            << " textInputMode=" << shState->input().getTextInputMode();
+    state.initialized = true;
+    state.result = result;
+    state.lastLogAt = now;
+}
+
+static void tynLogActionQuery(int code, const char *query, bool result)
+{
+    const char *name = tynInputButtonName(code);
+    if (!name) return;
+    tynLogRubyInputQuery(name, query, result, code == Input::C || code == Input::B);
+}
+
+static void tynLogRawKeyQuery(int code, bool isVKey, const char *query, bool result)
+{
+    const bool isEnter = isVKey
+        ? code == 0x0D
+        : (code == SDL_SCANCODE_RETURN || code == SDL_SCANCODE_KP_ENTER);
+    const bool isEscape = isVKey
+        ? code == 0x1B
+        : code == SDL_SCANCODE_ESCAPE;
+    if (!isEnter && !isEscape) return;
+    tynLogRubyInputQuery(isEnter ? "RETURN" : "ESCAPE", query, result, true);
 }
 #endif
 
@@ -123,8 +190,11 @@ RB_METHOD(inputPress) {
     rb_scan_args(argc, argv, "1", &button);
     
     int num = getButtonArg(&button);
-    
-    return rb_bool_new(shState->input().isPressed(num));
+    bool result = shState->input().isPressed(num);
+#ifdef __ANDROID__
+    tynLogActionQuery(num, "press?", result);
+#endif
+    return rb_bool_new(result);
 }
 
 RB_METHOD(inputTrigger) {
@@ -136,8 +206,11 @@ RB_METHOD(inputTrigger) {
     rb_scan_args(argc, argv, "1", &button);
     
     int num = getButtonArg(&button);
-    
-    return rb_bool_new(shState->input().isTriggered(num));
+    bool result = shState->input().isTriggered(num);
+#ifdef __ANDROID__
+    tynLogActionQuery(num, "trigger?", result);
+#endif
+    return rb_bool_new(result);
 }
 
 RB_METHOD(inputRepeat) {
@@ -149,8 +222,11 @@ RB_METHOD(inputRepeat) {
     rb_scan_args(argc, argv, "1", &button);
     
     int num = getButtonArg(&button);
-    
-    return rb_bool_new(shState->input().isRepeated(num));
+    bool result = shState->input().isRepeated(num);
+#ifdef __ANDROID__
+    tynLogActionQuery(num, "repeat?", result);
+#endif
+    return rb_bool_new(result);
 }
 
 RB_METHOD(inputRelease) {
@@ -162,8 +238,11 @@ RB_METHOD(inputRelease) {
     rb_scan_args(argc, argv, "1", &button);
     
     int num = getButtonArg(&button);
-    
-    return rb_bool_new(shState->input().isReleased(num));
+    bool result = shState->input().isReleased(num);
+#ifdef __ANDROID__
+    tynLogActionQuery(num, "release?", result);
+#endif
+    return rb_bool_new(result);
 }
 
 RB_METHOD(inputCount) {
@@ -202,7 +281,7 @@ RB_METHOD(inputPressEx) {
         int num = getScancodeArg(&button);
         bool result = shState->input().isPressedEx(num, 0);
 #ifdef __ANDROID__
-        tynLogEnterQuery(num, false, "pressex?", result);
+        tynLogRawKeyQuery(num, false, "pressex?", result);
 #endif
         return rb_bool_new(result);
     }
@@ -210,7 +289,7 @@ RB_METHOD(inputPressEx) {
     int num = NUM2INT(button);
     bool result = shState->input().isPressedEx(num, 1);
 #ifdef __ANDROID__
-    tynLogEnterQuery(num, true, "pressex?", result);
+    tynLogRawKeyQuery(num, true, "pressex?", result);
 #endif
     return rb_bool_new(result);
 }
@@ -225,7 +304,7 @@ RB_METHOD(inputTriggerEx) {
         int num = getScancodeArg(&button);
         bool result = shState->input().isTriggeredEx(num, 0);
 #ifdef __ANDROID__
-        tynLogEnterQuery(num, false, "triggerex?", result);
+        tynLogRawKeyQuery(num, false, "triggerex?", result);
 #endif
         return rb_bool_new(result);
     }
@@ -233,7 +312,7 @@ RB_METHOD(inputTriggerEx) {
     int num = NUM2INT(button);
     bool result = shState->input().isTriggeredEx(num, 1);
 #ifdef __ANDROID__
-    tynLogEnterQuery(num, true, "triggerex?", result);
+    tynLogRawKeyQuery(num, true, "triggerex?", result);
 #endif
     return rb_bool_new(result);
 }
@@ -248,7 +327,7 @@ RB_METHOD(inputRepeatEx) {
         int num = getScancodeArg(&button);
         bool result = shState->input().isRepeatedEx(num, 0);
 #ifdef __ANDROID__
-        tynLogEnterQuery(num, false, "repeatex?", result);
+        tynLogRawKeyQuery(num, false, "repeatex?", result);
 #endif
         return rb_bool_new(result);
     }
@@ -256,7 +335,7 @@ RB_METHOD(inputRepeatEx) {
     int num = NUM2INT(button);
     bool result = shState->input().isRepeatedEx(num, 1);
 #ifdef __ANDROID__
-    tynLogEnterQuery(num, true, "repeatex?", result);
+    tynLogRawKeyQuery(num, true, "repeatex?", result);
 #endif
     return rb_bool_new(result);
 }
@@ -269,10 +348,19 @@ RB_METHOD(inputReleaseEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return rb_bool_new(shState->input().isReleasedEx(num, 0));
+        bool result = shState->input().isReleasedEx(num, 0);
+#ifdef __ANDROID__
+        tynLogRawKeyQuery(num, false, "releaseex?", result);
+#endif
+        return rb_bool_new(result);
     }
     
-    return rb_bool_new(shState->input().isReleasedEx(NUM2INT(button), 1));
+    int num = NUM2INT(button);
+    bool result = shState->input().isReleasedEx(num, 1);
+#ifdef __ANDROID__
+    tynLogRawKeyQuery(num, true, "releaseex?", result);
+#endif
+    return rb_bool_new(result);
 }
 
 RB_METHOD(inputCountEx) {
@@ -361,6 +449,10 @@ RB_METHOD(inputRawKeyStates) {
     VALUE ret = rb_ary_new();
 
     uint8_t *states = shState->input().rawKeyStates();
+#ifdef __ANDROID__
+    tynLogRawKeyQuery(SDL_SCANCODE_RETURN, false, "raw_key_states", states[SDL_SCANCODE_RETURN] != 0);
+    tynLogRawKeyQuery(SDL_SCANCODE_ESCAPE, false, "raw_key_states", states[SDL_SCANCODE_ESCAPE] != 0);
+#endif
     
     for (unsigned int i = 0; i < shState->input().rawKeyStatesLength(); i++)
         rb_ary_push(ret, rb_bool_new(states[i]));

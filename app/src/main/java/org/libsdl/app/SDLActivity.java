@@ -1314,6 +1314,12 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         return "action-" + action;
     }
 
+    static String diagnosticKeyName(int keyCode, KeyEvent event) {
+        if (isTextInputEvent(event)) return "PRINTABLE_REDACTED";
+        String name = KeyEvent.keyCodeToString(keyCode);
+        return name.startsWith("KEYCODE_") ? name.substring("KEYCODE_".length()) : name;
+    }
+
     public static boolean handleKeyEvent(View v, int keyCode, KeyEvent event, InputConnection ic) {
         int deviceId = event.getDeviceId();
         int source = event.getSource();
@@ -1325,9 +1331,10 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             }
         }
 
-        if (keyCode == KeyEvent.KEYCODE_ENTER) {
+        final String diagnosticKey = diagnosticKeyName(keyCode, event);
+        if (event.getAction() == KeyEvent.ACTION_DOWN || event.getAction() == KeyEvent.ACTION_UP) {
             TynRuntimeDiagnostics.appendInputEvent(
-                "view-key key=ENTER action=" + keyActionName(event.getAction())
+                "view-key key=" + diagnosticKey + " action=" + keyActionName(event.getAction())
                     + " deviceId=" + deviceId
                     + " source=0x" + Integer.toHexString(source)
                     + " keyboardSource=" + ((source & InputDevice.SOURCE_KEYBOARD) == InputDevice.SOURCE_KEYBOARD)
@@ -1357,21 +1364,17 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             // Note that we process events with specific key codes here
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 int result = SDLControllerManager.onNativePadDown(deviceId, keyCode);
-                if (keyCode == KeyEvent.KEYCODE_ENTER) {
-                    TynRuntimeDiagnostics.appendInputEvent(
-                        "view-key controller-down key=ENTER deviceId=" + deviceId + " consumed=" + (result == 0)
-                    );
-                }
+                TynRuntimeDiagnostics.appendInputEvent(
+                    "view-key controller-down key=" + diagnosticKey + " deviceId=" + deviceId + " consumed=" + (result == 0)
+                );
                 if (result == 0) {
                     return true;
                 }
             } else if (event.getAction() == KeyEvent.ACTION_UP) {
                 int result = SDLControllerManager.onNativePadUp(deviceId, keyCode);
-                if (keyCode == KeyEvent.KEYCODE_ENTER) {
-                    TynRuntimeDiagnostics.appendInputEvent(
-                        "view-key controller-up key=ENTER deviceId=" + deviceId + " consumed=" + (result == 0)
-                    );
-                }
+                TynRuntimeDiagnostics.appendInputEvent(
+                    "view-key controller-up key=" + diagnosticKey + " deviceId=" + deviceId + " consumed=" + (result == 0)
+                );
                 if (result == 0) {
                     return true;
                 }
@@ -1388,15 +1391,15 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                     }
                 }
                 onNativeKeyDown(keyCode);
-                if (keyCode == KeyEvent.KEYCODE_ENTER) {
-                    TynRuntimeDiagnostics.appendInputEvent("view-key forwarded-to-sdl key=ENTER action=down");
-                }
+                TynRuntimeDiagnostics.appendInputEvent(
+                    "view-key forwarded-to-sdl key=" + diagnosticKey + " action=down"
+                );
                 return true;
             } else if (event.getAction() == KeyEvent.ACTION_UP) {
                 onNativeKeyUp(keyCode);
-                if (keyCode == KeyEvent.KEYCODE_ENTER) {
-                    TynRuntimeDiagnostics.appendInputEvent("view-key forwarded-to-sdl key=ENTER action=up");
-                }
+                TynRuntimeDiagnostics.appendInputEvent(
+                    "view-key forwarded-to-sdl key=" + diagnosticKey + " action=up"
+                );
                 return true;
             }
         }

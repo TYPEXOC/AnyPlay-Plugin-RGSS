@@ -29,14 +29,17 @@ class TynSdlInputBridge {
     private val handler = Handler(Looper.getMainLooper())
     private val downAt = HashMap<Int, Long>()
 
+    private fun diagnosticKeyName(code: Int): String {
+        val name = KeyEvent.keyCodeToString(code)
+        return if (name.startsWith("KEYCODE_")) name.substring("KEYCODE_".length) else name
+    }
+
     fun sendKeyDown(code: Int, meta: Int = 0) {
         if (meta and KeyEvent.META_SHIFT_ON != 0) SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_SHIFT_LEFT)
         if (meta and KeyEvent.META_CTRL_ON != 0) SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_CTRL_LEFT)
         if (meta and KeyEvent.META_ALT_ON != 0) SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_ALT_LEFT)
         downAt[code] = SystemClock.uptimeMillis()
-        if (code == KeyEvent.KEYCODE_ENTER) {
-            TynRuntimeDiagnostics.appendInputEvent("virtual-pad key=ENTER action=down androidKeyCode=$code")
-        }
+        TynRuntimeDiagnostics.appendInputEvent("virtual-pad key=${diagnosticKeyName(code)} action=down")
         SDLActivity.onNativeKeyDown(code)
     }
 
@@ -44,9 +47,9 @@ class TynSdlInputBridge {
         val held = SystemClock.uptimeMillis() - (downAt.remove(code) ?: 0L)
         val wait = (MIN_HOLD_MS - held).coerceAtLeast(0L)
         val release = Runnable {
-            if (code == KeyEvent.KEYCODE_ENTER) {
-                TynRuntimeDiagnostics.appendInputEvent("virtual-pad key=ENTER action=up androidKeyCode=$code")
-            }
+            TynRuntimeDiagnostics.appendInputEvent(
+                "virtual-pad key=${diagnosticKeyName(code)} action=up heldMs=${held + wait}"
+            )
             SDLActivity.onNativeKeyUp(code)
             if (meta and KeyEvent.META_ALT_ON != 0) SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_ALT_LEFT)
             if (meta and KeyEvent.META_CTRL_ON != 0) SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_CTRL_LEFT)

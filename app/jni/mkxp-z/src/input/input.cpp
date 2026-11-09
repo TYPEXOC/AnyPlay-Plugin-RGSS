@@ -56,7 +56,22 @@ static const char *tynInputActionName(Input::ButtonCode code)
     case Input::Down: return "Down";
     case Input::Left: return "Left";
     case Input::Right: return "Right";
+	case Input::A: return "A";
+	case Input::B: return "B/Cancel";
     case Input::C: return "C/Confirm";
+	case Input::X: return "X";
+	case Input::Y: return "Y";
+	case Input::Z: return "Z";
+	case Input::L: return "L";
+	case Input::R: return "R";
+	case Input::Shift: return "Shift";
+	case Input::Ctrl: return "Ctrl";
+	case Input::Alt: return "Alt";
+	case Input::F5: return "F5";
+	case Input::F6: return "F6";
+	case Input::F7: return "F7";
+	case Input::F8: return "F8";
+	case Input::F9: return "F9";
     case Input::E: return "E";
     case Input::F: return "F";
     case Input::D: return "D";
@@ -1265,7 +1280,10 @@ void Input::update()
 
 #ifdef __ANDROID__
     if (tynVerboseInputDiagnostics()) {
-        static const ButtonCode trackedButtons[] = { Up, Down, Left, Right, C, D };
+        static const ButtonCode trackedButtons[] = {
+            Up, Down, Left, Right, A, B, C, X, Y, Z, L, R,
+            Shift, Ctrl, Alt, F5, F6, F7, F8, F9, D, E, F
+        };
         for (ButtonCode code : trackedButtons) {
             const ButtonState &state = p->getState(code);
             if (state.triggered || state.released) {
