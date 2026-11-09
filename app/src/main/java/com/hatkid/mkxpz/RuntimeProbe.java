@@ -472,6 +472,7 @@ final class RuntimeProbe
         if (files.length > shown) sb.append(",...");
         sb.append("]; archives=").append(archives.length() == 0 ? "none" : archives.toString());
         if (kirinLeftovers > 0) sb.append("; .kirin* entries=").append(kirinLeftovers);
+        sb.append(describeMkxpJson(files));
         sb.append(archiveInfo);
 
         if (data == null) {
@@ -538,6 +539,7 @@ final class RuntimeProbe
             int magic = 0xDEADCAFE;
             int entries = 0, dataEntries = 0, mapEntries = 0;
             boolean scripts = false, m003 = false, m178 = false;
+            String spelled003 = "", spelled178 = "";
             StringBuilder lowest = new StringBuilder();
             int lowestShown = 0;
             java.util.TreeSet<Integer> mapNumbers = new java.util.TreeSet<Integer>();
@@ -569,8 +571,8 @@ final class RuntimeProbe
                     if (lower.equals("data/scripts.rxdata")) scripts = true;
                     if (lower.matches("data/map\\d+\\.rxdata")) {
                         mapEntries++;
-                        if (lower.equals("data/map003.rxdata")) m003 = true;
-                        if (lower.equals("data/map178.rxdata")) m178 = true;
+                        if (lower.equals("data/map003.rxdata")) { m003 = true; spelled003 = new String(chars); }
+                        if (lower.equals("data/map178.rxdata")) { m178 = true; spelled178 = new String(chars); }
                         try {
                             mapNumbers.add(Integer.parseInt(lower.substring(8, lower.length() - 7)));
                         } catch (NumberFormatException ignored) { }
@@ -586,8 +588,9 @@ final class RuntimeProbe
             }
             StringBuilder sb = new StringBuilder(name).append(" holds ").append(entries).append(" files, ")
                     .append(dataEntries).append(" in Data/ (").append(mapEntries).append(" Map*.rxdata), Scripts.rxdata=")
-                    .append(scripts ? "yes" : "no").append(", Map003=").append(m003 ? "yes" : "no")
-                    .append(", Map178=").append(m178 ? "yes" : "no");
+                    .append(scripts ? "yes" : "no")
+                    .append(", Map003=").append(m003 ? "yes" : "no").append(spelling(spelled003, "Data/Map003.rxdata"))
+                    .append(", Map178=").append(m178 ? "yes" : "no").append(spelling(spelled178, "Data/Map178.rxdata"));
             if (lowest.length() > 0) sb.append(", lowest map numbers ").append(lowest);
             if (problem.length() > 0) sb.append(" [").append(problem).append(']');
             return sb.toString();
@@ -598,6 +601,34 @@ final class RuntimeProbe
                 try { in.close(); } catch (IOException ignored) { }
             }
         }
+    }
+
+    /** " (stored as X)" when the archive spells the name differently from the usual spelling. */
+    private static String spelling(String stored, String usual)
+    {
+        if (stored.length() == 0 || stored.equals(usual)) return "";
+        return " (stored as " + printable(stored) + ")";
+    }
+
+    /** The few mkxp.json settings that change how files are found. "" when there is no mkxp.json. */
+    private static String describeMkxpJson(File[] files)
+    {
+        for (File f : files) {
+            if (!f.getName().equalsIgnoreCase("mkxp.json") || !f.isFile()) continue;
+            long len = f.length();
+            if (len <= 0 || len > 64 * 1024) return "; mkxp.json present (" + len + " bytes)";
+            byte[] data = readAll(f, (int) len);
+            if (data == null) return "; mkxp.json not readable";
+            String text = new String(data, StandardCharsets.ISO_8859_1);
+            StringBuilder sb = new StringBuilder("; mkxp.json:");
+            Matcher m = Pattern.compile("\"pathCache\"\\s*:\\s*(true|false)").matcher(text);
+            if (m.find()) sb.append(" pathCache=").append(m.group(1));
+            m = Pattern.compile("\"rgssVersion\"\\s*:\\s*(\\d)").matcher(text);
+            if (m.find()) sb.append(" rgssVersion=").append(m.group(1));
+            if (sb.length() == "; mkxp.json:".length()) sb.append(" no pathCache/rgssVersion keys");
+            return sb.toString();
+        }
+        return "";
     }
 
     private static int le32(byte[] b)
