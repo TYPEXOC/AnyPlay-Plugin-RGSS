@@ -50,6 +50,8 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.tyranor.runtime.diagnostics.TynRuntimeDiagnostics;
+
 import java.util.Hashtable;
 import java.util.Locale;
 
@@ -1306,6 +1308,12 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         return event.isPrintingKey() || event.getKeyCode() == KeyEvent.KEYCODE_SPACE;
     }
 
+    static String keyActionName(int action) {
+        if (action == KeyEvent.ACTION_DOWN) return "down";
+        if (action == KeyEvent.ACTION_UP) return "up";
+        return "action-" + action;
+    }
+
     public static boolean handleKeyEvent(View v, int keyCode, KeyEvent event, InputConnection ic) {
         int deviceId = event.getDeviceId();
         int source = event.getSource();
@@ -1315,6 +1323,21 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             if (device != null) {
                 source = device.getSources();
             }
+        }
+
+        if (keyCode == KeyEvent.KEYCODE_ENTER) {
+            TynRuntimeDiagnostics.appendInputEvent(
+                "view-key key=ENTER action=" + keyActionName(event.getAction())
+                    + " deviceId=" + deviceId
+                    + " source=0x" + Integer.toHexString(source)
+                    + " keyboardSource=" + ((source & InputDevice.SOURCE_KEYBOARD) == InputDevice.SOURCE_KEYBOARD)
+                    + " dpadSource=" + ((source & InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD)
+                    + " gamepadSource=" + ((source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD)
+                    + " repeat=" + event.getRepeatCount()
+                    + " meta=0x" + Integer.toHexString(event.getMetaState())
+                    + " inputConnection=" + (ic != null)
+                    + " textInputVisible=" + (mTextEdit != null && mTextEdit.getVisibility() == View.VISIBLE)
+            );
         }
 
 //        if (event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -1333,11 +1356,23 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         if (SDLControllerManager.isDeviceSDLJoystick(deviceId)) {
             // Note that we process events with specific key codes here
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                if (SDLControllerManager.onNativePadDown(deviceId, keyCode) == 0) {
+                int result = SDLControllerManager.onNativePadDown(deviceId, keyCode);
+                if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                    TynRuntimeDiagnostics.appendInputEvent(
+                        "view-key controller-down key=ENTER deviceId=" + deviceId + " consumed=" + (result == 0)
+                    );
+                }
+                if (result == 0) {
                     return true;
                 }
             } else if (event.getAction() == KeyEvent.ACTION_UP) {
-                if (SDLControllerManager.onNativePadUp(deviceId, keyCode) == 0) {
+                int result = SDLControllerManager.onNativePadUp(deviceId, keyCode);
+                if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                    TynRuntimeDiagnostics.appendInputEvent(
+                        "view-key controller-up key=ENTER deviceId=" + deviceId + " consumed=" + (result == 0)
+                    );
+                }
+                if (result == 0) {
                     return true;
                 }
             }
@@ -1353,9 +1388,15 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                     }
                 }
                 onNativeKeyDown(keyCode);
+                if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                    TynRuntimeDiagnostics.appendInputEvent("view-key forwarded-to-sdl key=ENTER action=down");
+                }
                 return true;
             } else if (event.getAction() == KeyEvent.ACTION_UP) {
                 onNativeKeyUp(keyCode);
+                if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                    TynRuntimeDiagnostics.appendInputEvent("view-key forwarded-to-sdl key=ENTER action=up");
+                }
                 return true;
             }
         }
@@ -1978,7 +2019,14 @@ class SDLInputConnection extends BaseInputConnection {
          */
 
         if (event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
-            if (SDLActivity.onNativeSoftReturnKey()) {
+            boolean handled = SDLActivity.onNativeSoftReturnKey();
+            TynRuntimeDiagnostics.appendInputEvent(
+                "ime-key key=ENTER action=" + keyActionName(event.getAction())
+                    + " softReturnHandled=" + handled
+                    + " textInputVisible=" + (SDLActivity.mTextEdit != null && SDLActivity.mTextEdit.getVisibility() == View.VISIBLE)
+                    + " forwardedAsGameKey=" + !handled
+            );
+            if (handled) {
                 return true;
             }
         }
@@ -2043,7 +2091,13 @@ class SDLInputConnection extends BaseInputConnection {
             for (offset = 0; offset < pendingText.length(); ) {
                 int codePoint = pendingText.codePointAt(offset);
                 if (codePoint == '\n') {
-                    if (SDLActivity.onNativeSoftReturnKey()) {
+                    boolean handled = SDLActivity.onNativeSoftReturnKey();
+                    TynRuntimeDiagnostics.appendInputEvent(
+                        "ime-commit newline softReturnHandled=" + handled
+                            + " textInputVisible=" + (SDLActivity.mTextEdit != null && SDLActivity.mTextEdit.getVisibility() == View.VISIBLE)
+                            + " forwardedAsGameKey=" + !handled
+                    );
+                    if (handled) {
                         return;
                     }
                 }

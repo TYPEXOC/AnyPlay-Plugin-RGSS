@@ -348,6 +348,7 @@ public class MainActivity extends SDLActivity
                 Os.setenv("TYN_RGSS_MISSING_RESOURCE_HINT", getString(R.string.tyn_runtime_missing_resource_hint), true);
                 Os.setenv("TYN_RGSS_MANAGED_RTP", "1", true);
                 boolean verboseDiagnostics = BuildConfig.TYN_VERBOSE_DIAGNOSTICS || mDebugEnabled;
+                TynRuntimeDiagnostics.setVerboseInputDiagnostics(verboseDiagnostics);
                 Os.setenv("TYN_RGSS_VERBOSE_LOG", verboseDiagnostics ? "1" : "0", true);
                 TynRuntimeDiagnostics.append(mSessionDir,
                     "Verbose runtime diagnostics enabled=" + verboseDiagnostics
@@ -474,6 +475,7 @@ public class MainActivity extends SDLActivity
                 Os.setenv("TYN_RGSS_MISSING_RESOURCE_HINT", getString(R.string.tyn_runtime_missing_resource_hint), true);
                 Os.setenv("TYN_RGSS_MANAGED_RTP", "0", true);
                 Os.setenv("TYN_RGSS_VERBOSE_LOG", "1", true);
+                TynRuntimeDiagnostics.setVerboseInputDiagnostics(true);
                 TynRuntimeDiagnostics.append(mSessionDir,
                     "Standalone diagnostic mode: verbose logging on; no TYN Ruby preloads or UI integrations");
             } catch (Exception error) {

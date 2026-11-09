@@ -20,7 +20,12 @@
  */
 
 #include <SDL_joystick.h>
+#include <SDL_scancode.h>
 #include <string>
+#ifdef __ANDROID__
+#include <cstdlib>
+#include "util/debugwriter.h"
+#endif
 
 
 #include "eventthread.h"
@@ -30,6 +35,21 @@
 #include "input/input.h"
 #include "sharedstate.h"
 #include "src/util/util.h"
+
+#ifdef __ANDROID__
+static bool tynVerboseInputDiagnostics()
+{
+    const char *enabled = std::getenv("TYN_RGSS_VERBOSE_LOG");
+    return enabled && enabled[0] == '1' && enabled[1] == '\0';
+}
+
+static void tynLogEnterQuery(int code, bool isVKey, const char *query, bool result)
+{
+    if (!result || !tynVerboseInputDiagnostics()) return;
+    const bool isEnter = isVKey ? code == 0x0D : code == SDL_SCANCODE_RETURN;
+    if (isEnter) Debug() << "[TYNInput] Ruby Input." << query << "(VK_RETURN) -> true";
+}
+#endif
 
 RB_METHOD(inputDelta) {
     RB_UNUSED_PARAM;
@@ -180,10 +200,19 @@ RB_METHOD(inputPressEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return rb_bool_new(shState->input().isPressedEx(num, 0));
+        bool result = shState->input().isPressedEx(num, 0);
+#ifdef __ANDROID__
+        tynLogEnterQuery(num, false, "pressex?", result);
+#endif
+        return rb_bool_new(result);
     }
     
-    return rb_bool_new(shState->input().isPressedEx(NUM2INT(button), 1));
+    int num = NUM2INT(button);
+    bool result = shState->input().isPressedEx(num, 1);
+#ifdef __ANDROID__
+    tynLogEnterQuery(num, true, "pressex?", result);
+#endif
+    return rb_bool_new(result);
 }
 
 RB_METHOD(inputTriggerEx) {
@@ -194,10 +223,19 @@ RB_METHOD(inputTriggerEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return rb_bool_new(shState->input().isTriggeredEx(num, 0));
+        bool result = shState->input().isTriggeredEx(num, 0);
+#ifdef __ANDROID__
+        tynLogEnterQuery(num, false, "triggerex?", result);
+#endif
+        return rb_bool_new(result);
     }
     
-    return rb_bool_new(shState->input().isTriggeredEx(NUM2INT(button), 1));
+    int num = NUM2INT(button);
+    bool result = shState->input().isTriggeredEx(num, 1);
+#ifdef __ANDROID__
+    tynLogEnterQuery(num, true, "triggerex?", result);
+#endif
+    return rb_bool_new(result);
 }
 
 RB_METHOD(inputRepeatEx) {
@@ -208,10 +246,19 @@ RB_METHOD(inputRepeatEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return rb_bool_new(shState->input().isRepeatedEx(num, 0));
+        bool result = shState->input().isRepeatedEx(num, 0);
+#ifdef __ANDROID__
+        tynLogEnterQuery(num, false, "repeatex?", result);
+#endif
+        return rb_bool_new(result);
     }
     
-    return rb_bool_new(shState->input().isRepeatedEx(NUM2INT(button), 1));
+    int num = NUM2INT(button);
+    bool result = shState->input().isRepeatedEx(num, 1);
+#ifdef __ANDROID__
+    tynLogEnterQuery(num, true, "repeatex?", result);
+#endif
+    return rb_bool_new(result);
 }
 
 RB_METHOD(inputReleaseEx) {

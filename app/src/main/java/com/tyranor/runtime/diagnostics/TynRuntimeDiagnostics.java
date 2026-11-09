@@ -49,6 +49,7 @@ public final class TynRuntimeDiagnostics {
     private static final Object APPEND_LOCK = new Object();
     private static volatile long sessionStartedElapsedRealtime;
     private static volatile File uncaughtExceptionSessionDir;
+    private static volatile boolean verboseInputDiagnostics;
     private static boolean exceptionHandlerInstalled;
 
     private TynRuntimeDiagnostics() {}
@@ -76,6 +77,7 @@ public final class TynRuntimeDiagnostics {
                 ? launchRequestedAtElapsedRealtime
                 : SystemClock.elapsedRealtime();
             uncaughtExceptionSessionDir = sessionDir;
+            verboseInputDiagnostics = BuildConfig.TYN_VERBOSE_DIAGNOSTICS;
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
                 new FileOutputStream(log, false), StandardCharsets.UTF_8))) {
                 Date now = new Date(launchRequestedAtMillis > 0 ? launchRequestedAtMillis : System.currentTimeMillis());
@@ -145,6 +147,19 @@ public final class TynRuntimeDiagnostics {
                 Log.e(TAG, "Could not append to private runtime diagnostics", writeError);
             }
         }
+    }
+
+    /** Enables input-event tracing for diagnostic builds or an explicitly enabled debug session. */
+    public static void setVerboseInputDiagnostics(boolean enabled) {
+        verboseInputDiagnostics = enabled;
+        append(uncaughtExceptionSessionDir, "Input event tracing enabled=" + enabled);
+    }
+
+    /** Records Enter routing without ever recording committed or typed text. */
+    public static void appendInputEvent(String message) {
+        if (!verboseInputDiagnostics) return;
+        File sessionDir = uncaughtExceptionSessionDir;
+        if (sessionDir != null) append(sessionDir, "Input: " + message);
     }
 
     /** Builds one ZIP containing the complete diagnostic logs from every saved game session. */

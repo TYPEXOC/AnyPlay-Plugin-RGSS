@@ -1087,6 +1087,22 @@ struct InputPrivate
     {
         
         memcpy(rawStates, shState->eThread().keyStates, SDL_NUM_SCANCODES);
+
+#ifdef __ANDROID__
+        if (tynVerboseInputDiagnostics()) {
+            const int enterScancodes[] = { SDL_SCANCODE_RETURN, SDL_SCANCODE_KP_ENTER };
+            const char *enterNames[] = { "RETURN", "KP_ENTER" };
+            for (unsigned int i = 0; i < sizeof(enterScancodes) / sizeof(enterScancodes[0]); ++i) {
+                const int scancode = enterScancodes[i];
+                if (rawStates[scancode] != rawStatesOld[scancode]) {
+                    Debug() << "[TYNInput] SDL raw key=" << enterNames[i]
+                            << " scancode=" << scancode
+                            << " action=" << (rawStates[scancode] ? "down" : "up")
+                            << " vkReturnPressed=" << (rawStates[SDL_SCANCODE_RETURN] || rawStates[SDL_SCANCODE_KP_ENTER]);
+                }
+            }
+        }
+#endif
         
         for (int i = 0; i < SDL_NUM_SCANCODES; i++)
         {

@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
+import com.tyranor.runtime.diagnostics.TynRuntimeDiagnostics
 import org.libsdl.app.SDLActivity
 
 /** Direction buttons used by the D-pad control. */
@@ -33,6 +34,9 @@ class TynSdlInputBridge {
         if (meta and KeyEvent.META_CTRL_ON != 0) SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_CTRL_LEFT)
         if (meta and KeyEvent.META_ALT_ON != 0) SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_ALT_LEFT)
         downAt[code] = SystemClock.uptimeMillis()
+        if (code == KeyEvent.KEYCODE_ENTER) {
+            TynRuntimeDiagnostics.appendInputEvent("virtual-pad key=ENTER action=down androidKeyCode=$code")
+        }
         SDLActivity.onNativeKeyDown(code)
     }
 
@@ -40,6 +44,9 @@ class TynSdlInputBridge {
         val held = SystemClock.uptimeMillis() - (downAt.remove(code) ?: 0L)
         val wait = (MIN_HOLD_MS - held).coerceAtLeast(0L)
         val release = Runnable {
+            if (code == KeyEvent.KEYCODE_ENTER) {
+                TynRuntimeDiagnostics.appendInputEvent("virtual-pad key=ENTER action=up androidKeyCode=$code")
+            }
             SDLActivity.onNativeKeyUp(code)
             if (meta and KeyEvent.META_ALT_ON != 0) SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_ALT_LEFT)
             if (meta and KeyEvent.META_CTRL_ON != 0) SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_CTRL_LEFT)
