@@ -37,3 +37,12 @@ module MKXP
 		end
 	end
 end
+
+# Some RGSS games call this positional SE helper, while mkxp-z exposes only
+# Audio.se_play. Keep the filename, volume, and pitch; this backend has no
+# positional/panning API for SE playback, so the coordinates are ignored.
+unless Audio.respond_to?(:se_play_position)
+	def Audio.se_play_position(filename, volume = 100, pitch = 100, _x = 0, _y = 0, _z = 0)
+		Audio.se_play(filename, volume, pitch)
+	end
+end
