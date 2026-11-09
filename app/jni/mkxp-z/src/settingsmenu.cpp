@@ -72,6 +72,7 @@ struct VButton
 	BTN_STRING(A),
 	BTN_STRING(B),
   BTN_STRING(C),
+	BTN_STRING(D),
 	BTN_STRING(X),
 	BTN_STRING(Y),
   BTN_STRING(Z),
@@ -921,11 +922,12 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
         SET_BUTTON_NAME(6, a);
         SET_BUTTON_NAME(7, b);
         SET_BUTTON_NAME(8, c);
-        SET_BUTTON_NAME(9, x);
-        SET_BUTTON_NAME(10, y);
-        SET_BUTTON_NAME(11, z);
-        SET_BUTTON_NAME(12, e);
-        SET_BUTTON_NAME(13, f);
+		SET_BUTTON_NAME(9, d);
+		SET_BUTTON_NAME(10, x);
+		SET_BUTTON_NAME(11, y);
+		SET_BUTTON_NAME(12, z);
+		SET_BUTTON_NAME(13, e);
+		SET_BUTTON_NAME(14, f);
 #undef SET_BUTTON_NAME
     }
     

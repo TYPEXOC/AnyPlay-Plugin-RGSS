@@ -78,7 +78,7 @@ static const KbBindingData defaultKbBindings[] =
 	{ SDL_SCANCODE_KP_0,   Input::B     },
 	{ SDL_SCANCODE_LSHIFT, Input::A     },
 	{ SDL_SCANCODE_X,      Input::B     },
-	{ SDL_SCANCODE_D,      Input::Z     },
+	{ SDL_SCANCODE_D,      Input::Z     }, // Preserve the legacy RGSS mapping; the separate D action can be rebound.
 	{ SDL_SCANCODE_Q,      Input::L     },
 	{ SDL_SCANCODE_W,      Input::R     },
 	{ SDL_SCANCODE_A,      Input::X     },
@@ -230,6 +230,7 @@ static bool verifyDesc(const BindingDesc &desc)
 	    Input::L, Input::R,
 	    Input::Shift, Input::Ctrl, Input::Alt,
 	    Input::F5, Input::F6, Input::F7, Input::F8, Input::F9,
+	    Input::D,
 	    Input::E, Input::F
 	};
 

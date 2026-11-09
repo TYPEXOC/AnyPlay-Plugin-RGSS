@@ -141,6 +141,7 @@ struct Config {
         
         std::string l;
         std::string r;
+        std::string d;
         std::string e;
         std::string f;
     } kbActionNames;

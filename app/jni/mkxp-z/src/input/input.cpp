@@ -59,12 +59,13 @@ static const char *tynInputActionName(Input::ButtonCode code)
     case Input::C: return "C/Confirm";
     case Input::E: return "E";
     case Input::F: return "F";
+    case Input::D: return "D";
     default: return "Other";
     }
 }
 #endif
 
-#define BUTTON_CODE_COUNT 28
+#define BUTTON_CODE_COUNT 29
 
 #define m(vk,sc) { vk, SDL_SCANCODE_##sc }
 std::unordered_map<int, int> vKeyToScancode{
@@ -661,7 +662,7 @@ static const int mapToIndex[] =
     0,
     16, 17, 18, 19, 20,
     0, 0, 0, 0, 0, 0, 0, 0,
-    21, 22, 23, 24, 25, 26, 27
+    21, 22, 23, 24, 25, 26, 27, 28
 };
 
 static elementsN(mapToIndex);
@@ -1248,7 +1249,7 @@ void Input::update()
 
 #ifdef __ANDROID__
     if (tynVerboseInputDiagnostics()) {
-        static const ButtonCode trackedButtons[] = { Up, Down, Left, Right, C };
+        static const ButtonCode trackedButtons[] = { Up, Down, Left, Right, C, D };
         for (ButtonCode code : trackedButtons) {
             const ButtonState &state = p->getState(code);
             if (state.triggered || state.released) {

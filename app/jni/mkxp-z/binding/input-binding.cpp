@@ -575,6 +575,7 @@ struct {
     {"MOUSERIGHT", Input::MouseRight},
     {"MOUSEX1", Input::MouseX1},
     {"MOUSEX2", Input::MouseX2},
+    {"D", Input::D},
     {"E", Input::E},
     {"F", Input::F}
 };
