@@ -8,7 +8,7 @@ uniform highp int aniIndex;
 attribute vec2 position;
 attribute vec2 texCoord;
 
-varying vec2 v_texCoord;
+varying highp vec2 v_texCoord;
 
 const int nAutotiles = 7;
 const float tileW = 32.0;
@@ -26,6 +26,9 @@ void main()
 {
     vec2 tex = texCoord;
     lowp int atIndex = int(tex.y / autotileH);
+    /* Tileset tiles sit far below the autotile area in a tall atlas; keep
+     * the uniform array index in range (the result is masked by 'pred'). */
+    if (atIndex > nAutotiles - 1) atIndex = nAutotiles - 1;
 
     lowp int pred = int(tex.x <= atAreaW && tex.y <= atAreaH);
     lowp int frame = int(aniIndex - atFrames[atIndex] * (aniIndex / atFrames[atIndex]));
