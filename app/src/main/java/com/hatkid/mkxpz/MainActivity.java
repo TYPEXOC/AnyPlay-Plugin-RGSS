@@ -744,9 +744,24 @@ public class MainActivity extends SDLActivity
      */
     private File prepareWindowsDiscordCompatPreload()
     {
-        File discordScript = new File(GAME_FOLDER, "Scripts/Online/DiscordRichPresence.rb");
+        File[] discordScripts = {
+            new File(GAME_FOLDER, "Scripts/DiscordRichPresence.rb"),
+            new File(GAME_FOLDER, "Scripts/Online/DiscordRichPresence.rb")
+        };
+        File discordScript = null;
+        for (File candidate : discordScripts) {
+            if (candidate.isFile()) {
+                discordScript = candidate;
+                break;
+            }
+        }
         File discordExtension = new File(GAME_FOLDER, "gems/discord.so");
-        if (!discordScript.isFile() || !discordExtension.isFile()) return null;
+        if (discordScript == null || !discordExtension.isFile()) {
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Discord compatibility: not needed; rich-presence script found=" + (discordScript != null)
+                    + ", bundled extension found=" + discordExtension.isFile());
+            return null;
+        }
 
         try (InputStream input = new java.io.FileInputStream(discordExtension)) {
             int first = input.read();
@@ -779,7 +794,9 @@ public class MainActivity extends SDLActivity
                 + "end\n";
             writeAtomically(preload, script);
             TynRuntimeDiagnostics.append(mSessionDir,
-                "Discord compatibility: detected a Windows PE extension; disabled optional Discord Rich Presence for Android");
+                "Discord compatibility: detected Windows PE extension " + discordExtension.getAbsolutePath()
+                    + " for script " + discordScript.getAbsolutePath()
+                    + "; disabled optional Discord Rich Presence for Android");
             return preload;
         } catch (Exception error) {
             TynRuntimeDiagnostics.append(mSessionDir,

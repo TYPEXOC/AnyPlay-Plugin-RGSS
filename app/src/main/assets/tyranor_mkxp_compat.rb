@@ -60,3 +60,30 @@ unless defined?(TilemapUtils) && TilemapUtils.respond_to?(:updateAutoTiles)
 	end
 	MKXP.puts("[TYN RGSS] TilemapUtils.updateAutoTiles fallback active; native Tilemap#update handles autotile animation") if MKXP.respond_to?(:puts)
 end
+
+# Windows text-mode reads translate CRLF to LF. Android does not perform that
+# conversion, so normalize common text-file reads to preserve the behavior
+# expected by scripts exported on Windows (for example, a CSV parsed with
+# split("\n")). Paths with non-text extensions remain unchanged.
+class IO
+	unless method_defined?(:tyn_android_text_read_original)
+		alias_method :tyn_android_text_read_original, :read
+
+		def read(*arguments)
+			content = tyn_android_text_read_original(*arguments)
+			if content.is_a?(String)
+				begin
+					file_path = path.to_s
+					if file_path =~ /\.(?:csv|txt|ini|cfg|yaml|yml|json)$/i
+						if content.gsub!("\r\n", "\n") && !$tyn_android_text_newlines_logged
+							$tyn_android_text_newlines_logged = true
+							MKXP.puts("[TYN RGSS] normalized Windows CRLF text while reading #{file_path}") if defined?(MKXP) && MKXP.respond_to?(:puts)
+						end
+					end
+				rescue Exception
+				end
+			end
+			content
+		end
+	end
+end
