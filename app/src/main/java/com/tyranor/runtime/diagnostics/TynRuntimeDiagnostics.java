@@ -161,6 +161,11 @@ public final class TynRuntimeDiagnostics {
         if (sessions.isEmpty()) return null;
         sessions.sort(Comparator.comparingLong(session -> session.startedAtMillis));
 
+        // The game's ScriptLoader writes the original exception details to the module's
+        // files directory, outside the per-session folder. Include it because the on-screen
+        // error dialog only reports this path and otherwise the root cause is omitted.
+        File gameErrorLog = new File(context.getFilesDir(), "errorlog.txt");
+
         File exportDir = new File(context.getCacheDir(), "tyranor-diagnostics");
         if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
             throw new IOException("Could not create diagnostics export directory");
@@ -171,7 +176,8 @@ public final class TynRuntimeDiagnostics {
         File archive = new File(exportDir, archiveName);
         try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(archive)))) {
             zip.setLevel(6);
-            putTextEntry(zip, "index.txt", buildIndex(sessions));
+            putTextEntry(zip, "index.txt", buildIndex(sessions, gameErrorLog.isFile()));
+            copyLog(zip, gameErrorLog, "module/errorlog.txt");
             int index = 0;
             for (SessionLogs session : sessions) {
                 index++;
@@ -261,12 +267,14 @@ public final class TynRuntimeDiagnostics {
         );
     }
 
-    private static String buildIndex(List<SessionLogs> sessions) {
+    private static String buildIndex(List<SessionLogs> sessions, boolean gameErrorLogIncluded) {
         StringBuilder index = new StringBuilder();
         index.append("TYN RGSS complete diagnostics archive\n");
         index.append("Exported: ").append(formatTimestamp(new Date())).append("\n");
         index.append("Sessions included: ").append(sessions.size()).append("\n");
         index.append("Each session folder contains every available TYN timeline, native runtime log, and Ruby error log.\n");
+        index.append("Module-level game script error log included: ").append(gameErrorLogIncluded).append("\n");
+        if (gameErrorLogIncluded) index.append("See module/errorlog.txt for original game script load exceptions.\n");
         index.append("Game folder paths and game assets are not included.\n\n");
         for (int i = 0; i < sessions.size(); i++) {
             SessionLogs session = sessions.get(i);
