@@ -46,3 +46,17 @@ unless Audio.respond_to?(:se_play_position)
 		Audio.se_play(filename, volume, pitch)
 	end
 end
+
+# Some Essentials-based games call this helper once per map update, although
+# mkxp-z advances autotile animation from each native Tilemap#update call.
+# Keep the optional game hook available without replacing native tilemap work.
+unless defined?(TilemapUtils) && TilemapUtils.respond_to?(:updateAutoTiles)
+	unless defined?(TilemapUtils)
+		module TilemapUtils
+		end
+	end
+	def TilemapUtils.updateAutoTiles
+		nil
+	end
+	MKXP.puts("[TYN RGSS] TilemapUtils.updateAutoTiles fallback active; native Tilemap#update handles autotile animation") if MKXP.respond_to?(:puts)
+end

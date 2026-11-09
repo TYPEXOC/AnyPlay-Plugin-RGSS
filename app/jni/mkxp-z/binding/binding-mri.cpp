@@ -2318,14 +2318,16 @@ module AnyPlayLog
 
     def context_now
       scene = (defined?(SceneManager) && SceneManager.respond_to?(:scene) ? SceneManager.scene : $scene).class rescue "?"
-      map = ($game_map.map_id rescue "-")
+      game_map = $game_map
+      map = game_map && game_map.respond_to?(:map_id) ? game_map.map_id : "-"
       "scene=#{scene} map=#{map} frame=#{(Graphics.frame_count rescue '?')} resize=#{($ResizeFactor rescue '?')}"
     end
 
     # Keep a compact execution timeline without writing once per frame.
     def runtime_checkpoint
       scene = (defined?(SceneManager) && SceneManager.respond_to?(:scene) ? SceneManager.scene : $scene).class rescue "?"
-      map = ($game_map.map_id rescue "-")
+      game_map = $game_map
+      map = game_map && game_map.respond_to?(:map_id) ? game_map.map_id : "-"
       current = "scene=#{scene} map=#{map}"
       return if current == @last_scene_map
       @last_scene_map = current
