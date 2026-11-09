@@ -8,7 +8,7 @@ module TyranorText
   @translations = {}
   @signature = nil
   @ticks = 0
-  @active_message_sources = []
+  @active_message_pairs = []
   @fast_forward_state = nil
   @logged_status = {}
   @logged_lookup_samples = {}
@@ -69,10 +69,17 @@ module TyranorText
   def self.translate(value)
     return value unless value.is_a?(String) && !value.empty?
     translated = @translations[value]
+    translated = @translations[binary_string(value)] unless translated
     log_lookup_sample(translated ? 'hit' : 'miss', value, translated)
     translated || value
   rescue Exception
     value
+  end
+
+  def self.binary_string(value)
+    result = value.dup
+    result.force_encoding('ASCII-8BIT') if result.respond_to?(:force_encoding)
+    result
   end
 
   def self.reload
@@ -110,8 +117,12 @@ module TyranorText
   end
 
   def self.set_active_message_sources(lines)
-    @active_message_sources = lines.is_a?(Array) ? lines.collect { |line| line.is_a?(String) ? line.dup : '' } : []
-    write_copy_text(@active_message_sources.collect { |line| translate(line) }.join("\n"))
+    sources = lines.is_a?(Array) ? lines : []
+    @active_message_pairs = sources.collect do |source|
+      target = source.is_a?(String) ? translate(source) : ''
+      [source.is_a?(String) ? source.dup : '', target.is_a?(String) ? target.dup : '']
+    end
+    write_copy_text(@active_message_pairs.collect { |pair| pair[1] }.join("\n"))
   end
 
   def self.write_copy_text(value)
@@ -138,56 +149,226 @@ module TyranorText
   end
 
   def self.refresh_active_message
-    return if @active_message_sources.empty?
-    lines = @active_message_sources.collect { |line| translate(line) }
-    version = rgss_version
-    if version >= 3 && defined?($game_message) && $game_message
-      if $game_message.instance_variable_defined?(:@texts)
-        $game_message.instance_variable_set(:@texts, lines.dup)
-      elsif $game_message.respond_to?(:texts=)
-        $game_message.texts = lines.dup
-      end
-      windows = message_windows
-      windows.each do |window|
-        window.instance_variable_set(:@fiber, nil) if window.instance_variable_defined?(:@fiber)
-        window.instance_variable_set(:@line_count, 0) if window.instance_variable_defined?(:@line_count)
-      end
-      write_copy_text(lines.join("\n"))
-      return
-    end
-
-    if version == 2 && defined?($game_message) && $game_message
-      if $game_message.instance_variable_defined?(:@texts)
-        $game_message.instance_variable_set(:@texts, lines.dup)
-      elsif $game_message.respond_to?(:texts=)
-        $game_message.texts = lines.dup
-      end
-      if defined?($game_temp) && $game_temp && $game_temp.respond_to?(:message_text=)
-        $game_temp.message_text = lines.join("\n")
-      end
-      message_windows.each do |window|
-        begin
-          window.send(:start_message) if window.respond_to?(:start_message, true)
-        rescue Exception => error
-          log("VX message redraw unavailable: #{error}")
+    message_pairs = @active_message_pairs || []
+    if defined?($game_message) && $game_message &&
+       $game_message.instance_variable_defined?(:@texts)
+      current_lines = $game_message.instance_variable_get(:@texts)
+      if current_lines.is_a?(Array) && !current_lines.empty? &&
+         current_lines.all? { |line| line.is_a?(String) }
+        previous_sources = message_pairs.collect { |pair| pair[0] }
+        previous_targets = message_pairs.collect { |pair| pair[1] }
+        unless same_string_array?(current_lines, previous_sources) || same_string_array?(current_lines, previous_targets)
+          message_pairs = current_lines.collect do |line|
+            previous_pair = message_pairs.find do |pair|
+              same_bytes?(pair[0], line) || same_bytes?(pair[1], line)
+            end
+            source = previous_pair ? previous_pair[0] : line
+            unless previous_pair
+              reverse_pair = @translations.find do |_source_text, target_text|
+                same_bytes?(target_text, line)
+              end
+              source = reverse_pair[0] if reverse_pair
+            end
+            [source, line]
+          end
+          @active_message_pairs = message_pairs
+          log("active message sources recovered from Game_Message buffer (#{message_pairs.length} line(s))")
         end
       end
-      write_copy_text(lines.join("\n"))
+    end
+    return if message_pairs.empty?
+
+    changed = false
+    updated_lines = []
+    message_pairs.each do |pair|
+      source, previous = pair
+      replacement = translate(source)
+      replacement = source unless replacement.is_a?(String) && !replacement.empty?
+      if !same_bytes?(replacement, previous)
+        pair[1] = replacement
+        changed = true
+      end
+      updated_lines << replacement
+    end
+    return unless changed
+
+    # RGSS3 / MKXP-Z renders Game_Message from Window_Message's fiber. Do not
+    # restart choice or number-input prompts: those windows own active input
+    # state as well as their visible text.
+    if defined?($game_message) && $game_message &&
+       $game_message.respond_to?(:has_text?) && $game_message.has_text? &&
+       defined?(Window_Message) && defined?(ObjectSpace)
+      ace_windows = []
+      ObjectSpace.each_object(Window_Message) do |window|
+        next unless window.instance_variable_defined?(:@fiber)
+        next unless window.instance_variable_get(:@fiber)
+        next if window.respond_to?(:visible) && !window.visible
+        ace_windows << window
+      end
+      has_choice = $game_message.respond_to?(:choice?) && $game_message.choice?
+      has_number_input = $game_message.respond_to?(:num_input?) && $game_message.num_input?
+      if !ace_windows.empty? && $game_message.instance_variable_defined?(:@texts) &&
+         !has_choice && !has_number_input
+        $game_message.instance_variable_set(:@texts, updated_lines.dup)
+        ace_windows.each do |window|
+          window.instance_variable_set(:@line_count, 0) if window.instance_variable_defined?(:@line_count)
+          window.instance_variable_set(:@fiber, nil)
+        end
+        write_copy_text(updated_lines.join("\n"))
+        log("active message refreshed through Game_Message fiber (#{ace_windows.length} window(s), #{updated_lines.length} line(s))")
+        return
+      end
+    end
+
+    # VX and compatible custom message windows render a page incrementally.
+    # Rebuild the currently visible page from the complete translated buffer.
+    if refresh_vx_message_page(updated_lines)
+      write_copy_text(updated_lines.join("\n"))
       return
     end
 
-    if defined?($game_temp) && $game_temp && $game_temp.respond_to?(:message_text=)
-      $game_temp.message_text = lines.join("\n")
-    end
-    message_windows.each do |window|
-      begin
-        window.refresh if window.respond_to?(:refresh)
-      rescue Exception
+    # XP keeps its assembled message in Game_Temp and exposes a refreshable
+    # Window_Message. Replacing this buffer is safe only when that window is
+    # currently visible; the first line is included by the command hook below.
+    if defined?(Window_Message) && defined?($game_temp) && $game_temp &&
+       $game_temp.respond_to?(:message_text=) && defined?(ObjectSpace)
+      windows = []
+      ObjectSpace.each_object(Window_Message) do |window|
+        next unless window.respond_to?(:refresh)
+        next if window.respond_to?(:visible) && !window.visible
+        windows << window
+      end
+      unless windows.empty?
+        $game_temp.message_text = updated_lines.join("\n")
+        windows.each do |window|
+          begin
+            window.send(:refresh)
+          rescue Exception => error
+            log("XP message redraw failed for #{window.class}: #{error}")
+          end
+        end
+        write_copy_text(updated_lines.join("\n"))
+        log("active message refreshed through Window_Message#refresh (#{windows.length} window(s))")
+        return
       end
     end
-    write_copy_text(lines.join("\n"))
+    log('no refreshable active RGSS message window was found')
   rescue Exception => error
     log("active message refresh failed: #{error}")
+  end
+
+  def self.same_bytes?(left, right)
+    left.is_a?(String) && right.is_a?(String) && binary_string(left) == binary_string(right)
+  end
+
+  def self.same_string_array?(left, right)
+    return false unless left.is_a?(Array) && right.is_a?(Array) && left.length == right.length
+    index = 0
+    while index < left.length
+      return false unless same_bytes?(left[index], right[index])
+      index += 1
+    end
+    true
+  end
+
+  def self.refresh_vx_message_page(updated_lines)
+    return false unless defined?(Window_Message) && defined?(ObjectSpace)
+
+    message = defined?($game_message) ? $game_message : nil
+    temp = defined?($game_temp) ? $game_temp : nil
+    has_choice = message && message.respond_to?(:choice?) && message.choice?
+    has_number_input = message && message.respond_to?(:num_input?) && message.num_input?
+    return false if has_choice || has_number_input
+
+    windows = []
+    ObjectSpace.each_object(Window_Message) do |window|
+      next if window.respond_to?(:visible) && !window.visible
+      active_text = window.instance_variable_defined?(:@text) &&
+        window.instance_variable_get(:@text).is_a?(String)
+      active_pause = window.respond_to?(:pause) && window.pause
+      active_message = message && message.respond_to?(:visible) && message.visible
+      next unless active_text || active_pause || active_message
+      next unless window.respond_to?(:start_message, true) &&
+                  window.respond_to?(:update_message, true)
+      windows << window
+    end
+    return false if windows.empty?
+
+    if message && message.instance_variable_defined?(:@texts)
+      message.instance_variable_set(:@texts, updated_lines.dup)
+    elsif message && message.respond_to?(:texts=)
+      message.texts = updated_lines.dup
+    end
+    temp.message_text = updated_lines.join("\n") if temp && temp.respond_to?(:message_text=)
+
+    refreshed = 0
+    windows.each do |window|
+      old_show_fast = window.instance_variable_get(:@show_fast) if
+        window.instance_variable_defined?(:@show_fast)
+      line_count = window.instance_variable_defined?(:@line_count) ?
+        window.instance_variable_get(:@line_count) : 0
+      remaining = window.instance_variable_defined?(:@text) ?
+        window.instance_variable_get(:@text) : nil
+      remaining_breaks = remaining.is_a?(String) ? remaining.count("\x00") : 0
+      completed_lines = updated_lines.length - remaining_breaks
+      page_start = completed_lines - (line_count.is_a?(Integer) ? line_count : 0)
+      page_start = 0 if page_start < 0
+      page_start = updated_lines.length - 1 if page_start >= updated_lines.length
+      page_lines = updated_lines[page_start..-1] || updated_lines
+      begin
+        if message && message.instance_variable_defined?(:@texts)
+          message.instance_variable_set(:@texts, page_lines.dup)
+        elsif message && message.respond_to?(:texts=)
+          message.texts = page_lines.dup
+        end
+        temp.message_text = page_lines.join("\n") if temp && temp.respond_to?(:message_text=)
+        window.send(:start_message)
+        if message && message.instance_variable_defined?(:@texts)
+          message.instance_variable_set(:@texts, updated_lines.dup)
+        elsif message && message.respond_to?(:texts=)
+          message.texts = updated_lines.dup
+        end
+        temp.message_text = updated_lines.join("\n") if temp && temp.respond_to?(:message_text=)
+        window.instance_variable_set(:@show_fast, true) if
+          window.instance_variable_defined?(:@show_fast)
+        window.instance_variable_set(:@wait_count, 0) if
+          window.instance_variable_defined?(:@wait_count)
+        window.pause = false if window.respond_to?(:pause=)
+        steps = 0
+        while steps < 256
+          text = window.instance_variable_get(:@text) if
+            window.instance_variable_defined?(:@text)
+          break unless text.is_a?(String)
+          before = text.dup
+          window.send(:update_message)
+          after = window.instance_variable_get(:@text) if
+            window.instance_variable_defined?(:@text)
+          break if after.nil? || (after.is_a?(String) && after == before)
+          break if window.respond_to?(:pause) && window.pause
+          steps += 1
+        end
+        refreshed += 1
+        log("VX message window redrawn from page line #{page_start + 1}")
+      rescue Exception => error
+        log("VX message page redraw failed for #{window.class}: #{error}")
+      ensure
+        if message && message.instance_variable_defined?(:@texts)
+          message.instance_variable_set(:@texts, updated_lines.dup)
+        elsif message && message.respond_to?(:texts=)
+          message.texts = updated_lines.dup
+        end
+        temp.message_text = updated_lines.join("\n") if temp && temp.respond_to?(:message_text=)
+        if !old_show_fast.nil? && window.instance_variable_defined?(:@show_fast)
+          window.instance_variable_set(:@show_fast, old_show_fast)
+        end
+      end
+    end
+    return false if refreshed == 0
+    log("active VX message page redrawn (#{refreshed} window(s))")
+    true
+  rescue Exception => error
+    log("VX message page refresh unavailable: #{error}")
+    false
   end
 
   def self.message_windows
@@ -302,6 +483,15 @@ module TyranorText
           case code
           when 101, 105
             lines = []
+            vx_message_header = code == 101 && parameters.length >= 4 &&
+              parameters[1].is_a?(Integer) && parameters[2].is_a?(Integer) &&
+              parameters[3].is_a?(Integer)
+            if code == 101 && parameters[0].is_a?(String) && !vx_message_header
+              original = parameters[0]
+              lines << original
+              parameters[0] = TyranorText.translate(original)
+              changed << [parameters, 0, original]
+            end
             line_code = code == 101 ? 401 : 405
             line_index = @index + 1
             while @list && line_index < @list.length
