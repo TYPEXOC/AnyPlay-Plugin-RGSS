@@ -3528,7 +3528,7 @@ module AnyPlayPerf
           alias_method :__anyplay_set_tileset, :tileset=
           def tileset=(v)
             if v && (v.mega? rescue false) && !@tilemap.is_a?(SynchronizedTilemap)
-              AnyPlayLog.write("tileset #{v.width}x#{v.height} is too big for the GPU: using the native tilemap")
+              AnyPlayLog.write("tileset #{v.width}x#{v.height} is too big for the GPU (max texture #{(Bitmap.max_size rescue '?')}): using the native tilemap")
               # TilemapLoader#setClass copies terrain_tags onto the new tilemap, but the native
               # tilemap class has no such accessor, so the switch used to fail with
               # "undefined method `terrain_tags='". Give it one (it only stores the array).
