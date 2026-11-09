@@ -550,9 +550,6 @@ module TyranorText
 
   def self.tick
     @ticks += 1
-    return unless (@ticks % 10) == 0
-    update_fast_forward
-    reload
     install_hooks
     unless @startup_windows_refreshed
       refreshed = refresh_windows
@@ -561,6 +558,9 @@ module TyranorText
         log("initial runtime windows refreshed after text hooks: #{refreshed}")
       end
     end
+    return unless (@ticks % 10) == 0
+    update_fast_forward
+    reload
   rescue Exception
   end
 end
