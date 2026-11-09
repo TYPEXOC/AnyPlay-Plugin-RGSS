@@ -2021,7 +2021,7 @@ class SDLInputConnection extends BaseInputConnection {
         if (event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
             boolean handled = SDLActivity.onNativeSoftReturnKey();
             TynRuntimeDiagnostics.appendInputEvent(
-                "ime-key key=ENTER action=" + keyActionName(event.getAction())
+                "ime-key key=ENTER action=" + SDLActivity.keyActionName(event.getAction())
                     + " softReturnHandled=" + handled
                     + " textInputVisible=" + (SDLActivity.mTextEdit != null && SDLActivity.mTextEdit.getVisibility() == View.VISIBLE)
                     + " forwardedAsGameKey=" + !handled
