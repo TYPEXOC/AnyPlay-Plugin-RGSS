@@ -22,7 +22,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
+import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.Selection;
@@ -1994,8 +1996,12 @@ class DummyEdit extends View implements View.OnKeyListener {
 
 class SDLInputConnection extends BaseInputConnection {
 
+    private static final long MIN_GAME_ENTER_HOLD_MS = 80L;
+
     protected EditText mEditText;
     protected String mCommittedText = "";
+    private final Handler mInputEventHandler = new Handler(Looper.getMainLooper());
+    private long mEnterDownUptimeMs;
 
     public SDLInputConnection(View targetView, boolean fullEditor) {
         super(targetView, fullEditor);
@@ -2030,10 +2036,49 @@ class SDLInputConnection extends BaseInputConnection {
                     + " forwardedAsGameKey=" + !handled
             );
             if (handled) {
+                mEnterDownUptimeMs = 0L;
                 return true;
+            }
+
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                mEnterDownUptimeMs = SystemClock.uptimeMillis();
+            } else if (event.getAction() == KeyEvent.ACTION_UP && mEnterDownUptimeMs > 0L) {
+                long now = SystemClock.uptimeMillis();
+                long heldMs = now - mEnterDownUptimeMs;
+                long delayMs = MIN_GAME_ENTER_HOLD_MS - heldMs;
+                mEnterDownUptimeMs = 0L;
+
+                if (delayMs > 0L) {
+                    KeyEvent delayedRelease = new KeyEvent(
+                        event.getDownTime(),
+                        now + delayMs,
+                        KeyEvent.ACTION_UP,
+                        event.getKeyCode(),
+                        event.getRepeatCount(),
+                        event.getMetaState(),
+                        event.getDeviceId(),
+                        event.getScanCode(),
+                        event.getFlags(),
+                        event.getSource()
+                    );
+                    TynRuntimeDiagnostics.appendInputEvent(
+                        "ime-key ENTER release delayed heldMs=" + heldMs
+                            + " delayMs=" + delayMs
+                            + " minimumHoldMs=" + MIN_GAME_ENTER_HOLD_MS
+                    );
+                    if (mInputEventHandler.postDelayed(() -> dispatchKeyEventToTarget(delayedRelease), delayMs)) {
+                        return true;
+                    }
+                    TynRuntimeDiagnostics.appendInputEvent("ime-key ENTER delayed release scheduling failed; forwarding immediately");
+                }
             }
         }
 
+        return super.sendKeyEvent(event);
+    }
+
+    private boolean dispatchKeyEventToTarget(KeyEvent event) {
+        TynRuntimeDiagnostics.appendInputEvent("ime-key ENTER delayed release dispatched");
         return super.sendKeyEvent(event);
     }
 
