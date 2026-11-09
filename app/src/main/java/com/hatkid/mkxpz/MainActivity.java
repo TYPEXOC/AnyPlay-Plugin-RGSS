@@ -744,31 +744,18 @@ public class MainActivity extends SDLActivity
      */
     private File prepareWindowsDiscordCompatPreload()
     {
-        File[] discordScripts = {
-            new File(GAME_FOLDER, "Scripts/DiscordRichPresence.rb"),
-            new File(GAME_FOLDER, "Scripts/Online/DiscordRichPresence.rb")
-        };
-        File discordScript = null;
-        for (File candidate : discordScripts) {
-            if (candidate.isFile()) {
-                discordScript = candidate;
-                break;
-            }
-        }
         File discordExtension = new File(GAME_FOLDER, "gems/discord.so");
-        if (discordScript == null || !discordExtension.isFile()) {
+        if (!discordExtension.isFile()) {
             TynRuntimeDiagnostics.append(mSessionDir,
-                "Discord compatibility: not needed; rich-presence script found=" + (discordScript != null)
-                    + ", bundled extension found=" + discordExtension.isFile());
+                "Discord compatibility: no bundled gems/discord.so; no workaround needed");
             return null;
         }
 
-        try (InputStream input = new java.io.FileInputStream(discordExtension)) {
-            int first = input.read();
-            int second = input.read();
-            if (first != 0x4d || second != 0x5a) {
+        try {
+            if (!isWindowsPeBinary(discordExtension)) {
                 TynRuntimeDiagnostics.append(mSessionDir,
-                    "Discord compatibility: bundled discord.so is not a Windows PE binary; left unchanged");
+                    "Discord compatibility: bundled discord.so is not a Windows PE binary; left unchanged: "
+                        + discordExtension.getAbsolutePath());
                 return null;
             }
 
@@ -795,13 +782,27 @@ public class MainActivity extends SDLActivity
             writeAtomically(preload, script);
             TynRuntimeDiagnostics.append(mSessionDir,
                 "Discord compatibility: detected Windows PE extension " + discordExtension.getAbsolutePath()
-                    + " for script " + discordScript.getAbsolutePath()
                     + "; disabled optional Discord Rich Presence for Android");
             return preload;
         } catch (Exception error) {
             TynRuntimeDiagnostics.append(mSessionDir,
                 "Discord compatibility: could not inspect or prepare the optional extension stub", error);
             return null;
+        }
+    }
+
+    private static boolean isWindowsPeBinary(File file) throws java.io.IOException
+    {
+        try (java.io.RandomAccessFile input = new java.io.RandomAccessFile(file, "r")) {
+            if (input.length() < 64 || input.readUnsignedShort() != 0x4d5a) return false;
+            input.seek(0x3c);
+            long peHeaderOffset = Integer.toUnsignedLong(Integer.reverseBytes(input.readInt()));
+            if (peHeaderOffset < 64 || peHeaderOffset > input.length() - 4) return false;
+            input.seek(peHeaderOffset);
+            return input.readUnsignedByte() == 0x50
+                && input.readUnsignedByte() == 0x45
+                && input.readUnsignedByte() == 0
+                && input.readUnsignedByte() == 0;
         }
     }
 
