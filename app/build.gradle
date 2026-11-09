@@ -13,8 +13,8 @@ android {
         applicationId "com.tyranor.runtime.rgss"
         minSdk 23
         targetSdk 33
-        versionCode 70
-        versionName "0.1.44-tyn.1"
+        versionCode 71
+        versionName "0.1.45-tyn.1"
         archivesBaseName = "mkxp-z-$versionName"
         ndk.debugSymbolLevel = 'FULL'
     }

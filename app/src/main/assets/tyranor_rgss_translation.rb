@@ -10,6 +10,10 @@ module TyranorText
   @ticks = 0
   @active_message_sources = []
   @fast_forward_state = nil
+  @logged_status = {}
+  @logged_lookup_samples = {}
+  @lookup_sample_counts = { 'hit' => 0, 'miss' => 0 }
+  @verbose_diagnostics = nil
 
   def self.log(message)
     begin
@@ -18,6 +22,38 @@ module TyranorText
       end
     rescue Exception
     end
+  end
+
+  def self.log_once(key, message)
+    return if @logged_status[key]
+    @logged_status[key] = true
+    log(message)
+  end
+
+  def self.verbose_diagnostics?
+    return @verbose_diagnostics unless @verbose_diagnostics.nil?
+    @verbose_diagnostics = ENV['TYN_RGSS_VERBOSE_LOG'].to_s == '1'
+  rescue Exception
+    @verbose_diagnostics = false
+  end
+
+  def self.log_lookup_sample(kind, source, target)
+    return unless verbose_diagnostics?
+    key = [kind, source]
+    return if @logged_lookup_samples[key]
+    return if @lookup_sample_counts[kind] >= 8
+    @logged_lookup_samples[key] = true
+    @lookup_sample_counts[kind] += 1
+    source_text = source.inspect
+    source_text = source_text[0, 157] + '...' if source_text.length > 160
+    message = "lookup #{kind}: source=#{source_text}"
+    if target
+      target_text = target.inspect
+      target_text = target_text[0, 157] + '...' if target_text.length > 160
+      message += " target=#{target_text}"
+    end
+    log(message)
+  rescue Exception
   end
 
   def self.rgss_version
@@ -32,13 +68,18 @@ module TyranorText
 
   def self.translate(value)
     return value unless value.is_a?(String) && !value.empty?
-    @translations[value] || value
+    translated = @translations[value]
+    log_lookup_sample(translated ? 'hit' : 'miss', value, translated)
+    translated || value
   rescue Exception
     value
   end
 
   def self.reload
-    return unless File.file?(TABLE_PATH)
+    unless File.file?(TABLE_PATH)
+      log_once(:table_missing, "translation table not found: #{TABLE_PATH}")
+      return
+    end
     stat = File.stat(TABLE_PATH)
     signature = [stat.mtime.to_f, stat.size]
     return if signature == @signature
@@ -192,7 +233,10 @@ module TyranorText
       end
       return
     end
-    return unless defined?(Bitmap) && Bitmap.method_defined?(:draw_text)
+    unless defined?(Bitmap) && Bitmap.method_defined?(:draw_text)
+      log_once(:bitmap_hook_missing, 'Bitmap text hook not installed yet: Bitmap#draw_text is unavailable')
+      return
+    end
     return if Bitmap.method_defined?(:__tyranor_draw_text)
     Bitmap.class_eval do
       alias __tyranor_draw_text draw_text
@@ -206,13 +250,17 @@ module TyranorText
         __tyranor_draw_text(*translated)
       end
     end
+    log_once(:bitmap_hook_installed, 'Bitmap#draw_text translation hook installed')
   rescue Exception => error
     log("Bitmap hook failed: #{error}")
   end
 
   def self.install_window_hook
     return if defined?(System) && System.respond_to?(:native_bitmap_text_translation?) && System.native_bitmap_text_translation?
-    return unless defined?(Window_Base) && Window_Base.method_defined?(:draw_text)
+    unless defined?(Window_Base) && Window_Base.method_defined?(:draw_text)
+      log_once(:window_hook_missing, 'Window text hook not installed yet: Window_Base#draw_text is unavailable')
+      return
+    end
     return if Window_Base.method_defined?(:__tyranor_draw_text)
     Window_Base.class_eval do
       alias __tyranor_draw_text draw_text
@@ -226,6 +274,7 @@ module TyranorText
         __tyranor_draw_text(*translated)
       end
     end
+    log_once(:window_hook_installed, 'Window_Base#draw_text translation hook installed')
   rescue Exception => error
     log("Window_Base hook failed: #{error}")
   end
@@ -236,7 +285,10 @@ module TyranorText
     elsif defined?(Interpreter)
       Interpreter
     end
-    return unless klass && (klass.method_defined?(:execute_command) || klass.private_method_defined?(:execute_command))
+    unless klass && (klass.method_defined?(:execute_command) || klass.private_method_defined?(:execute_command))
+      log_once(:interpreter_hook_missing, 'Event-text hook not installed yet: interpreter execute_command is unavailable')
+      return
+    end
     return if klass.method_defined?(:__tyranor_execute_command) || klass.private_method_defined?(:__tyranor_execute_command)
     private_method = klass.private_method_defined?(:execute_command)
     klass.class_eval do
@@ -291,6 +343,7 @@ module TyranorText
       end
     end
     klass.send(:private, :execute_command) if private_method
+    log_once(:interpreter_hook_installed, "Event-text translation hook installed on #{klass}")
   rescue Exception => error
     TyranorText.log("interpreter hook failed: #{error}")
   end
@@ -313,6 +366,7 @@ end
 
 TyranorText.reload
 TyranorText.install_hooks
+TyranorText.log("translation bridge initialized for RGSS #{TyranorText.rgss_version}")
 
 if defined?(Graphics) && Graphics.respond_to?(:update) && !Graphics.respond_to?(:__tyranor_update)
   class << Graphics

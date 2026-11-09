@@ -202,6 +202,7 @@ public final class TynRuntimeDiagnostics {
                 copyLog(zip, session.diagnosticsLog, sessionPath + SESSION_LOG_NAME);
                 copyLog(zip, session.nativeLog, sessionPath + NATIVE_LOG_NAME);
                 copyLog(zip, session.rubyLog, sessionPath + RUBY_LOG_NAME);
+                copyLog(zip, new File(session.directory, "tyranor_runtime.log"), sessionPath + "tyranor_runtime.log");
             }
         }
         return archive;
