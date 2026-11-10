@@ -1,6 +1,7 @@
 package com.hatkid.mkxpz;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ContentResolver;
@@ -88,6 +89,7 @@ public class MainActivity extends SDLActivity
     private static final String TYN_EXTRA_RTP_ROOT = "com.tyranor.runtime.extra.RTP_ROOT";
     private static final String TYN_EXTRA_THEME_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_PRIMARY_COLOR";
     private static final String TYN_EXTRA_THEME_ON_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_ON_PRIMARY_COLOR";
+    private static final String TYN_EXTRA_SAVE_SESSION_ENDED_CALLBACK = "com.tyranor.runtime.extra.SAVE_SESSION_ENDED_CALLBACK";
     private static final String[] RUBY_187_LIBRARIES = {
         "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "fluidsynth", "ruby187", "mkxp-z-187"
     };
@@ -117,6 +119,8 @@ public class MainActivity extends SDLActivity
     private boolean mWaitingForStoragePermission;
     private boolean mRtpScanNeedsRefresh;
     private String mTynGameTitle;
+    private PendingIntent mTynSaveSessionEndedCallback;
+    private boolean mTynSaveSessionEndedCallbackSent;
     private ScheduledExecutorService mTranslationSync;
     private volatile long mLastTranslationFailureLogAt;
     private boolean mDiagnosticsExporting;
@@ -298,6 +302,7 @@ public class MainActivity extends SDLActivity
             mTranslationMapUri = intent.getStringExtra(TYN_EXTRA_TRANSLATION_MAP_URI);
             mGameId = intent.getStringExtra(TYN_EXTRA_GAME_ID);
             mTynGameTitle = intent.getStringExtra(TYN_EXTRA_TITLE);
+            mTynSaveSessionEndedCallback = intent.getParcelableExtra(TYN_EXTRA_SAVE_SESSION_ENDED_CALLBACK);
             preparePrivateSession(mTynGameTitle);
             Log.i(TAG, "TYN runtime game folder: " + GAME_FOLDER + ", session: " + GAME_PATH);
             return;
@@ -1368,10 +1373,27 @@ public class MainActivity extends SDLActivity
         sInstance = null;
         super.onDestroy();
 
+        // Notify TYN only after SDL teardown. If Android kills the process without this callback,
+        // the App's durable launch marker intentionally remains and can be cleared by confirmation.
+        if (mTynLaunch && isFinishing() && !isChangingConfigurations()) {
+            sendTynSaveSessionEndedCallback();
+        }
+
         // HACK: Exiting the JVM (process) since Ruby does not likes when we
         // trying to re-initialize Ruby VM in mkxp-z (JNI native library)
         // that leads to segmentation fault, even we have cleanup the Ruby VM.
         System.exit(0);
+    }
+
+    private void sendTynSaveSessionEndedCallback()
+    {
+        if (mTynSaveSessionEndedCallback == null || mTynSaveSessionEndedCallbackSent) return;
+        mTynSaveSessionEndedCallbackSent = true;
+        try {
+            mTynSaveSessionEndedCallback.send();
+        } catch (PendingIntent.CanceledException error) {
+            Log.w(TAG, "TYN save-session completion callback was canceled", error);
+        }
     }
 
     @Override
