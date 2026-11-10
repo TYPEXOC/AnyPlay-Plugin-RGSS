@@ -24,6 +24,7 @@ import android.content.res.ColorStateList
 import android.util.TypedValue
 import com.tyranor.runtime.cheat.TyranorCheatController
 import com.tyranor.runtime.input.PadProfile
+import com.tyranor.runtime.input.TyranorMouseController
 import com.tyranor.runtime.input.TyranorPadController
 import com.tyranor.runtime.rgss.R
 import java.io.File
@@ -57,6 +58,7 @@ class TynRuntimeUi(
     private val root = FrameLayout(activity)
     private val loading = FrameLayout(activity)
     private val controller: TyranorPadController
+    private val mouseController: TyranorMouseController
     private val cheats = if (cheatsEnabled) TyranorCheatController(activity, gameKey) else null
     private var cheatMenu: TyranorCheatPanel? = null
     private var dialog: Dialog? = null
@@ -70,7 +72,11 @@ class TynRuntimeUi(
             ?.let { path -> runCatching { PadProfile.parse(File(path).readText()) }.getOrNull() }
             ?: PadProfile.defaultProfile()
         controller = TyranorPadController(activity, root, padProfile, padProfileUri, padEnabled, primaryColor, onPrimaryColor)
-
+        controller.pad.floatingButtonVisible = false
+        mouseController = TyranorMouseController(activity, root)
+        // Keep the configured virtual-pad hit targets above the transparent mouse layer. Unclaimed
+        // touches pass through to the mouse layer when mouse mode is enabled.
+        controller.pad.bringToFront()
         // 2) loading spinner (top-most, hides the black screen)
         loading.setBackgroundColor(Color.BLACK)
         loading.isClickable = true
@@ -92,38 +98,24 @@ class TynRuntimeUi(
         loading.addView(box, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         root.addView(loading, FrameLayout.LayoutParams(-1, -1))
 
-        if (cheatsEnabled) {
-            val cheatButton = TextView(activity).apply {
-                text = "TYN"
-                contentDescription = activity.getString(R.string.tyn_runtime_cheat_button)
-                gravity = Gravity.CENTER
-                setTextColor(onPrimaryColor)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(primaryColor)
-                }
-                elevation = 8f * density
-                setOnClickListener { openCheats() }
-            }
-            root.addView(
-                cheatButton,
-                FrameLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt(), Gravity.TOP or Gravity.END).apply {
-                    topMargin = (16 * density).toInt()
-                    marginEnd = (16 * density).toInt()
-                },
-            )
-        }
+        TyranorRuntimeActionBar(
+            activity,
+            root,
+            controller,
+            mouseController,
+            primaryColor,
+            onPrimaryColor,
+            cheatsEnabled,
+        ) { openCheats() }
 
         if (copyTextEnabled) {
             root.addView(
                 actionButton("文", activity.getString(R.string.tyn_runtime_copy_text)) {
                     copyActiveText()
                 },
-                FrameLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt(), Gravity.TOP or Gravity.START).apply {
+                FrameLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt(), Gravity.TOP or Gravity.END).apply {
                     topMargin = (16 * density).toInt()
-                    marginStart = (16 * density).toInt()
+                    marginEnd = (16 * density).toInt()
                 },
             )
         }
@@ -177,6 +169,10 @@ class TynRuntimeUi(
             primaryColor,
             onPrimaryColor,
             { onExportDiagnostics.run() },
+            {
+                controller.setPadVisible(true)
+                controller.pad.enterEditMode()
+            },
         ).also { cheatMenu = it }
         controller.releaseAllKeys()
         menu.show()
@@ -185,6 +181,7 @@ class TynRuntimeUi(
     fun onPause() {
         fastForwardEnabled = false
         writeFastForwardState()
+        mouseController.onPause()
         controller.onPause()
     }
 
@@ -194,6 +191,7 @@ class TynRuntimeUi(
         dialog?.dismiss()
         cheatMenu?.dismiss()
         cheats?.shutdown()
+        mouseController.shutdown()
         controller.shutdown()
     }
 

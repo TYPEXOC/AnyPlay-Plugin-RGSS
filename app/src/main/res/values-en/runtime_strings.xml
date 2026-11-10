@@ -24,6 +24,8 @@
     <string name="tyn_runtime_loading">Starting game…</string>
     <string name="tyn_runtime_missing_resource_hint">A game resource could not be found. Check the game files. If the missing file belongs to RPG Maker RTP, import the matching RTP in TYN RPG Maker settings and retry.</string>
     <string name="tyn_runtime_cheat_button">Cheats</string>
+    <string name="tyn_runtime_pad_button">Show or hide virtual pad</string>
+    <string name="tyn_runtime_mouse_button">Toggle virtual mouse</string>
     <string name="tyn_runtime_copy_text">Copy current dialogue</string>
     <string name="tyn_runtime_copy_empty">There is no dialogue to copy yet</string>
     <string name="tyn_runtime_copy_done">Dialogue copied</string>

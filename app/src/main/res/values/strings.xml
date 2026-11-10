@@ -25,6 +25,8 @@
     <string name="tyn_runtime_loading">正在启动游戏…</string>
     <string name="tyn_runtime_missing_resource_hint">找不到游戏资源。请检查游戏文件；如果缺少的是 RPG Maker RTP 自带资源，请在 TYN 的 RPG Maker 设置中导入对应版本 RTP 后重试。</string>
     <string name="tyn_runtime_cheat_button">作弊面板</string>
+    <string name="tyn_runtime_pad_button">显示或隐藏虚拟按键</string>
+    <string name="tyn_runtime_mouse_button">切换虚拟鼠标</string>
     <string name="tyn_runtime_copy_text">复制当前对话</string>
     <string name="tyn_runtime_copy_empty">当前没有可复制的对话</string>
     <string name="tyn_runtime_copy_done">对话已复制</string>

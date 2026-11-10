@@ -37,7 +37,9 @@ class TyranorPadController(
     val pad = VirtualPadView(activity, sink).apply {
         theme = VirtualPadView.PadTheme(primary = primaryColor, onPrimary = onPrimaryColor)
         this.profile = profile
-        visibility = if (enabled) android.view.View.VISIBLE else android.view.View.GONE
+        setPadVisible(enabled && PadOverlayPrefs.isPadVisible(activity))
+        // Keep the transparent overlay attached so the runtime action button can enable it.
+        visibility = android.view.View.VISIBLE
     }
 
     private var editPanel: VirtualPadEditPanel? = null
@@ -75,7 +77,9 @@ class TyranorPadController(
                 persistProfile(profile)
             }
 
-            override fun onPadVisibilityChanged(visible: Boolean) = Unit
+            override fun onPadVisibilityChanged(visible: Boolean) {
+                PadOverlayPrefs.savePadVisible(activity, visible)
+            }
         }
     }
 
@@ -86,6 +90,11 @@ class TyranorPadController(
     }
 
     fun releaseAllKeys() = pad.releaseAllKeys()
+
+    fun setPadVisible(visible: Boolean) {
+        pad.setPadVisible(visible)
+        PadOverlayPrefs.savePadVisible(activity, visible)
+    }
 
     fun onPause() = pad.onHostPause()
 

@@ -109,6 +109,13 @@ class VirtualPadView(
 
     private var padVisible = true
 
+    /** The runtime action bar owns the pad toggle when this is false. */
+    var floatingButtonVisible: Boolean = true
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     private val density = resources.displayMetrics.density
 
     // ---------- 元素布局 ----------
@@ -245,7 +252,7 @@ class VirtualPadView(
                 elementById[button.id]?.let { drawButton(canvas, it, button) }
             }
         }
-        if (!editing) drawFab(canvas)
+        if (!editing && floatingButtonVisible) drawFab(canvas)
         if (editing && selectedId != null) {
             elementById[selectedId]?.let { element ->
                 selectPaint.color = theme.onPrimary
@@ -387,7 +394,7 @@ class VirtualPadView(
                     resetFabGesture()
                     releaseAllPointers()
                 }
-                if (event.actionMasked == MotionEvent.ACTION_DOWN && fabRect.contains(x, y)) {
+                if (floatingButtonVisible && event.actionMasked == MotionEvent.ACTION_DOWN && fabRect.contains(x, y)) {
                     fabPointerId = pointerId
                     fabMoved = false
                     fabDownX = x

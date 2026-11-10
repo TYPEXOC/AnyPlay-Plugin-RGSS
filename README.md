@@ -4,7 +4,7 @@ An installable runtime module for **Tyranor Next** that runs **RPG Maker XP, VX 
 
 The runtime is based on [mkxp-z](https://github.com/mkxp-z/mkxp-z) and the Android port [BookerRues9/mkxp-z-android-reworked](https://github.com/BookerRues9/mkxp-z-android-reworked), adapted from [AnyPlay-Plugin-RGSS](https://github.com/001-lovely-singh/AnyPlay-Plugin-RGSS).
 
-The TYN module uses its own APK process. Its manifest declares the host translation rule `mtool-json`; Tyranor Next discovers the source file and serves the parsed, normalized JSON map through a read-only session URI. The module includes a TYN virtual pad and editor, a TYN cheat panel, and a Ruby translation bridge that loads and polls that map while the game is running. The bridge and generated table are kept in the module's private session directory; the game folder is not patched with plugin or translation files.
+The TYN module uses its own APK process. Its manifest declares the host translation rule `mtool-json`; Tyranor Next discovers the source file and serves the parsed, normalized JSON map through a read-only session URI. The module includes a TYN virtual pad and editor, virtual mouse controls, a TYN cheat panel, and a Ruby translation bridge that loads and polls that map while the game is running. The bridge and generated table are kept in the module's private session directory; the game folder is not patched with plugin or translation files.
 
 ## 📥 Install
 
@@ -19,7 +19,7 @@ New versions install over the old one. Nothing needs to be uninstalled.
 ## 📦What it includes
 
 - One APK for 64-bit and 32-bit phones (arm64-v8a and armeabi-v7a).
-- TYN's configurable on-screen pad and pad-layout editor; virtual keys are sent to SDL in the runtime process.
+- TYN's configurable on-screen pad and pad-layout editor; virtual keys are sent to SDL in the runtime process. A matching three-button overlay toggles the pad, switches SDL virtual-mouse mode, and opens the cheat panel. In mouse mode, dragging moves the pointer, tapping clicks, and long-pressing sends a right click; taps on pad controls continue to work.
 - TYN cheat panel backed by Ruby-side RGSS control code for supported XP / VX / VX Ace games and Pokémon Essentials variants.
 - Runtime loading of the normalized translation map selected in Tyranor Next, with polling-based hot reload. The module reads the host-parsed JSON through a temporary read-only content URI grant and does not inspect source formats or copy the bridge into the game folder.
 - MIDI playback through upstream FluidSynth 2.6.2. Each Android ABI builds the synthesizer with libsndfile 1.2.2 and Ogg/Vorbis decoding enabled, so SF2 and SF3 SoundFonts can be loaded. The static decoder libraries are linked into FluidSynth; no additional runtime libraries are required. When a game's `mkxp.json` does not name a SoundFont, the module copies the bundled `GMGSx.SF2` into its private session and passes that path to mkxp-z. MIDI PCM stays on mkxp-z's existing OpenAL audio path.

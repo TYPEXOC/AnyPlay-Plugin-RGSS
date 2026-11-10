@@ -24,6 +24,8 @@
     <string name="tyn_runtime_loading">ゲームを起動中…</string>
     <string name="tyn_runtime_missing_resource_hint">ゲームのリソースが見つかりません。ゲームファイルを確認してください。RPG Maker RTP の素材が不足している場合は、TYN の RPG Maker 設定から対応する RTP をインポートして再試行してください。</string>
     <string name="tyn_runtime_cheat_button">チート</string>
+    <string name="tyn_runtime_pad_button">仮想パッドの表示を切り替え</string>
+    <string name="tyn_runtime_mouse_button">仮想マウスを切り替え</string>
     <string name="tyn_runtime_copy_text">現在の会話をコピー</string>
     <string name="tyn_runtime_copy_empty">コピーできる会話がありません</string>
     <string name="tyn_runtime_copy_done">会話をコピーしました</string>
