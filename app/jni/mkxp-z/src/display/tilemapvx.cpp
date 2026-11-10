@@ -28,6 +28,7 @@
 #include "viewport.h"
 #include "gl-util.h"
 #include "sharedstate.h"
+#include "config.h"
 #include "glstate.h"
 #include "vertex.h"
 #include "quad.h"
