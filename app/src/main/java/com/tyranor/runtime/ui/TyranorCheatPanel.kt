@@ -20,7 +20,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.tyranor.runtime.cheat.TyranorCheatController
 import com.tyranor.runtime.cheat.TyranorCheatToggle
-import com.hatkid.mkxpz.R
+import com.tyranor.runtime.rgss.R
 
 /** TYN-owned RGSS cheat panel. The controller talks to the Ruby runtime; this view owns the UI. */
 class TyranorCheatPanel(

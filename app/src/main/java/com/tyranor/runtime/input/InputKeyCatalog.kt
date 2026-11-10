@@ -2,7 +2,7 @@ package com.tyranor.runtime.input
 
 import android.content.Context
 import android.view.KeyEvent
-import com.hatkid.mkxpz.R
+import com.tyranor.runtime.rgss.R
 
 /**
  * 键位选择目录（virtual pad 与手柄映射共用的 canonical 键位清单）。

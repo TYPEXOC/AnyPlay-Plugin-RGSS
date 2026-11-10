@@ -10,7 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
-import com.hatkid.mkxpz.R
+import com.tyranor.runtime.rgss.R
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max

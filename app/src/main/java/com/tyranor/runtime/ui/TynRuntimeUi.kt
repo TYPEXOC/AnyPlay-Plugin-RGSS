@@ -25,7 +25,7 @@ import android.util.TypedValue
 import com.tyranor.runtime.cheat.TyranorCheatController
 import com.tyranor.runtime.input.PadProfile
 import com.tyranor.runtime.input.TyranorPadController
-import com.hatkid.mkxpz.R
+import com.tyranor.runtime.rgss.R
 import java.io.File
 import kotlin.math.abs
 

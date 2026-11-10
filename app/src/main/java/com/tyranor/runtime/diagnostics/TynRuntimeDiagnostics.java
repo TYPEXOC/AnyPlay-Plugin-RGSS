@@ -12,7 +12,7 @@ import android.util.Log;
 
 import androidx.core.content.FileProvider;
 
-import com.hatkid.mkxpz.BuildConfig;
+import com.tyranor.runtime.rgss.BuildConfig;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;

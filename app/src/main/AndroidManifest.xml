@@ -51,7 +51,7 @@
     >
         <!-- Main activity -->
         <activity
-            android:name=".MainActivity"
+            android:name="com.hatkid.mkxpz.MainActivity"
             android:label="@string/app_name"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleTask"
@@ -68,13 +68,7 @@
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
 
-            <!-- Legacy launch action retained for compatible launchers. -->
-            <intent-filter>
-                <action android:name="com.anyplay.rgss.LAUNCH" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-
-            <!-- TYN runtime-module contract. Optional URI extras are additive to protocol v1. -->
+            <!-- TYN runtime-module v1 entry point; TYN-specific extension extras are additive. -->
             <intent-filter>
                 <action android:name="com.tyranor.runtime.action.LAUNCH" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -108,7 +102,7 @@
         <activity-alias
             android:name="MainDebugActivity"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.hatkid.mkxpz.MainActivity"
             android:exported="true"
         >
             <meta-data android:name="mkxp_debug" android:value="true" />

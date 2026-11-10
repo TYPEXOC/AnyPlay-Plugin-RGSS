@@ -4,9 +4,6 @@
   "capabilities": [
     "translation"
   ],
-  "overrideEngines": [
-    "RPGMAKER"
-  ],
   "scan": {
     "match": "any",
     "markers": [

@@ -52,6 +52,8 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import com.tyranor.runtime.diagnostics.TynRuntimeDiagnostics;
 import com.tyranor.runtime.ui.TynRuntimeUi;
+import com.tyranor.runtime.rgss.BuildConfig;
+import com.tyranor.runtime.rgss.R;
 
 public class MainActivity extends SDLActivity
 {
@@ -67,13 +69,13 @@ public class MainActivity extends SDLActivity
     private static boolean DEBUG = false;
 
     // ---- Runtime module launch ------------------------------------------
-    // Tyranor Next supplies a game folder plus optional URI grants. The legacy
-    // AnyPlay game_dir extra remains accepted for source compatibility.
-    public static final String EXTRA_GAME_DIR = "game_dir";
+    // TYN supplies the v1 launch payload plus optional TYN-specific extensions.
+    public static final String EXTRA_DIAGNOSTIC_GAME_DIR = "com.tyranor.runtime.extra.DIAGNOSTIC_GAME_DIR";
     public static final String EXTRA_STANDALONE_DIAGNOSTIC = "com.tyranor.runtime.extra.STANDALONE_DIAGNOSTIC";
     public static final String EXTRA_DIAGNOSTIC_RUBY_RUNTIME = "com.tyranor.runtime.extra.DIAGNOSTIC_RUBY_RUNTIME";
     public static final String EXTRA_DIAGNOSTIC_GAME_TITLE = "com.tyranor.runtime.extra.DIAGNOSTIC_GAME_TITLE";
     private static final String TYN_ACTION_LAUNCH = "com.tyranor.runtime.action.LAUNCH";
+    private static final String TYN_EXTRA_PROTOCOL_VERSION = "com.tyranor.runtime.extra.PROTOCOL_VERSION";
     private static final String TYN_EXTRA_FOLDER = "com.tyranor.runtime.extra.FOLDER_PATH";
     private static final String TYN_EXTRA_TITLE = "com.tyranor.runtime.extra.GAME_TITLE";
     private static final String TYN_EXTRA_GAME_ID = "com.tyranor.runtime.extra.GAME_ID";
@@ -98,6 +100,7 @@ public class MainActivity extends SDLActivity
     private static int sRubyRuntime = 313;
     private boolean mCustomGameDir = false;
     private boolean mTynLaunch = false;
+    private boolean mInvalidLaunchRequest = false;
     private boolean mPadEnabled = true;
     private boolean mCheatsEnabled = true;
     private boolean mDebugEnabled = false;
@@ -220,20 +223,22 @@ public class MainActivity extends SDLActivity
     }
 
     /**
-     * Reads "game_dir" from the launching intent and, if valid, makes it the
-     * game folder. The native side reads the static GAME_PATH field when the SDL
-     * thread starts (see main.cpp), so this must run before that (onCreate).
+     * Validates the module contract before SDL can start. The native side reads
+     * GAME_PATH when its thread starts, so the path must be set before onCreate.
      */
     private void applyGameDirFromIntent(Intent intent)
     {
-        if (intent == null) return;
+        if (intent == null) {
+            rejectLaunch("Rejected activity launch without an Intent");
+            return;
+        }
 
         if (intent.getBooleanExtra(EXTRA_STANDALONE_DIAGNOSTIC, false)) {
             mLaunchRequestedAtMillis = System.currentTimeMillis();
             mLaunchRequestedAtElapsedRealtime = SystemClock.elapsedRealtime();
-            String dir = intent.getStringExtra(EXTRA_GAME_DIR);
-            if (dir == null || dir.isEmpty() || !new File(dir).isDirectory()) {
-                Log.e(TAG, "Standalone diagnostic launch has no readable game folder");
+            String dir = intent.getStringExtra(EXTRA_DIAGNOSTIC_GAME_DIR);
+            if (!isAbsoluteDirectory(dir)) {
+                rejectLaunch("Standalone diagnostic launch has no absolute game folder");
                 return;
             }
             GAME_FOLDER = new File(dir).getAbsolutePath();
@@ -255,10 +260,17 @@ public class MainActivity extends SDLActivity
             mTynLaunch = true;
             mLaunchRequestedAtMillis = System.currentTimeMillis();
             mLaunchRequestedAtElapsedRealtime = SystemClock.elapsedRealtime();
+            // Protocol v1 is the default in the module contract; explicit unknown versions are rejected.
+            int protocol = intent.getIntExtra(TYN_EXTRA_PROTOCOL_VERSION, 1);
+            if (protocol != 1) {
+                rejectLaunch("Unsupported or missing runtime-module protocol version: " + protocol);
+                return;
+            }
+            Log.i(TAG, "TYN runtime-module launch accepted; protocol=" + protocol);
             String rubyRuntime = intent.getStringExtra(TYN_EXTRA_RUBY_RUNTIME);
             String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
-            if (dir == null || dir.isEmpty() || !new File(dir).isDirectory()) {
-                Log.e(TAG, "TYN runtime launch has no readable game folder");
+            if (!isAbsoluteDirectory(dir)) {
+                rejectLaunch("TYN runtime launch requires an absolute game folder");
                 return;
             }
             GAME_FOLDER = new File(dir).getAbsolutePath();
@@ -291,19 +303,20 @@ public class MainActivity extends SDLActivity
             return;
         }
 
-        String dir = intent.getStringExtra(EXTRA_GAME_DIR);
-        if (dir == null || dir.isEmpty()) return;
+        rejectLaunch("Rejected activity launch outside the TYN module contract");
+    }
 
-        File f = new File(dir);
-        if (!f.isDirectory()) {
-            Log.e(TAG, "game_dir does not exist or is not a folder: " + dir);
-            return; // fall back to the default folder; native side shows an error if that is missing too
-        }
+    private static boolean isAbsoluteDirectory(String path)
+    {
+        if (path == null || path.trim().isEmpty()) return false;
+        File folder = new File(path);
+        return folder.isAbsolute() && folder.isDirectory();
+    }
 
-        GAME_PATH = f.getAbsolutePath();
-        GAME_FOLDER = GAME_PATH;
-        mCustomGameDir = true;
-        Log.i(TAG, "Game folder from legacy launcher: " + GAME_PATH);
+    private void rejectLaunch(String reason)
+    {
+        mInvalidLaunchRequest = true;
+        Log.e(TAG, reason);
     }
 
     @Override
@@ -410,9 +423,15 @@ public class MainActivity extends SDLActivity
                 String path = gameScripts.optString(i, "");
                 if (!path.isEmpty() && !containsString(scripts, path)) scripts.put(path);
             }
+            appendGameRootScript(scripts, "preload.rb", "preload");
             String bridgePath = bridge.getAbsolutePath();
             if (!containsString(scripts, bridgePath)) scripts.put(bridgePath);
             config.put("preloadScript", scripts);
+            JSONArray postloadScripts = stringArray(config.opt("postloadScript"));
+            if (isPostloadScriptsEnabled()) {
+                appendGameRootScript(postloadScripts, "postload.rb", "postload");
+            }
+            config.put("postloadScript", postloadScripts);
             writeAtomically(new File(mSessionDir, "mkxp.json"), config.toString());
             GAME_PATH = mSessionDir.getAbsolutePath();
             TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup complete; private mkxp configuration is ready");
@@ -668,6 +687,42 @@ public class MainActivity extends SDLActivity
             if (target.equals(values.optString(i))) return true;
         }
         return false;
+    }
+
+    private boolean isPostloadScriptsEnabled()
+    {
+        return mTynRgssOptions == null || mTynRgssOptions.optBoolean("enablePostloadScripts", false);
+    }
+
+    private void appendGameRootScript(JSONArray scripts, String fileName, String phase) throws org.json.JSONException
+    {
+        File script = new File(GAME_FOLDER, fileName);
+        if (!script.isFile() || containsFile(scripts, script)) return;
+        scripts.put(script.getAbsolutePath());
+        TynRuntimeDiagnostics.append(mSessionDir,
+            "Detected game-root " + phase + " script: " + script.getAbsolutePath());
+    }
+
+    private boolean containsFile(JSONArray paths, File candidate)
+    {
+        String candidatePath = canonicalPath(candidate);
+        for (int i = 0; i < paths.length(); i++) {
+            String configuredPath = paths.optString(i, "");
+            if (configuredPath.isEmpty()) continue;
+            File configured = new File(configuredPath);
+            if (!configured.isAbsolute()) configured = new File(GAME_FOLDER, configuredPath);
+            if (candidatePath.equals(canonicalPath(configured))) return true;
+        }
+        return false;
+    }
+
+    private static String canonicalPath(File file)
+    {
+        try {
+            return file.getCanonicalPath();
+        } catch (Exception ignored) {
+            return file.getAbsolutePath();
+        }
     }
 
     /**
@@ -1059,11 +1114,19 @@ public class MainActivity extends SDLActivity
     protected void onNewIntent(Intent intent)
     {
         super.onNewIntent(intent);
-
-        String dir = TYN_ACTION_LAUNCH.equals(intent.getAction())
-            ? intent.getStringExtra(TYN_EXTRA_FOLDER)
-            : intent.getStringExtra(EXTRA_GAME_DIR);
-        if (dir != null && !dir.isEmpty() && !new File(dir).getAbsolutePath().equals(GAME_FOLDER)) {
+        if (!TYN_ACTION_LAUNCH.equals(intent.getAction()) ||
+            intent.getIntExtra(TYN_EXTRA_PROTOCOL_VERSION, 1) != 1) {
+            Log.e(TAG, "Rejected new activity intent outside the TYN runtime-module v1 contract");
+            finish();
+            return;
+        }
+        String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
+        if (!isAbsoluteDirectory(dir)) {
+            Log.e(TAG, "Rejected new runtime-module intent with invalid game folder");
+            finish();
+            return;
+        }
+        if (!new File(dir).getAbsolutePath().equals(GAME_FOLDER)) {
             Toast.makeText(this, "Closing the running game. Open the new game again.", Toast.LENGTH_LONG).show();
             finish(); // onDestroy() exits the process, so the next launch is clean
         }
@@ -1076,6 +1139,10 @@ public class MainActivity extends SDLActivity
         applyGameDirFromIntent(getIntent());
 
         super.onCreate(savedInstanceState);
+        if (mInvalidLaunchRequest) {
+            finish();
+            return;
+        }
         TynRuntimeDiagnostics.append(mSessionDir, "Android SDL activity onCreate completed");
 
         mStorageManager = (StorageManager) getSystemService(STORAGE_SERVICE);
@@ -1239,6 +1306,7 @@ public class MainActivity extends SDLActivity
 
     private void startRuntimeWhenReady()
     {
+        if (mInvalidLaunchRequest || isFinishing()) return;
         if (mWaitingForStoragePermission) {
             TynRuntimeDiagnostics.append(mSessionDir,
                 "Native startup held until the all-files permission result is handled");

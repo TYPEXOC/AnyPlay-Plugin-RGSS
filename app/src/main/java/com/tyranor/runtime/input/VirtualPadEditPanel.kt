@@ -23,7 +23,7 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import com.hatkid.mkxpz.R
+import com.tyranor.runtime.rgss.R
 import kotlin.math.min
 
 /**

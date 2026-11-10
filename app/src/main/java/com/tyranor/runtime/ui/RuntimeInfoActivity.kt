@@ -21,9 +21,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import com.hatkid.mkxpz.BuildConfig
+import com.tyranor.runtime.rgss.BuildConfig
 import com.hatkid.mkxpz.MainActivity
-import com.hatkid.mkxpz.R
+import com.tyranor.runtime.rgss.R
 import com.tyranor.runtime.diagnostics.TynRuntimeDiagnostics
 import java.io.File
 
@@ -287,7 +287,7 @@ class RuntimeInfoActivity : Activity() {
 
     private fun launchDiagnosticGame(gameFolder: File, rubyRuntime: String) {
         val intent = Intent(this, MainActivity::class.java).apply {
-            putExtra(MainActivity.EXTRA_GAME_DIR, gameFolder.absolutePath)
+            putExtra(MainActivity.EXTRA_DIAGNOSTIC_GAME_DIR, gameFolder.absolutePath)
             putExtra(MainActivity.EXTRA_STANDALONE_DIAGNOSTIC, true)
             putExtra(MainActivity.EXTRA_DIAGNOSTIC_RUBY_RUNTIME, rubyRuntime)
             putExtra(MainActivity.EXTRA_DIAGNOSTIC_GAME_TITLE, gameFolder.name)
