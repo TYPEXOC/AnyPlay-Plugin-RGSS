@@ -18,6 +18,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -29,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -46,9 +48,31 @@ public final class TynRuntimeDiagnostics {
     private static final String NATIVE_LOG_NAME = "NativeRuntime.txt";
     private static final String RUBY_LOG_NAME = "AnyPlayLog.txt";
     private static final String SESSION_ENV = "TYN_RGSS_DIAGNOSTICS_DIR";
+    private static final String EXPORT_PREFIX = "TYN-RGSS-diagnostics-";
+    private static final long KIB = 1024L;
+    private static final long MIB = 1024L * KIB;
+    private static final long MAX_TIMELINE_LOG_BYTES = 2L * MIB;
+    private static final long MAX_NATIVE_LOG_BYTES = 4L * MIB;
+    private static final long MAX_RUBY_LOG_BYTES = 256L * KIB;
+    private static final long MAX_LEGACY_LOG_BYTES = 512L * KIB;
+    private static final long MAX_MODULE_ERROR_LOG_BYTES = 1L * MIB;
+    private static final long MAX_SESSION_LOG_BYTES = 8L * MIB;
+    private static final long MAX_TOTAL_SESSION_LOG_BYTES = 128L * MIB;
+    private static final long SESSION_LOG_CLEANUP_TARGET_BYTES = MAX_TOTAL_SESSION_LOG_BYTES - MAX_SESSION_LOG_BYTES;
+    private static final long SESSION_RETENTION_MILLIS = 30L * 24L * 60L * 60L * 1000L;
+    private static final int MAX_SESSION_COUNT = 40;
+    private static final long RETENTION_CHECK_INTERVAL_MILLIS = 60L * 1000L;
+    private static final int MAX_EXPORT_ARCHIVE_COUNT = 3;
+    private static final long MAX_EXPORT_ARCHIVE_BYTES = 64L * MIB;
+    private static final String[] SESSION_LOG_NAMES = {
+        SESSION_LOG_NAME, NATIVE_LOG_NAME, RUBY_LOG_NAME, "tyranor_runtime.log"
+    };
     private static final Object APPEND_LOCK = new Object();
+    private static final Object RETENTION_LOCK = new Object();
     private static volatile long sessionStartedElapsedRealtime;
     private static volatile File uncaughtExceptionSessionDir;
+    private static volatile File activeSessionDir;
+    private static volatile long lastRetentionCheckElapsedRealtime;
     private static volatile boolean verboseInputDiagnostics;
     private static boolean exceptionHandlerInstalled;
 
@@ -73,6 +97,8 @@ public final class TynRuntimeDiagnostics {
             if (!sessionDir.isDirectory() && !sessionDir.mkdirs()) {
                 throw new IOException("Could not create private session directory");
             }
+            activeSessionDir = sessionDir;
+            safePruneSessionLogs(sessionDir.getParentFile(), sessionDir);
             sessionStartedElapsedRealtime = launchRequestedAtElapsedRealtime > 0
                 ? launchRequestedAtElapsedRealtime
                 : SystemClock.elapsedRealtime();
@@ -142,11 +168,14 @@ public final class TynRuntimeDiagnostics {
         if (sessionDir == null) return;
         synchronized (APPEND_LOCK) {
             try (FileOutputStream output = new FileOutputStream(new File(sessionDir, SESSION_LOG_NAME), true)) {
-                output.write(line.getBytes(StandardCharsets.UTF_8));
+                appendBoundedTimeline(output, new File(sessionDir, SESSION_LOG_NAME), line.getBytes(StandardCharsets.UTF_8));
+                trimLogToLimit(new File(sessionDir, "tyranor_runtime.log"), MAX_LEGACY_LOG_BYTES,
+                    "[Older runtime log entries trimmed]\n");
             } catch (IOException writeError) {
                 Log.e(TAG, "Could not append to private runtime diagnostics", writeError);
             }
         }
+        maybePruneSessionLogs(sessionDir);
     }
 
     /** Enables input-event tracing for diagnostic builds or an explicitly enabled debug session. */
@@ -165,6 +194,7 @@ public final class TynRuntimeDiagnostics {
     /** Builds one ZIP containing the complete diagnostic logs from every saved game session. */
     public static File createArchive(Context context) throws IOException {
         File sessionsRoot = new File(context.getFilesDir(), "tyranor/sessions");
+        safePruneSessionLogs(sessionsRoot, activeSessionDir);
         File[] sessionDirs = sessionsRoot.listFiles(File::isDirectory);
         if (sessionDirs == null || sessionDirs.length == 0) return null;
 
@@ -185,7 +215,8 @@ public final class TynRuntimeDiagnostics {
         if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
             throw new IOException("Could not create diagnostics export directory");
         }
-        String archiveName = "TYN-RGSS-diagnostics-"
+        safePruneExportArchives(exportDir, null);
+        String archiveName = EXPORT_PREFIX
             + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(new Date())
             + "-" + Long.toHexString(System.nanoTime()) + ".zip";
         File archive = new File(exportDir, archiveName);
@@ -205,7 +236,235 @@ public final class TynRuntimeDiagnostics {
                 copyLog(zip, new File(session.directory, "tyranor_runtime.log"), sessionPath + "tyranor_runtime.log");
             }
         }
+        safePruneExportArchives(exportDir, archive);
         return archive;
+    }
+
+    private static void appendBoundedTimeline(
+        FileOutputStream output,
+        File log,
+        byte[] line
+    ) throws IOException {
+        long currentBytes = log.isFile() ? log.length() : 0L;
+        if (currentBytes + line.length <= MAX_TIMELINE_LOG_BYTES) {
+            output.write(line);
+            return;
+        }
+
+        byte[] header = readLogPrefix(log, 16 * 1024);
+        byte[] marker = ("[Earlier timeline entries were trimmed to keep this session log bounded]\n")
+            .getBytes(StandardCharsets.UTF_8);
+        long availableForHeader = MAX_TIMELINE_LOG_BYTES - marker.length - line.length;
+        if (availableForHeader < 0) {
+            line = Arrays.copyOfRange(line, (int) Math.max(0L, line.length + availableForHeader), line.length);
+            availableForHeader = MAX_TIMELINE_LOG_BYTES - marker.length - line.length;
+        }
+        if (header.length > availableForHeader) {
+            header = Arrays.copyOf(header, (int) Math.max(0L, availableForHeader));
+            int lastNewline = -1;
+            for (int i = 0; i < header.length; i++) if (header[i] == '\n') lastNewline = i;
+            if (lastNewline >= 0) header = Arrays.copyOf(header, lastNewline + 1);
+        }
+
+        output.close();
+        try (FileOutputStream trimmed = new FileOutputStream(log, false)) {
+            trimmed.write(header);
+            trimmed.write(marker);
+            trimmed.write(line);
+        }
+    }
+
+    private static byte[] readLogPrefix(File file, int limit) throws IOException {
+        if (!file.isFile() || limit <= 0) return new byte[0];
+        try (InputStream input = new FileInputStream(file);
+             ByteArrayOutputStream prefix = new ByteArrayOutputStream(Math.min(limit, (int) file.length()))) {
+            byte[] buffer = new byte[4096];
+            int remaining = limit;
+            int count;
+            while (remaining > 0 && (count = input.read(buffer, 0, Math.min(buffer.length, remaining))) != -1) {
+                prefix.write(buffer, 0, count);
+                remaining -= count;
+            }
+            byte[] bytes = prefix.toByteArray();
+            int lastNewline = -1;
+            for (int i = 0; i < bytes.length; i++) if (bytes[i] == '\n') lastNewline = i;
+            return lastNewline < 0 ? new byte[0] : Arrays.copyOf(bytes, lastNewline + 1);
+        }
+    }
+
+    private static void maybePruneSessionLogs(File sessionDir) {
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastRetentionCheckElapsedRealtime < RETENTION_CHECK_INTERVAL_MILLIS) return;
+        synchronized (RETENTION_LOCK) {
+            now = SystemClock.elapsedRealtime();
+            if (now - lastRetentionCheckElapsedRealtime < RETENTION_CHECK_INTERVAL_MILLIS) return;
+            lastRetentionCheckElapsedRealtime = now;
+            safePruneSessionLogs(sessionDir.getParentFile(), activeSessionDir);
+        }
+    }
+
+    private static void safePruneSessionLogs(File sessionsRoot, File activeDir) {
+        try {
+            pruneSessionLogs(sessionsRoot, activeDir);
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Could not apply diagnostics session retention", error);
+        }
+    }
+
+    private static void pruneSessionLogs(File sessionsRoot, File activeDir) {
+        if (sessionsRoot == null || !sessionsRoot.isDirectory()) return;
+        synchronized (RETENTION_LOCK) {
+            File moduleErrorLog = moduleErrorLog(sessionsRoot);
+            trimLogToLimit(moduleErrorLog, MAX_MODULE_ERROR_LOG_BYTES,
+                "[Earlier module error log entries trimmed to keep diagnostics bounded]\n");
+            File[] children = sessionsRoot.listFiles(File::isDirectory);
+            if (children == null || children.length == 0) return;
+            List<File> sessions = new ArrayList<>(Arrays.asList(children));
+            sessions.sort(Comparator.comparingLong(TynRuntimeDiagnostics::sessionLastModified));
+            long now = System.currentTimeMillis();
+            for (File session : new ArrayList<>(sessions)) {
+                if (isActiveSession(session, activeDir)) continue;
+                long lastUsed = sessionLastModified(session);
+                trimSessionLogs(session);
+                if (now - lastUsed > SESSION_RETENTION_MILLIS && deleteRecursively(session)) {
+                    sessions.remove(session);
+                }
+            }
+            long totalBytes = moduleErrorLog.isFile() ? moduleErrorLog.length() : 0L;
+            for (File session : sessions) totalBytes += sessionLogBytes(session);
+            java.util.Iterator<File> iterator = sessions.iterator();
+            while (iterator.hasNext()) {
+                File session = iterator.next();
+                if (sessions.size() <= MAX_SESSION_COUNT && totalBytes <= SESSION_LOG_CLEANUP_TARGET_BYTES) break;
+                if (isActiveSession(session, activeDir)) continue;
+                long bytes = sessionLogBytes(session);
+                if (deleteRecursively(session)) {
+                    totalBytes = Math.max(0L, totalBytes - bytes);
+                    iterator.remove();
+                }
+            }
+        }
+    }
+
+    private static File moduleErrorLog(File sessionsRoot) {
+        File tyranorDir = sessionsRoot == null ? null : sessionsRoot.getParentFile();
+        File filesDir = tyranorDir == null ? null : tyranorDir.getParentFile();
+        return new File(filesDir == null ? new File(".") : filesDir, "errorlog.txt");
+    }
+
+    private static boolean isActiveSession(File session, File activeDir) {
+        if (session == null || activeDir == null) return false;
+        try {
+            return session.getCanonicalFile().equals(activeDir.getCanonicalFile());
+        } catch (IOException ignored) {
+            return session.equals(activeDir);
+        }
+    }
+
+    private static long sessionLastModified(File session) {
+        long modified = session.lastModified();
+        for (String name : SESSION_LOG_NAMES) {
+            File log = new File(session, name);
+            if (log.isFile()) modified = Math.max(modified, log.lastModified());
+        }
+        return modified;
+    }
+
+    private static long sessionLogBytes(File session) {
+        long bytes = 0L;
+        for (String name : SESSION_LOG_NAMES) {
+            File log = new File(session, name);
+            if (log.isFile()) bytes += log.length();
+        }
+        return bytes;
+    }
+
+    private static void trimSessionLogs(File session) {
+        trimLogToLimit(new File(session, SESSION_LOG_NAME), MAX_TIMELINE_LOG_BYTES,
+            "[Older timeline entries trimmed to keep this session bounded]\n");
+        trimLogToLimit(new File(session, NATIVE_LOG_NAME), MAX_NATIVE_LOG_BYTES,
+            "[Older native runtime entries trimmed to keep this session bounded]\n");
+        trimLogToLimit(new File(session, RUBY_LOG_NAME), MAX_RUBY_LOG_BYTES,
+            "[Older Ruby log entries trimmed to keep this session bounded]\n");
+        trimLogToLimit(new File(session, "tyranor_runtime.log"), MAX_LEGACY_LOG_BYTES,
+            "[Older runtime log entries trimmed]\n");
+        if (sessionLogBytes(session) > MAX_SESSION_LOG_BYTES) {
+            Log.w(TAG, "Session diagnostics exceed the configured size cap after trimming");
+        }
+    }
+
+    private static void trimLogToLimit(File log, long maxBytes, String markerText) {
+        if (!log.isFile() || log.length() <= maxBytes) return;
+        byte[] marker = markerText.getBytes(StandardCharsets.UTF_8);
+        int tailBytes = (int) Math.max(0L, maxBytes - marker.length);
+        try (FileInputStream input = new FileInputStream(log)) {
+            long skip = Math.max(0L, log.length() - tailBytes);
+            while (skip > 0L) {
+                long skipped = input.skip(skip);
+                if (skipped <= 0L) break;
+                skip -= skipped;
+            }
+            ByteArrayOutputStream tail = new ByteArrayOutputStream(tailBytes);
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) != -1) tail.write(buffer, 0, count);
+            byte[] contents = tail.toByteArray();
+            int firstNewline = -1;
+            for (int i = 0; i < contents.length; i++) {
+                if (contents[i] == '\n') {
+                    firstNewline = i;
+                    break;
+                }
+            }
+            if (firstNewline >= 0) contents = Arrays.copyOfRange(contents, firstNewline + 1, contents.length);
+            try (FileOutputStream output = new FileOutputStream(log, false)) {
+                output.write(marker);
+                output.write(contents);
+            }
+        } catch (IOException error) {
+            Log.w(TAG, "Could not enforce diagnostics log size limit for " + log.getName(), error);
+        }
+    }
+
+    private static boolean deleteRecursively(File target) {
+        File[] children = target.listFiles();
+        if (children != null) {
+            for (File child : children) deleteRecursively(child);
+        }
+        return !target.exists() || target.delete();
+    }
+
+    private static void pruneExportArchives(File exportDir, File newestArchive) {
+        File[] archives = exportDir.listFiles(file -> file.isFile()
+            && file.getName().startsWith(EXPORT_PREFIX) && file.getName().endsWith(".zip"));
+        if (archives == null || archives.length == 0) return;
+        List<File> sorted = new ArrayList<>(Arrays.asList(archives));
+        sorted.sort((left, right) -> {
+            if (newestArchive != null) {
+                if (left.equals(newestArchive)) return -1;
+                if (right.equals(newestArchive)) return 1;
+            }
+            return Long.compare(right.lastModified(), left.lastModified());
+        });
+        long totalBytes = 0L;
+        int kept = 0;
+        for (File archive : sorted) {
+            boolean preserveNewest = newestArchive != null && archive.equals(newestArchive);
+            if (preserveNewest || (kept < MAX_EXPORT_ARCHIVE_COUNT && totalBytes + archive.length() <= MAX_EXPORT_ARCHIVE_BYTES)) {
+                kept++;
+                totalBytes += archive.length();
+            } else if (!archive.delete()) {
+                Log.w(TAG, "Could not remove old diagnostics archive " + archive.getName());
+            }
+        }
+    }
+
+    private static void safePruneExportArchives(File exportDir, File newestArchive) {
+        try {
+            pruneExportArchives(exportDir, newestArchive);
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Could not apply diagnostics archive retention", error);
+        }
     }
 
     public static void share(Activity activity, File archive, String chooserTitle) throws IOException {

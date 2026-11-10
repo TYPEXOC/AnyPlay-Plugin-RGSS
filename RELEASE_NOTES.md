@@ -16,8 +16,8 @@ New versions install over the old one.
 - FluidSynth now has libsndfile's Ogg/Vorbis decoder enabled, allowing games to use SF3 SoundFonts as well as SF2.
 - Tyranor Next exposes the translation-file picker for games handled by this module.
 - Audio scripts written for newer mkxp-z (extra position argument, `bgm_position`) no longer cause errors.
-- New problem report: `AnyPlayLog.txt` in the game folder (created only when needed, fresh on every start). Attach it when you report a problem.
-- Frame-speed summary in that report, with the busiest script lines, to find slow spots.
+- Complete per-session diagnostics can be exported from the module; session and archive retention now have automatic age and size limits.
+- Frame-speed summaries and busiest script lines are included in the private Ruby runtime log when diagnostics are enabled.
 
 ### Note
 This TYN build uses package `com.tyranor.runtime.rgss`, so it installs alongside the original AnyPlay RGSS plugin. Later Tyranor runtime updates install over this module.

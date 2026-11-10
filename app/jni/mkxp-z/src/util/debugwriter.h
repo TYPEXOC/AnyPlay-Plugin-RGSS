@@ -30,11 +30,27 @@
 #include <iomanip>
 #include <string>
 #include <vector>
+#include <cerrno>
 
 #ifdef __ANDROID__
 #include <android/log.h>
 #include <fcntl.h>
+#include <sys/file.h>
 #include <unistd.h>
+
+static void writeTynDiagnosticBytes(int fd, const char *data, size_t size)
+{
+	size_t offset = 0;
+	while (offset < size) {
+		const ssize_t written = ::write(fd, data + offset, size - offset);
+		if (written > 0) {
+			offset += static_cast<size_t>(written);
+			continue;
+		}
+		if (written < 0 && errno == EINTR) continue;
+		break;
+	}
+}
 
 static void appendTynRuntimeDiagnostic(const std::string &message)
 {
@@ -64,11 +80,33 @@ static void appendTynRuntimeDiagnostic(const std::string &message)
 		 << '.' << std::setw(3) << std::setfill('0') << millisecondsPart
 		 << " " << redactedMessage << '\n';
 	const std::string path = std::string(sessionDir) + "/NativeRuntime.txt";
-	const std::string record = line.str();
+	std::string record = line.str();
+	static const off_t maxFileBytes = 4 * 1024 * 1024;
+	static const std::string truncationMarker = "[Older native runtime entries trimmed to keep this session bounded]\n";
 	const int fd = ::open(path.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0600);
 	if (fd < 0) return;
-	const ssize_t ignored = ::write(fd, record.data(), record.size());
-	(void)ignored;
+	if (::flock(fd, LOCK_EX) != 0) {
+		::close(fd);
+		return;
+	}
+	const off_t currentBytes = ::lseek(fd, 0, SEEK_END);
+	if (currentBytes < 0) {
+		::flock(fd, LOCK_UN);
+		::close(fd);
+		return;
+	}
+	if (currentBytes + static_cast<off_t>(record.size()) > maxFileBytes) {
+		const size_t available = static_cast<size_t>(maxFileBytes) - truncationMarker.size();
+		if (record.size() > available) record.erase(0, record.size() - available);
+		if (::ftruncate(fd, 0) != 0 || ::lseek(fd, 0, SEEK_SET) < 0) {
+			::flock(fd, LOCK_UN);
+			::close(fd);
+			return;
+		}
+		writeTynDiagnosticBytes(fd, truncationMarker.data(), truncationMarker.size());
+	}
+	writeTynDiagnosticBytes(fd, record.data(), record.size());
+	::flock(fd, LOCK_UN);
 	::close(fd);
 }
 #endif
