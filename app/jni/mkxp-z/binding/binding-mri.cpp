@@ -3541,7 +3541,64 @@ module AnyPlayPerf
                 AnyPlayLog.write("native tilemap switch failed: #{e.class}: #{e.message}")
               end
             end
+            @__ap_dump = 150 if @tilemap.is_a?(SynchronizedTilemap)
             self.__anyplay_set_tileset(v)
+          end
+          # Diagnostic: a little after a big tileset is shown, write down which tile ids the
+          # map uses (priority, terrain tag, row in the tileset) so missing tiles can be matched.
+          if method_defined?(:update) && !method_defined?(:__anyplay_update)
+          alias_method :__anyplay_update, :update
+          def update(*a, &b)
+            r = __anyplay_update(*a, &b)
+            if @__ap_dump
+              @__ap_dump -= 1
+              if @__ap_dump <= 0
+                @__ap_dump = nil
+                begin
+                  md = @tilemap.map_data
+                  pr = @tilemap.priorities
+                  tt = nil
+                  begin
+                    tset = $data_tilesets[$game_map.instance_variable_get(:@map).tileset_id]
+                    tt = tset.terrain_tags
+                    pr ||= tset.priorities
+                  rescue Exception
+                  end
+                  counts = Hash.new(0)
+                  md.xsize.times do |x|
+                    md.ysize.times do |y|
+                      md.zsize.times do |z|
+                        id = md[x, y, z]
+                        counts[id] += 1 if id && id >= 48
+                      end
+                    end
+                  end
+                  auto = counts.select { |k, _| k < 384 }.values.inject(0) { |t, c| t + c }
+                  ids = counts.keys.select { |k| k >= 384 }.sort
+                  info = lambda do |id|
+                    "#{id}x#{counts[id]}(row=#{(id - 384) / 8},prio=#{pr ? pr[id] : '?'},tag=#{tt ? tt[id] : '?'})"
+                  end
+                  out = "tilemap ids: map=#{md.xsize}x#{md.ysize}x#{md.zsize} priorities=#{pr ? pr.xsize : 'nil'} " \
+                        "autotile_cells=#{auto} tileset_ids=#{ids.size} max_id=#{ids.last} max_row=#{ids.last ? (ids.last - 384) / 8 : '-'}"
+                  top = counts.keys.select { |k| k >= 384 }.sort_by { |k| -counts[k] }.first(25)
+                  out << "\n  most used: " + top.map { |k| info.call(k) }.join(" ")
+                  out << "\n  highest rows: " + ids.last(12).map { |k| info.call(k) }.join(" ")
+                  if tt
+                    grass = ids.select { |k| tt[k] == 2 }.first(20)
+                    out << "\n  grass (tag 2): " + (grass.empty? ? "none" : grass.map { |k| info.call(k) }.join(" "))
+                  end
+                  if pr
+                    odd = counts.keys.select { |k| k >= 48 && (k >= pr.xsize || pr[k] > 5) }.first(10)
+                    out << "\n  bad priority ids: " + odd.inspect unless odd.empty?
+                  end
+                  AnyPlayLog.write(out)
+                rescue Exception => e
+                  AnyPlayLog.write("tilemap ids dump failed: #{e.class}: #{e.message}") rescue nil
+                end
+              end
+            end
+            r
+          end
           end
         end
       end
