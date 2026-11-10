@@ -8,7 +8,7 @@ uniform highp int aniIndex;
 attribute vec2 position;
 attribute vec2 texCoord;
 
-varying vec2 v_texCoord;
+varying highp vec2 v_texCoord;
 
 const int nAutotiles = 7;
 const float tileW = 32.0;
@@ -26,6 +26,9 @@ void main()
 {
     vec2 tex = texCoord;
     lowp int atIndex = int(tex.y / autotileH);
+    /* Tall tilesets can place ordinary tiles below the autotile table. Keep
+     * the uniform-array lookup valid even when that coordinate is not used. */
+    if (atIndex > nAutotiles - 1) atIndex = nAutotiles - 1;
 
     lowp int pred = int(tex.x <= atAreaW && tex.y <= atAreaH);
     lowp int frame = int(aniIndex - atFrames[atIndex] * (aniIndex / atFrames[atIndex]));

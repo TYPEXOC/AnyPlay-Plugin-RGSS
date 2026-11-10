@@ -4120,7 +4120,17 @@ module AnyPlayPerf
           def tileset=(v)
             if v && (v.mega? rescue false) && !@tilemap.is_a?(SynchronizedTilemap)
               AnyPlayLog.write("tileset #{v.width}x#{v.height} is too big for the GPU: using the native tilemap")
-              (setClass(SynchronizedTilemap) rescue AnyPlayLog.write("native tilemap switch failed"))
+              # TilemapLoader#setClass copies terrain_tags onto the replacement tilemap.
+              # The native class does not otherwise need this data, but the setter must
+              # exist so the fallback can complete.
+              unless SynchronizedTilemap.method_defined?(:terrain_tags=)
+                SynchronizedTilemap.class_eval { attr_accessor :terrain_tags }
+              end
+              begin
+                setClass(SynchronizedTilemap)
+              rescue StandardError => e
+                AnyPlayLog.write("native tilemap switch failed: #{e.class}: #{e.message}")
+              end
             end
             self.__anyplay_set_tileset(v)
           end

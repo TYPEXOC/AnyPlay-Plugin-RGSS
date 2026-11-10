@@ -5,7 +5,15 @@ uniform lowp vec4 tone;
 uniform lowp float opacity;
 uniform lowp vec4 color;
 
+#ifdef GLSLES
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+varying highp vec2 v_texCoord;
+#else
+varying mediump vec2 v_texCoord;
+#endif
+#else
 varying vec2 v_texCoord;
+#endif
 
 const vec3 lumaF = vec3(.299, .587, .114);
 

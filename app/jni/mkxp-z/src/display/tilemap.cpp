@@ -1224,7 +1224,7 @@ void Tilemap::update()
 		p->flashAlphaIdx = 0;
 
 	/* Animate autotiles */
-	if (!p->tiles.animated)
+	if (!p->tiles.animated || !shState->config().animateAutotiles)
 		return;
 
 	++p->tiles.aniIdx;

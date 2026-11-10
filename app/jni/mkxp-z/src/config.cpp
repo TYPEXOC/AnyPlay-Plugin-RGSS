@@ -178,6 +178,7 @@ void Config::read(int argc, char *argv[]) {
         {"fastPathEnum", true},
         {"copyText", false},
         {"useCJKFont", false},
+        {"animateAutotiles", true},
         {"customFont", ""},
         {"verticalScreenAlign", "top-center"},
         {"fontScale", 0.75},
@@ -244,6 +245,7 @@ try { exp } catch (...) {}
     SET_OPT(pathCache, boolean);
     SET_OPT(prebuiltPathCache, boolean);
     SET_OPT(useCJKFont, boolean);
+    SET_OPT(animateAutotiles, boolean);
     SET_STRINGOPT(customFont, customFont);
     SET_STRINGOPT(verticalScreenAlign, verticalScreenAlign);
     SET_OPT(fontScale, number);

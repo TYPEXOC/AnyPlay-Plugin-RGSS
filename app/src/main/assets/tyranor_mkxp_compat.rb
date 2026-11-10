@@ -47,6 +47,19 @@ unless Audio.respond_to?(:se_play_position)
 	end
 end
 
+# Pokémon Essentials checks this legacy JoiPlay capability query before
+# enabling screen resizing. TYN exposes mkxp-z's native resize_screen directly.
+begin
+	unless Graphics.respond_to?(:haveresizescreen)
+		class << Graphics
+			def haveresizescreen
+				respond_to?(:resize_screen)
+			end
+		end
+	end
+rescue Exception
+end
+
 # Some Essentials-based games call this helper once per map update, although
 # mkxp-z advances autotile animation from each native Tilemap#update call.
 # Keep the optional game hook available without replacing native tilemap work.

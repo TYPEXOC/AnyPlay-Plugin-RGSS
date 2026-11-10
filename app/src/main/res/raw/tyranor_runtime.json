@@ -4,6 +4,7 @@
   "capabilities": [
     "translation"
   ],
+  "translationRule": "mtool-json",
   "scan": {
     "match": "any",
     "markers": [

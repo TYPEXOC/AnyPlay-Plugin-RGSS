@@ -74,6 +74,7 @@ struct Config {
     bool pathCache;
     bool prebuiltPathCache;
     bool useCJKFont;
+    bool animateAutotiles;
     
     std::string dataPathOrg;
     std::string dataPathApp;

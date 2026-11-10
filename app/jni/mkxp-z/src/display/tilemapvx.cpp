@@ -417,18 +417,21 @@ void TilemapVX::update()
 	guardDisposed();
 
 	/* Animate tiles */
-	if (++p->frameIdx >= 30*3*4)
-		p->frameIdx = 0;
+	if (shState->config().animateAutotiles)
+	{
+		if (++p->frameIdx >= 30*3*4)
+			p->frameIdx = 0;
 
-	const uint8_t aniIndicesA[3*4] =
-		{ 0, 1, 2, 1, 0, 1, 2, 1, 0, 1, 2, 1 };
-	const uint8_t aniIndicesC[3*4] =
-		{ 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2 };
+		const uint8_t aniIndicesA[3*4] =
+			{ 0, 1, 2, 1, 0, 1, 2, 1, 0, 1, 2, 1 };
+		const uint8_t aniIndicesC[3*4] =
+			{ 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2 };
 
-	uint8_t aniIdxA = aniIndicesA[p->frameIdx / 30];
-	uint8_t aniIdxC = aniIndicesC[p->frameIdx / 30];
+		uint8_t aniIdxA = aniIndicesA[p->frameIdx / 30];
+		uint8_t aniIdxC = aniIndicesC[p->frameIdx / 30];
 
-	p->aniOffset = Vec2(aniIdxA * 2 * 32, aniIdxC * 32);
+		p->aniOffset = Vec2(aniIdxA * 2 * 32, aniIdxC * 32);
+	}
 
 	/* Animate flash */
 	if (++p->flashAlphaIdx >= flashAlphaN)

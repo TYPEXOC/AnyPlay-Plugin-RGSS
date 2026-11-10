@@ -34,6 +34,7 @@
 #include <physfs.h>
 
 #include <algorithm>
+#include <cctype>
 #include <stack>
 #include <stdio.h>
 #include <string.h>
@@ -709,7 +710,23 @@ void FileSystem::openRead(OpenHandler &handler, const char *filename) {
 void FileSystem::openReadRaw(SDL_RWops &ops, const char *filename,
                              bool freeOnClose) {
 
-  PHYSFS_File *handle = PHYSFS_openRead(normalize(filename, 0, 0).c_str());
+  std::string path = normalize(filename, 0, 0);
+  PHYSFS_File *handle = PHYSFS_openRead(path.c_str());
+
+  /* Windows game assets are commonly referenced with different casing than
+   * the spelling stored in an RGSS archive or Android directory. Preserve the
+   * exact-path fast path, then use the existing path index as a fallback. */
+  if (!handle && p->havePathCache) {
+    std::string lower(path);
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    if (p->pathCache.contains(lower)) {
+      const std::string &actual = p->pathCache[lower];
+      if (actual != path)
+        handle = PHYSFS_openRead(actual.c_str());
+    }
+  }
 
   if (!handle)
     throw Exception(Exception::NoFileError, "%s", filename);

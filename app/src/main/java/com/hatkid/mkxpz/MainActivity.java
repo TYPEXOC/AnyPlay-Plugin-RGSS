@@ -79,7 +79,7 @@ public class MainActivity extends SDLActivity
     private static final String TYN_EXTRA_FOLDER = "com.tyranor.runtime.extra.FOLDER_PATH";
     private static final String TYN_EXTRA_TITLE = "com.tyranor.runtime.extra.GAME_TITLE";
     private static final String TYN_EXTRA_GAME_ID = "com.tyranor.runtime.extra.GAME_ID";
-    private static final String TYN_EXTRA_TRANSLATION_URI = "com.tyranor.runtime.extra.TRANSLATION_URI";
+    private static final String TYN_EXTRA_TRANSLATION_MAP_URI = "com.tyranor.runtime.extra.TRANSLATION_MAP_URI";
     private static final String TYN_EXTRA_PAD_ENABLED = "com.tyranor.runtime.extra.PAD_ENABLED";
     private static final String TYN_EXTRA_PAD_PROFILE_URI = "com.tyranor.runtime.extra.PAD_PROFILE_URI";
     private static final String TYN_EXTRA_PAD_PROFILE_ID = "com.tyranor.runtime.extra.PAD_PROFILE_ID";
@@ -109,7 +109,7 @@ public class MainActivity extends SDLActivity
     private int mThemePrimaryColor = 0xFF18B978;
     private int mThemeOnPrimaryColor = 0xFFFFFFFF;
     private String mPadProfileUri;
-    private String mTranslationUri;
+    private String mTranslationMapUri;
     private String mGameId;
     private String mTynRtpRoot;
     private JSONObject mTynRgssOptions;
@@ -295,7 +295,7 @@ public class MainActivity extends SDLActivity
             mTynRtpRoot = intent.getStringExtra(TYN_EXTRA_RTP_ROOT);
             mThemePrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_PRIMARY_COLOR, mThemePrimaryColor);
             mThemeOnPrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_ON_PRIMARY_COLOR, mThemeOnPrimaryColor);
-            mTranslationUri = intent.getStringExtra(TYN_EXTRA_TRANSLATION_URI);
+            mTranslationMapUri = intent.getStringExtra(TYN_EXTRA_TRANSLATION_MAP_URI);
             mGameId = intent.getStringExtra(TYN_EXTRA_GAME_ID);
             mTynGameTitle = intent.getStringExtra(TYN_EXTRA_TITLE);
             preparePrivateSession(mTynGameTitle);
@@ -347,7 +347,7 @@ public class MainActivity extends SDLActivity
                     new File(GAME_FOLDER),
                     sRubyRuntime,
                     detectRgssVersion(GAME_FOLDER),
-                    mTranslationUri != null,
+                    mTranslationMapUri != null,
                     mPadEnabled,
                     mTynRgssOptions == null ? "{}" : mTynRgssOptions.toString(),
                     mLaunchRequestedAtMillis,
@@ -396,12 +396,12 @@ public class MainActivity extends SDLActivity
                     copied ? "Virtual-pad profile imported" : "Virtual-pad profile import failed");
             }
 
-            if (mTranslationUri != null) {
+            if (mTranslationMapUri != null) {
                 TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: importing selected translation table");
                 File table = new File(mSessionDir, "runtime_translations.hex");
-                if (!syncTranslationTable(mTranslationUri, table)) {
+                if (!syncTranslationTable(mTranslationMapUri, table)) {
                     TynRuntimeDiagnostics.append(mSessionDir, "Selected translation table could not be loaded; continuing without it");
-                    mTranslationUri = null;
+                    mTranslationMapUri = null;
                 }
             }
 
@@ -561,7 +561,7 @@ public class MainActivity extends SDLActivity
         if (options != null) {
             String[] booleanKeys = {
                 "debug", "smoothScaling", "vsync", "frameSkip", "solidFonts", "pathCache",
-                "prebuiltPathCache", "fastPathEnum", "copyText", "useCJKFont"
+                "prebuiltPathCache", "fastPathEnum", "copyText", "useCJKFont", "animateAutotiles"
             };
             for (String key : booleanKeys) {
                 if (options.has(key)) {
@@ -613,7 +613,7 @@ public class MainActivity extends SDLActivity
         JSONArray rtps = new JSONArray();
         JSONArray configured = stringArray(config.opt("RTP"));
         File rtpRoot = mTynRtpRoot == null || mTynRtpRoot.trim().isEmpty()
-            ? new File(Environment.getExternalStorageDirectory(), "JoiPlay/RTP")
+            ? null
             : new File(mTynRtpRoot);
         File gameRoot = new File(GAME_FOLDER);
         int skippedForeign = 0;
@@ -623,7 +623,7 @@ public class MainActivity extends SDLActivity
             if (entry.isEmpty()) continue;
             File path = new File(entry);
             if (!path.isAbsolute()) path = new File(GAME_FOLDER, entry);
-            if (!isInsideRoot(gameRoot, path) && !isInsideRoot(rtpRoot, path)) {
+            if (!isInsideRoot(gameRoot, path) && (rtpRoot == null || !isInsideRoot(rtpRoot, path))) {
                 skippedForeign++;
                 continue;
             }
@@ -635,8 +635,10 @@ public class MainActivity extends SDLActivity
             if (!containsString(rtps, resolved)) rtps.put(resolved);
         }
 
-        File versionRtp = new File(new File(rtpRoot, versionFolder), "app");
-        boolean tynRtpAvailable = hasRtpFiles(versionRtp);
+        File versionRtp = rtpRoot == null
+            ? null
+            : new File(new File(rtpRoot, versionFolder), "app");
+        boolean tynRtpAvailable = versionRtp != null && hasRtpFiles(versionRtp);
         if (tynRtpAvailable) {
             String resolved = versionRtp.getAbsolutePath();
             if (!containsString(rtps, resolved)) rtps.put(resolved);
@@ -942,13 +944,32 @@ public class MainActivity extends SDLActivity
 
     private static int resolveRubyRuntime(String requested, String gameFolder)
     {
-        if ("187".equals(requested)) return 187;
-        if ("193".equals(requested)) return 193;
-        if ("313".equals(requested)) return 313;
+        if ("187".equals(requested)) {
+            Log.i(TAG, "Ruby runtime selection: explicit Ruby 1.8.7 override");
+            return 187;
+        }
+        if ("193".equals(requested)) {
+            Log.i(TAG, "Ruby runtime selection: explicit Ruby 1.9.3 override");
+            return 193;
+        }
+        if ("313".equals(requested)) {
+            Log.i(TAG, "Ruby runtime selection: explicit Ruby 3.1.3 override");
+            return 313;
+        }
+
+        EssentialsRuntimeProbe.Result essentials = EssentialsRuntimeProbe.detect(new File(gameFolder));
+        if (essentials.rubyRuntime != EssentialsRuntimeProbe.UNKNOWN) {
+            Log.i(TAG, "Ruby runtime auto selection: " + essentials.reason);
+            return essentials.rubyRuntime;
+        }
+
         int rgssVersion = detectRgssVersion(gameFolder);
-        if (rgssVersion == 1 || rgssVersion == 2) return 187;
-        if (rgssVersion == 3) return 193;
-        return 313;
+        int runtime = rgssVersion == 1 || rgssVersion == 2 ? 187
+            : rgssVersion == 3 ? 193 : 313;
+        Log.i(TAG, "Ruby runtime auto selection: " + essentials.reason
+            + "; falling back to RGSS generation " + rgssVersion + " -> Ruby "
+            + (runtime == 187 ? "1.8.7" : runtime == 193 ? "1.9.3" : "3.1.3"));
+        return runtime;
     }
 
     private static String shortHash(String value)
@@ -1099,9 +1120,9 @@ public class MainActivity extends SDLActivity
 
     private void startTranslationSync(final File table)
     {
-        if (mTranslationUri == null) return;
+        if (mTranslationMapUri == null) return;
         mTranslationSync = Executors.newSingleThreadScheduledExecutor();
-        final String uri = mTranslationUri;
+        final String uri = mTranslationMapUri;
         mTranslationSync.scheduleWithFixedDelay(() -> syncTranslationTable(uri, table), 2, 2, TimeUnit.SECONDS);
     }
 
@@ -1180,7 +1201,7 @@ public class MainActivity extends SDLActivity
 
         // TYN controls on top of the game surface
         sInstance = this;
-        if (mTynLaunch && mTranslationUri != null && mSessionDir != null) {
+        if (mTynLaunch && mTranslationMapUri != null && mSessionDir != null) {
             startTranslationSync(new File(mSessionDir, "runtime_translations.hex"));
         }
         if (mLayout != null) {
