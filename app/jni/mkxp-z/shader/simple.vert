@@ -7,7 +7,7 @@ uniform vec2 translation;
 attribute vec2 position;
 attribute vec2 texCoord;
 
-varying vec2 v_texCoord;
+varying highp vec2 v_texCoord;
 
 void main()
 {
