@@ -238,6 +238,45 @@ lambda { |s, name|
             rb_gc_register_address(&compatFix);
         }
         rb_eval_string("$__anyplay_syntax_errors = []");
+        rb_gv_set("$__anyplay_compatfix", compatFix);
+        // The repair pass (regex rewrites + a full parse of every script) costs seconds
+        // on a phone and gives the same answer on every launch, so its result is kept in
+        // AnyPlay_script_cache.bin, keyed by script name + content checksum.
+        VALUE cachedFix = rb_eval_string(R"RB(
+$__anyplay_ncache_ver = "n1-v9"
+$__anyplay_ncache_t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+$__anyplay_nhits = 0
+$__anyplay_ncount = 0
+$__anyplay_ncache_dirty = false
+$__anyplay_ncache = begin
+  d = File.exist?("AnyPlay_script_cache.bin") ? Marshal.load(File.binread("AnyPlay_script_cache.bin")) : nil
+  (d.is_a?(Hash) && d[:v] == $__anyplay_ncache_ver && d[:s].is_a?(Hash)) ? d : { :v => $__anyplay_ncache_ver, :s => {} }
+rescue Exception
+  { :v => $__anyplay_ncache_ver, :s => {} }
+end
+lambda { |s, name|
+  begin
+    $__anyplay_ncount += 1
+    key = [s.bytesize, s.sum(32), (defined?(Zlib) && Zlib.respond_to?(:crc32) ? Zlib.crc32(s) : 0), s[0, 48], s[-48, 48]]
+    ent = $__anyplay_ncache[:s][name.to_s]
+    if ent && ent[0] == key && ent[1].is_a?(String)
+      ($__anyplay_src ||= {})[name.to_s] = ent[1]
+      ($__anyplay_syntax_errors ||= []).concat(ent[2]) if ent[2].is_a?(Array) && !ent[2].empty?
+      $__anyplay_nhits += 1
+      next ent[1]
+    end
+    before = ($__anyplay_syntax_errors ||= []).size
+    out = $__anyplay_compatfix.call(s, name)
+    errs = $__anyplay_syntax_errors[before..-1] || []
+    $__anyplay_ncache[:s][name.to_s] = [key, out, errs]
+    $__anyplay_ncache_dirty = true
+    out
+  rescue Exception
+    $__anyplay_compatfix.call(s, name)
+  end
+}
+)RB");
+        rb_gc_register_address(&cachedFix);
         fixedScripts = rb_ary_new();
         for (long i = 0; i < scriptCount; ++i) {
             VALUE script = rb_ary_entry(scriptArray, i);
@@ -253,9 +292,24 @@ lambda { |s, name|
                 nlen = snprintf(nbuf, sizeof(nbuf), SCRIPT_SECTION_FMT, i);
             VALUE nameStr = newStringUTF8(nbuf, nlen);
             VALUE args[2] = { string, nameStr };
-            VALUE fixed = rb_funcall2(compatFix, rb_intern("call"), 2, args);
+            VALUE fixed = rb_funcall2(cachedFix, rb_intern("call"), 2, args);
             rb_ary_push(fixedScripts, fixed == Qnil ? string : fixed);
         }
+        rb_eval_string(R"RB(
+begin
+  if $__anyplay_ncache_dirty
+    File.binwrite("AnyPlay_script_cache.bin.tmp", Marshal.dump($__anyplay_ncache))
+    File.rename("AnyPlay_script_cache.bin.tmp", "AnyPlay_script_cache.bin")
+    $__anyplay_ncache_dirty = false
+  end
+rescue Exception
+end
+begin
+  ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - $__anyplay_ncache_t0) * 1000).to_i
+  AnyPlayLog.write("script prepass: #{$__anyplay_nhits}/#{$__anyplay_ncount} from cache, #{ms}ms") if defined?(AnyPlayLog)
+rescue Exception
+end
+)RB");
         rb_eval_string(R"RB(
 begin
   old = "AnyPlay_script_errors.txt"
