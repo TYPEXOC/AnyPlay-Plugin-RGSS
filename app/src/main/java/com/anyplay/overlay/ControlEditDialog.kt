@@ -42,6 +42,8 @@ import kotlin.math.roundToInt
  * gamepad editor. Redesigned compared to the reference's plain
  * spinner-and-slider form:
  *
+ *   - for the D-pad: a TYPE switch (D-pad / Joystick) — picking Joystick turns
+ *     the D-pad into a joystick (same arrow keys), with an optional 8-way mode,
  *   - LIVE PREVIEW of the control at the left (drawn by the very same
  *     ControlView the game uses) plus Copy / Delete,
  *   - searchable KEY PICKER (A-Z, 0-9, F1-F12, arrows, Enter, Esc, ...),
@@ -71,7 +73,8 @@ internal class ControlEditDialog(
 
     private val density = context.resources.displayMetrics.density
     private var cur: ControlSpec = initial
-    private val isDpad = initial.type == ControlType.DPAD
+    /** true for the D-pad AND the joystick (they are the same control slot, just a different style). */
+    private val isDpad = initial.type != ControlType.BUTTON
     private val dialog = Dialog(context)
 
     private lateinit var preview: ControlView
@@ -85,6 +88,10 @@ internal class ControlEditDialog(
     private var redRow: SliderRow? = null
     private var greenRow: SliderRow? = null
     private var blueRow: SliderRow? = null
+
+    private var titleView: TextView? = null
+    private var joystickOnly: View? = null
+    private val typeChips = LinkedHashMap<ControlType, TextView>()
 
     private val shapeChips = LinkedHashMap<ControlShape, TextView>()
     private val swatches = ArrayList<Pair<Int, View>>()
@@ -148,11 +155,12 @@ internal class ControlEditDialog(
             gravity = Gravity.CENTER_VERTICAL
         }
         val title = TextView(context).apply {
-            text = if (isDpad) "Edit D-pad" else "Edit button"
+            text = titleFor(cur.type)
             setTextColor(TEXT)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
             typeface = Typeface.DEFAULT_BOLD
         }
+        titleView = title
         header.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(
             pill("Done", fill = ACCENT, textColor = Color.parseColor("#0B1620")) { dialog.dismiss() },
@@ -233,7 +241,12 @@ internal class ControlEditDialog(
             col.addView(buildShapeChips())
         }
 
-        col.addView(sectionTitle("SIZE", first = isDpad))
+        if (isDpad) {
+            col.addView(sectionTitle("TYPE", first = true))
+            col.addView(buildTypeChips())
+        }
+
+        col.addView(sectionTitle("SIZE", first = false))
         if (isDpad) {
             val row = slider("Size", 80, 200, cur.widthDp.roundToInt(), { "$it dp" }) { v ->
                 update(cur.copy(widthDp = v.toFloat(), heightDp = v.toFloat()))
@@ -276,8 +289,88 @@ internal class ControlEditDialog(
         if (!isDpad) {
             col.addView(sectionTitle("BEHAVIOR"))
             col.addView(buildLatchRow())
+        } else {
+            // Only visible while the type is Joystick.
+            val box = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                visibility = if (cur.type == ControlType.JOYSTICK) View.VISIBLE else View.GONE
+            }
+            box.addView(sectionTitle("JOYSTICK"))
+            box.addView(buildDiagonalRow())
+            joystickOnly = box
+            col.addView(box)
         }
         return col
+    }
+
+    // ---- D-pad / Joystick type ---------------------------------------------
+
+    private fun titleFor(type: ControlType) = when (type) {
+        ControlType.JOYSTICK -> "Edit joystick"
+        ControlType.DPAD -> "Edit D-pad"
+        ControlType.BUTTON -> "Edit button"
+    }
+
+    private fun buildTypeChips(): View {
+        val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        val options = listOf(ControlType.DPAD to "D-pad", ControlType.JOYSTICK to "Joystick")
+        for ((type, name) in options) {
+            val chip = TextView(context).apply {
+                text = name
+                gravity = Gravity.CENTER
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setOnClickListener { selectType(type) }
+            }
+            typeChips[type] = chip
+            row.addView(chip, LinearLayout.LayoutParams(0, dp(36f), 1f).apply { rightMargin = dp(6f) })
+        }
+        refreshTypeChips()
+        return row
+    }
+
+    private fun selectType(type: ControlType) {
+        if (cur.type == type) return
+        update(cur.copy(type = type))
+        refreshTypeChips()
+        titleView?.text = titleFor(type)
+        joystickOnly?.visibility = if (type == ControlType.JOYSTICK) View.VISIBLE else View.GONE
+        callbacks.onCommit()
+    }
+
+    private fun refreshTypeChips() {
+        for ((type, chip) in typeChips) {
+            val selected = type == cur.type
+            chip.background = rounded(if (selected) ACCENT else FIELD, 8f)
+            chip.setTextColor(if (selected) Color.parseColor("#0B1620") else TEXT)
+            chip.typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+        }
+    }
+
+    private fun buildDiagonalRow(): View {
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val texts = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        texts.addView(TextView(context).apply {
+            text = "8-way (diagonal)"
+            setTextColor(TEXT)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        })
+        texts.addView(TextView(context).apply {
+            text = "Off = 4 directions like the D-pad. On = two arrow keys together on diagonals"
+            setTextColor(MUTED)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+        })
+        row.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(android.widget.Switch(context).apply {
+            isChecked = cur.diagonal
+            setOnCheckedChangeListener { _, checked ->
+                update(cur.copy(diagonal = checked))
+                callbacks.onCommit()
+            }
+        })
+        return row
     }
 
     // ---- Label / key / shape ---------------------------------------------
