@@ -25,7 +25,8 @@ import java.util.UUID
  *   - centers: D-pad (214,547), ENTER (1370,483), ESCAPE (1487,483),
  *     Z (1370,596), B (1487,596) -> the fractions used below.
  */
-enum class ControlType { DPAD, BUTTON }
+/** DPAD = 4 arms, JOYSTICK = analog-style stick (same arrow keys), BUTTON = one key. */
+enum class ControlType { DPAD, BUTTON, JOYSTICK }
 
 enum class ControlShape(val title: String) {
     CIRCLE("Circle"),
@@ -54,7 +55,9 @@ data class ControlSpec(
     val latch: Boolean,
     /** Center position as a fraction of the overlay (0..1). */
     val cx: Float,
-    val cy: Float
+    val cy: Float,
+    /** JOYSTICK only: true = 8 directions (two arrow keys at once on diagonals). */
+    val diagonal: Boolean = false
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -70,6 +73,7 @@ data class ControlSpec(
         put("latch", latch)
         put("cx", cx.toDouble())
         put("cy", cy.toDouble())
+        put("diagonal", diagonal)
     }
 
     companion object {
@@ -87,7 +91,8 @@ data class ControlSpec(
             color = o.optInt("color", 0x444444) and 0xFFFFFF,
             latch = o.optBoolean("latch", false),
             cx = o.optDouble("cx", 0.5).toFloat().coerceIn(0f, 1f),
-            cy = o.optDouble("cy", 0.5).toFloat().coerceIn(0f, 1f)
+            cy = o.optDouble("cy", 0.5).toFloat().coerceIn(0f, 1f),
+            diagonal = o.optBoolean("diagonal", false)
         )
     }
 }
