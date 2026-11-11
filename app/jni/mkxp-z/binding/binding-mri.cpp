@@ -3158,6 +3158,11 @@ module AnyPlayTouch
   end
 end
 
+# The cheat subsystem is evaluated as an isolated optional layer. A syntax or
+# initialization error in cheats must never abort the core Android prelude and
+# prevent unrelated games from starting.
+begin
+  eval(<<'TYRANOR_CHEATS_LAYER')
 # ---- AnyPlay cheats (RPG Maker XP / VX / Ace and Pokemon Essentials) --------
 # The Android overlay writes one command per file into the app cache folder,
 # this module reads it (every few frames), runs it, and writes a one line
@@ -6610,6 +6615,32 @@ module TyranorCheats
           end
         end
       end
+    end
+  end
+end
+TYRANOR_CHEATS_LAYER
+rescue Exception => e
+  detail = (e.backtrace || []).first(8).join("\n  ") rescue ""
+  AnyPlayLog.error("cheat layer disabled during preload: #{e.class}: #{e.message}\n  #{detail}") rescue nil
+  # Keep the public frame hook alive so the game's input, render and perf
+  # wrappers can continue. Reply to cheat requests with a clear failure instead
+  # of leaving the Android panel waiting for a timeout.
+  module TyranorCheats
+    DIR = "/data/data/com.tyranor.runtime.rgss/cache" unless const_defined?(:DIR)
+    CMD = DIR + "/tyranor_cheat_cmd.txt" unless const_defined?(:CMD)
+    REPLY = DIR + "/tyranor_cheat_reply.txt" unless const_defined?(:REPLY)
+    def self.engine; :unknown; end
+    def self.frame
+      return unless File.exist?(CMD)
+      txt = (File.read(CMD) rescue "")
+      File.delete(CMD) rescue nil
+      id = txt.to_s.split("\t", 2)[0].to_s
+      File.open(REPLY + ".tmp", "wb") do |f|
+        f.write("#{id}\tCheat layer unavailable; see TYN RGSS diagnostics.")
+      end
+      File.rename(REPLY + ".tmp", REPLY)
+    rescue Exception => fallback_error
+      AnyPlayLog.error("cheat fallback reply failed: #{fallback_error.class}: #{fallback_error.message}") rescue nil
     end
   end
 end
