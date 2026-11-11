@@ -3179,7 +3179,13 @@ module TyranorCheats
   @item_snap = nil
   @old_textspeed = nil
   @through_forced = false
+  @old_player_through = nil
+  @encounter_saved = false
+  @old_encounter_disabled = nil
+  @old_encounter_count = nil
   @battle = nil
+  @xp_critical_attacker = nil
+  @free_skill_cost_actor = nil
 
   class << self
     attr_accessor :battle
@@ -3211,6 +3217,89 @@ module TyranorCheats
 
     def ess?; engine == :essentials; end
     def ess21?; ess? && @ess21; end
+    def ess_move_class
+      return nil unless ess?
+      return Battle::Move if ess21? && defined?(Battle::Move)
+      defined?(PokeBattle_Move) ? PokeBattle_Move : nil
+    rescue Exception
+      nil
+    end
+    def ess_battler_class
+      return nil unless ess?
+      return Battle::Battler if ess21? && defined?(Battle::Battler)
+      defined?(PokeBattle_Battler) ? PokeBattle_Battler : nil
+    rescue Exception
+      nil
+    end
+    def ess_battle_class
+      return nil unless ess?
+      return Battle if ess21? && defined?(Battle)
+      defined?(PokeBattle_Battle) ? PokeBattle_Battle : nil
+    rescue Exception
+      nil
+    end
+    def class_method?(klass, name)
+      klass && (klass.method_defined?(name) || klass.private_method_defined?(name) ||
+                klass.protected_method_defined?(name))
+    rescue Exception
+      false
+    end
+
+    # Ruby 3 separates keyword arguments from a positional hash. Mark the
+    # compatibility wrappers that forward *args so keywords reach the game's
+    # original method; older Ruby versions simply skip this.
+    def preserve_keyword_forwarding(klass, method_name)
+      return unless klass && klass.respond_to?(:ruby2_keywords, true)
+      klass.send(:ruby2_keywords, method_name)
+    rescue Exception
+      nil
+    end
+
+    def fast_text_supported?
+      return true if ess? && defined?($PokemonSystem) && $PokemonSystem && $PokemonSystem.respond_to?(:textspeed=)
+      return false unless defined?(Window_Message)
+      return true if class_method?(Window_Message, :update_message)
+      engine == :ace && class_method?(Window_Message, :update_show_fast) &&
+        class_method?(Window_Message, :wait_for_one_character)
+    rescue Exception
+      false
+    end
+
+    def message_skip_supported?
+      if ess? && defined?(Window_AdvancedTextPokemon)
+        klass = Window_AdvancedTextPokemon
+        return class_method?(klass, :update) && class_method?(klass, :textspeed=) &&
+          class_method?(klass, :waitcount=) && class_method?(klass, :busy?) &&
+          class_method?(klass, :pausing?) && class_method?(klass, :resume)
+      end
+      return false unless defined?(Window_Message)
+      case engine
+      when :xp
+        class_method?(Window_Message, :update) && class_method?(Window_Message, :terminate_message)
+      when :vx
+        class_method?(Window_Message, :update_message) && class_method?(Window_Message, :input_pause) &&
+          class_method?(Window_Message, :terminate_message)
+      when :ace
+        class_method?(Window_Message, :input_pause) && class_method?(Window_Message, :update_show_fast) &&
+          class_method?(Window_Message, :wait_for_one_character) && class_method?(Window_Message, :wait)
+      else
+        class_method?(Window_Message, :update_message) && class_method?(Window_Message, :update_input)
+      end
+    rescue Exception
+      false
+    end
+
+    def message_choice_active?
+      if defined?($game_temp) && $game_temp && $game_temp.respond_to?(:choice_max)
+        return true if $game_temp.choice_max.to_i > 0
+      end
+      if defined?($game_message) && $game_message && $game_message.respond_to?(:choice?)
+        return true if $game_message.choice?
+      end
+      false
+    rescue Exception
+      false
+    end
     # Items and species are looked up by name (symbols) in Essentials v19 and
     # newer, and by number (PBItems / PBSpecies) in v17 and older.
     def gd?
@@ -3273,6 +3362,54 @@ module TyranorCheats
       false
     end
 
+    def party_battler?(battler)
+      actors.include?(battler)
+    rescue Exception
+      false
+    end
+
+    def enemy_battler?(battler)
+      return false unless $game_troop
+      list = $game_troop.respond_to?(:enemies) ? $game_troop.enemies :
+             ($game_troop.respond_to?(:members) ? $game_troop.members : [])
+      list.include?(battler)
+    rescue Exception
+      false
+    end
+
+    def xp_critical_attacker
+      @xp_critical_attacker
+    end
+
+    def with_xp_critical_attacker(attacker)
+      return yield unless engine == :xp && on?('crit') && party_battler?(attacker)
+      previous = @xp_critical_attacker
+      @xp_critical_attacker = attacker
+      begin
+        yield
+      ensure
+        @xp_critical_attacker = previous
+      end
+    end
+
+    # XP reads RPG::Skill#sp_cost while checking and consuming a skill. Keep
+    # the zero-cost override scoped to the party member whose action is being
+    # processed, so enemy skills and unrelated script code retain their costs.
+    def with_free_skill_cost(actor)
+      return yield unless on?('freeSkill') && party_battler?(actor)
+      previous = @free_skill_cost_actor
+      @free_skill_cost_actor = actor
+      begin
+        yield
+      ensure
+        @free_skill_cost_actor = previous
+      end
+    end
+
+    def free_skill_cost_scope?
+      on?('freeSkill') && party_battler?(@free_skill_cost_actor)
+    end
+
     def maxhp_of(a); a.respond_to?(:mhp) ? a.mhp : a.maxhp; end
     def maxmp_of(a)
       return a.mmp if a.respond_to?(:mmp)
@@ -3324,9 +3461,25 @@ module TyranorCheats
       when 'restore' then restore(a, b)
       when 'toggle'  then toggle(a, b == '1')
       when 'value'   then set_value(a, b)
+      when 'system_switch' then set_system_switch(a, b)
+      when 'system_variable' then set_system_variable(a, b)
+      when 'quantity' then set_quantity(a, b)
+      when 'pokemon_value' then set_pokemon_value(a, b)
+      when 'pokemon_recover' then recover_pokemon(a)
+      when 'pokemon_move' then set_pokemon_move(a, b)
+      when 'pokemon_status' then set_pokemon_status(a, b)
+      when 'pokemon_item' then set_pokemon_item(a, b)
+      when 'actor_value' then set_actor_value(a, b)
+      when 'actor_recover' then recover_actor(a)
+      when 'actor_collection' then set_actor_collection(a, b)
+      when 'actor_equip' then set_actor_equip(a, b)
+      when 'event_switch' then set_event_switch(a, b)
+      when 'battle_enemy_hp' then set_enemy_hp(a, b)
+      when 'save_slot' then select_save_slot(a)
+      when 'delete_save' then delete_save_slot(a)
       when 'give'    then give(a, b)
-      when 'run'     then run_action(a)
-      when 'list'    then list_items(a)
+      when 'run'     then run_action(a, b)
+      when 'list'    then list_data(a, b)
       else "Unknown cheat command."
       end
     rescue Exception => e
@@ -3350,6 +3503,7 @@ module TyranorCheats
         return "#{NOPE}"
       end
       if enable
+        save_encounter_state if name == 'noEncounter'
         @on[name] = true
         @item_snap = nil if name == 'items'
       else
@@ -3362,8 +3516,55 @@ module TyranorCheats
     def toggle_supported?(name)
       case name
       when 'tp'                         then engine == :ace
-      when 'fastText'                   then ess?
-      when 'oneHit', 'invincible', 'crit', 'escape', 'freeSkill' then ess?
+      when 'fastText'                   then fast_text_supported?
+      when 'msgSkip'                    then message_skip_supported?
+      when 'eventSpeed'                 then defined?(Game_Interpreter) && class_method?(Game_Interpreter, :update)
+      when 'oneHit', 'invincible'
+        ess? ? (ess_battler_class && class_method?(ess_battler_class, :pbReduceHP)) :
+          (rpgm? && defined?(Game_Battler) && class_method?(Game_Battler, :hp=))
+      when 'crit'
+        if ess?
+          ess_move_class && (class_method?(ess_move_class, :pbCritRate?) || class_method?(ess_move_class, :pbIsCritical?))
+        elsif engine == :ace
+          defined?(Game_Battler) && class_method?(Game_Battler, :item_cri) &&
+            class_method?(Game_Battler, :make_damage_value)
+        elsif engine == :xp
+          defined?(Game_Battler) && class_method?(Game_Battler, :attack_effect) &&
+            class_method?(Game_Battler, :hp=)
+        elsif engine == :vx
+          defined?(Game_Battler) && class_method?(Game_Battler, :make_attack_damage_value)
+        else
+          false
+        end
+      when 'escape'
+        if ess?
+          ess_battle_class && (class_method?(ess_battle_class, :pbCanRun?) || class_method?(ess_battle_class, :pbRun))
+        elsif engine == :xp
+          (defined?(BattleManager) && BattleManager.respond_to?(:process_escape)) ||
+            (defined?(Scene_Battle) && class_method?(Scene_Battle, :process_escape)) ||
+            (defined?(Scene_Battle) && class_method?(Scene_Battle, :update_phase2_escape) && class_method?(Scene_Battle, :battle_end))
+        elsif engine == :ace
+          defined?(BattleManager) && BattleManager.respond_to?(:process_escape)
+        elsif engine == :vx
+          (defined?(BattleManager) && BattleManager.respond_to?(:process_escape)) ||
+            (defined?(Scene_Battle) && class_method?(Scene_Battle, :process_escape))
+        else
+          false
+        end
+      when 'freeSkill'
+        if ess?
+          ess_battler_class && class_method?(ess_battler_class, :pbReducePP)
+        elsif engine == :ace
+          defined?(Game_BattlerBase) && class_method?(Game_BattlerBase, :skill_mp_cost)
+        elsif engine == :vx
+          defined?(Game_Battler) && class_method?(Game_Battler, :calc_mp_cost)
+        elsif engine == :xp
+          defined?(RPG::Skill) && class_method?(RPG::Skill, :sp_cost) &&
+            defined?(Game_Battler) && class_method?(Game_Battler, :skill_can_use?) &&
+            defined?(Scene_Battle) && class_method?(Scene_Battle, :make_skill_action_result)
+        else
+          false
+        end
       when 'hpmp', 'gold', 'status', 'items', 'noclip', 'noEncounter', 'speed'
         ess? || rpgm?
       else false
@@ -3373,13 +3574,28 @@ module TyranorCheats
     def toggle_off(name)
       case name
       when 'noclip'
-        $game_player.through = false if $game_player && @through_forced
+        if $game_player && @through_forced
+          $game_player.through = @old_player_through.nil? ? false : @old_player_through
+        end
         @through_forced = false
+        @old_player_through = nil
+      when 'noEncounter'
+        if @encounter_saved
+          if $game_system && $game_system.respond_to?(:encounter_disabled=)
+            $game_system.encounter_disabled = @old_encounter_disabled
+          end
+          if $game_player && !@old_encounter_count.nil? && $game_player.instance_variable_defined?(:@encounter_count)
+            $game_player.instance_variable_set(:@encounter_count, @old_encounter_count)
+          end
+        end
+        @encounter_saved = false
+        @old_encounter_disabled = nil
+        @old_encounter_count = nil
       when 'fastText'
-        if @old_textspeed && defined?($PokemonSystem) && $PokemonSystem
+        if !@old_textspeed.nil? && defined?($PokemonSystem) && $PokemonSystem
           $PokemonSystem.textspeed = @old_textspeed
         end
-        if @fast_text_set && defined?(MessageConfig) && MessageConfig.respond_to?(:pbSetTextSpeed)
+        if @fast_text_set && !@old_textspeed.nil? && defined?(MessageConfig) && MessageConfig.respond_to?(:pbSetTextSpeed)
           (MessageConfig.pbSetTextSpeed(MessageConfig.pbSettingToTextSpeed(@old_textspeed)) rescue nil)
         end
         @fast_text_set = false
@@ -3387,6 +3603,23 @@ module TyranorCheats
       when 'items'
         @item_snap = nil
       end
+    end
+
+    def save_encounter_state
+      return if @encounter_saved
+      @old_encounter_disabled = if $game_system && $game_system.respond_to?(:encounter_disabled)
+                                 $game_system.encounter_disabled
+                               else
+                                 nil
+                               end
+      @old_encounter_count = if $game_player && $game_player.instance_variable_defined?(:@encounter_count)
+                               $game_player.instance_variable_get(:@encounter_count)
+                             else
+                               nil
+                             end
+      @encounter_saved = true
+    rescue Exception
+      @encounter_saved = true
     end
 
     # ------------------------------------------------------------- values
@@ -3414,7 +3647,7 @@ module TyranorCheats
       when 'gold'
         t = trainer
         return "Trainer data isn't ready yet. Start or load a game first." unless t
-        t.money = n
+        t.money = [[n, 0].max, ess_money_limit].min
         "Money set to #{t.money}"
       when 'level'
         ps = pokes
@@ -3440,21 +3673,29 @@ module TyranorCheats
       end
     end
 
+    def ess_money_limit
+      maximum = if defined?(Settings::MAX_MONEY)
+                  Settings::MAX_MONEY.to_i
+                else
+                  999_999
+                end
+      [maximum, 0].max
+    rescue Exception
+      999_999
+    end
+
     def rpgm_value(name, n)
       return "Start or load a game first." unless $game_party
       case name
       when 'gold'
-        $game_party.instance_variable_set(:@gold, [n, 99_999_999].min)
-        "Gold set to #{n}"
+        value = set_rpgm_gold(n)
+        "Gold set to #{value}"
       when 'level'
         ac = actors
         return "Your party is empty." if ac.empty?
         ac.each do |a|
-          if a.respond_to?(:change_level)
-            a.change_level(n, false)
-          else
-            a.level = n
-          end
+          result = set_actor_level(a, n)
+          return result if result.is_a?(String)
         end
         "Party level set to #{n}"
       when 'exp'
@@ -3468,11 +3709,40 @@ module TyranorCheats
           end
         end
         "Party EXP set to #{n}"
-      when 'atk', 'def', 'mat', 'mdf', 'agi', 'luk'
+      when 'atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'dex'
         set_stat(name, n)
       else
         NOPE
       end
+    end
+
+    def rpgm_gold_limit
+      return $game_party.max_gold.to_i if $game_party && $game_party.respond_to?(:max_gold)
+      engine == :xp ? 999_999 : 99_999_999
+    rescue Exception
+      engine == :xp ? 999_999 : 99_999_999
+    end
+
+    def rpgm_gold_value
+      return $game_party.gold.to_i if $game_party && $game_party.respond_to?(:gold)
+      ($game_party.instance_variable_get(:@gold).to_i rescue 0)
+    rescue Exception
+      0
+    end
+
+    def set_rpgm_gold(value)
+      return 0 unless $game_party
+      maximum = [rpgm_gold_limit, 0].max
+      target = [[value.to_i, 0].max, maximum].min
+      current = rpgm_gold_value
+      if $game_party.respond_to?(:gain_gold)
+        $game_party.gain_gold(target - current)
+      elsif $game_party.respond_to?(:gold=)
+        $game_party.gold = target
+      else
+        $game_party.instance_variable_set(:@gold, target)
+      end
+      rpgm_gold_value
     end
 
     def set_stat(name, n)
@@ -3482,6 +3752,7 @@ module TyranorCheats
       ac.each do |a|
         if engine == :ace
           id = { 'atk' => 2, 'def' => 3, 'mat' => 4, 'mdf' => 5, 'agi' => 6, 'luk' => 7 }[name]
+          next unless id
           a.add_param(id, n - a.param(id))
           done = true
         elsif engine == :vx
@@ -3491,7 +3762,7 @@ module TyranorCheats
           a.send("#{k}_plus=", a.send("#{k}_plus") + (n - cur))
           done = true
         else
-          k = { 'atk' => :str, 'mat' => :int, 'agi' => :agi, 'luk' => :dex }[name]
+          k = { 'atk' => :str, 'def' => :pdef, 'mat' => :int, 'mdf' => :mdef, 'agi' => :agi, 'dex' => :dex }[name]
           next unless k
           cur = a.send(k)
           a.send("#{k}_plus=", a.send("#{k}_plus") + (n - cur))
@@ -3575,6 +3846,1373 @@ module TyranorCheats
     end
 
     # Answer is "kind<TAB>key<TAB>name" lines, one per thing the player can pick.
+    def list_data(kind = "", arg = "")
+      return list_system if kind == 'system'
+      return list_gold if kind == 'gold'
+      return list_maps if kind == 'maps'
+      return list_pokemon if kind == 'pokemon'
+      return list_pokemon_moves(arg) if kind == 'pokemon_moves'
+      return list_pokemon_move_candidates if kind == 'pokemon_move_candidates'
+      return list_pokemon_statuses(arg) if kind == 'pokemon_statuses'
+      return list_pokemon_stats(arg) if kind == 'pokemon_stats'
+      return list_actors if kind == 'actors'
+      return list_events if kind == 'events'
+      return list_minimap if kind == 'minimap'
+      return list_battle if kind == 'battle'
+      return list_battle_actors if kind == 'battle_actors'
+      return list_save_slots if kind == 'saves'
+      return list_actor_collection(arg, 'skills') if kind == 'actor_skills'
+      return list_actor_collection(arg, 'states') if kind == 'actor_states'
+      return list_actor_equips(arg) if kind == 'actor_equips'
+      return list_equip_candidates(arg) if kind == 'equip_candidates'
+      return list_capabilities if kind == 'capabilities'
+      list_items(kind)
+    end
+
+    def wire_text(value)
+      value.to_s.gsub("\t", " ").gsub("\r", " ").gsub("\n", " ")
+    rescue Exception
+      ""
+    end
+
+    def system_database
+      if ess? && defined?($cache) && $cache && $cache.respond_to?(:RXsystem)
+        value = ($cache.RXsystem rescue nil)
+        return value if value
+      end
+      return $data_system if defined?($data_system) && $data_system
+      nil
+    rescue Exception
+      nil
+    end
+
+    def system_names(database, name)
+      return nil unless database
+      value = database.respond_to?(name) ? (database.send(name) rescue nil) : nil
+      value ||= (database.instance_variable_get("@#{name}") rescue nil)
+      value.is_a?(Array) ? value : nil
+    rescue Exception
+      nil
+    end
+
+    def json_module
+      # mkxp-z exposes this parser from its native JSON binding in every
+      # bundled Ruby runtime. Prefer it so legacy Ruby builds do not depend on
+      # an optional JSON gem being present in the game's load path.
+      return HTTPLite::JSON if defined?(HTTPLite::JSON) && HTTPLite::JSON.respond_to?(:parse)
+      return JSON if defined?(JSON)
+      require 'json'
+      defined?(JSON) ? JSON : nil
+    rescue Exception
+      nil
+    end
+
+    def json_parse_value(parser, text)
+      parser.parse(text)
+    end
+
+    def json_generate_value(parser, value)
+      return parser.stringify(value) if parser.respond_to?(:stringify)
+      return parser.generate(value) if parser.respond_to?(:generate)
+      nil
+    rescue Exception
+      nil
+    end
+
+    def list_capabilities
+      out = ["E\t#{engine}"]
+      toggles = if ess?
+                  %w[hpmp gold status items noclip noEncounter speed fastText eventSpeed oneHit invincible msgSkip]
+                elsif rpgm?
+                  %w[hpmp gold status items noclip noEncounter speed fastText eventSpeed oneHit invincible msgSkip]
+                else
+                  []
+                end
+      toggles.each { |name| out << "T\t#{name}" if toggle_supported?(name) }
+      %w[crit escape freeSkill].each { |name| out << "T\t#{name}" if toggle_supported?(name) }
+      out << "T\ttp" if engine == :ace
+      values = case engine
+               when :essentials then %w[gold level exp]
+               when :xp then %w[gold level exp atk def mat mdf agi dex]
+               when :vx then %w[gold level exp atk def mat agi]
+               when :ace then %w[gold level exp atk def mat mdf agi luk]
+               else []
+               end
+      values.each { |name| out << "V\t#{name}" }
+      out << "V\tspeed" if engine != :unknown
+      out << "F\tevents" if $game_map && $game_map.respond_to?(:events)
+      out << "F\teventSelfSwitches" if event_switches && event_switches.respond_to?(:[]=)
+      out << "F\tminimap" if $game_map && $game_map.respond_to?(:width) && $game_map.respond_to?(:height)
+      out << "F\tbattle" if (ess? && @battle) || $game_troop
+      out << "F\tbattleEscape" if toggle_supported?('escape')
+      out << "F\tsaveSlots" if save_slots_supported?
+      out << "F\tpokemonParty" if ess? && trainer && trainer.respond_to?(:party)
+      party_pokemon = pokes
+      pokemon_class = if party_pokemon.first
+                        party_pokemon.first.class
+                      elsif defined?(PokeBattle_Pokemon)
+                        PokeBattle_Pokemon
+                      elsif defined?(Pokemon)
+                        Pokemon
+                      else
+                        nil
+                      end
+      can_learn_pokemon_moves = class_method?(pokemon_class, :pbLearnMoveAtIndex) || defined?(PBMove)
+      out << "F\tpokemonMoves" if ess? && can_learn_pokemon_moves &&
+        class_method?(pokemon_class, :moves) && class_method?(pokemon_class, :moves=) &&
+        !pokemon_move_catalog.empty?
+      out << "F\tpokemonStatus" if ess? && class_method?(pokemon_class, :status=)
+      out << "F\tpokemonItem" if ess? && (class_method?(pokemon_class, :item=) || class_method?(pokemon_class, :setItem))
+      out << "F\tpokemonStats" if ess? && class_method?(pokemon_class, :iv) && class_method?(pokemon_class, :iv=) && class_method?(pokemon_class, :ev) && class_method?(pokemon_class, :ev=) && (class_method?(pokemon_class, :calc_stats) || class_method?(pokemon_class, :calcStats))
+      if rpgm?
+        out << "F\tactors"
+        actor_value_fields.each { |name| out << "AS\t#{name}" }
+        out << "F\tactorSkills" if actors.any? { |actor| actor.respond_to?(:learn_skill) && actor.respond_to?(:forget_skill) }
+        out << "F\tactorStates" if actors.any? { |actor| actor.respond_to?(:add_state) && actor.respond_to?(:remove_state) }
+        out << "F\tactorEquips" if actors.any? { |actor| actor_equip_supported?(actor) }
+      end
+      out.join("\n")
+    end
+
+    def actor_value_fields
+      case engine
+      when :xp then %w[level hp mhp mp mmp atk def mat mdf agi dex]
+      when :vx then %w[level hp mhp mp mmp atk def mat agi]
+      when :ace then %w[level hp mhp mp mmp atk def mat mdf agi luk]
+      else []
+      end
+    end
+
+    def pokemon_display_name(pokemon)
+      name = pokemon.respond_to?(:name) ? pokemon.name.to_s : ""
+      species = if gd?
+                  (GameData::Species.get(pokemon.species).name rescue "")
+                elsif defined?(PBSpecies)
+                  (PBSpecies.getName(pokemon.species) rescue "")
+                else
+                  ""
+                end
+      name = species if name.empty?
+      return name if species.empty? || species == name
+      "#{name} (#{species})"
+    rescue Exception
+      name.to_s
+    end
+
+    def pokemon_item_name(pokemon)
+      return "" unless pokemon && pokemon.respond_to?(:item)
+      item = pokemon.item
+      return "" if item.nil? || item == 0 || item.to_s.empty?
+      if gd?
+        data = (GameData::Item.get(item) rescue nil)
+        return data.name.to_s if data && data.respond_to?(:name)
+      elsif defined?(PBItems) && PBItems.respond_to?(:getName)
+        name = (PBItems.getName(item.to_i) rescue nil)
+        return name.to_s unless name.nil?
+      end
+      item.to_s
+    rescue Exception
+      ""
+    end
+
+    def list_pokemon
+      return NOPE unless ess?
+      out = []
+      pokes.each_with_index do |pokemon, index|
+        next unless pokemon
+        name = wire_text(pokemon_display_name(pokemon))
+        level = pokemon.respond_to?(:level) ? pokemon.level.to_i : 0
+        hp = pokemon.respond_to?(:hp) ? pokemon.hp.to_i : 0
+        maximum = pokemon.respond_to?(:totalhp) ? pokemon.totalhp.to_i : hp
+        exp = pokemon.respond_to?(:exp) ? pokemon.exp.to_i : 0
+        egg = pokemon.respond_to?(:egg?) && pokemon.egg?
+        status = pokemon.respond_to?(:status) ? pokemon_status_key(pokemon.status) : ""
+        item = wire_text(pokemon_item_name(pokemon))
+        out << "P\t#{index}\t#{name}\t#{level}\t#{hp}\t#{maximum}\t#{exp}\t#{egg ? 1 : 0}\t#{status}\t#{item}"
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read party Pokemon: #{e.class}: #{e.message}"
+    end
+
+    POKEMON_STATUSES = [
+      [:SLEEP, "Sleep"], [:POISON, "Poison"], [:BURN, "Burn"],
+      [:PARALYSIS, "Paralysis"], [:FROZEN, "Frozen"]
+    ]
+    def pokemon_status_key(value)
+      return "" if no_status?(value)
+      return value.to_s.gsub(/^:/, "").upcase unless value.is_a?(Numeric)
+      POKEMON_STATUSES.each do |key, _name|
+        return key.to_s if defined?(PBStatuses) && PBStatuses.const_defined?(key) && PBStatuses.const_get(key).to_i == value.to_i
+      end
+      value.to_s
+    rescue Exception
+      value.to_s
+    end
+
+    def pokemon_at(index_text)
+      pokemon = pokes[index_text.to_i]
+      return [nil, "That Pokemon isn't in the current party."] unless pokemon
+      return [nil, "Egg data can't be edited here."] if pokemon.respond_to?(:egg?) && pokemon.egg?
+      [pokemon, nil]
+    end
+
+    def pokemon_move_key(move)
+      move.respond_to?(:move) ? move.move : (move.respond_to?(:id) ? move.id : nil)
+    rescue Exception
+      nil
+    end
+
+    def pokemon_move_name(key)
+      return "" if key.nil?
+      if defined?($cache) && $cache && $cache.respond_to?(:moves)
+        data = ($cache.moves[key] rescue nil)
+        return data.name.to_s if data && data.respond_to?(:name) && !data.name.to_s.empty?
+      end
+      if key.is_a?(Integer) && defined?(PBMoves) && PBMoves.respond_to?(:getName)
+        name = (PBMoves.getName(key) rescue nil)
+        return name.to_s unless name.nil? || name.to_s.empty?
+      end
+      if defined?(GameData::Move) && GameData::Move.respond_to?(:get)
+        data = (GameData::Move.get(key) rescue nil)
+        return data.name.to_s if data && data.respond_to?(:name)
+      end
+      key.to_s
+    rescue Exception
+      key.to_s
+    end
+
+    def pokemon_move_catalog
+      out = []
+      if defined?(GameData::Move) && GameData::Move.respond_to?(:each)
+        begin
+          GameData::Move.each do |move|
+            key = move.respond_to?(:id) ? move.id : nil
+            name = move.respond_to?(:name) ? move.name.to_s : ""
+            out << [key, name] if key && !name.empty?
+          end
+        rescue Exception
+          out = []
+        end
+      end
+      if out.empty? && defined?($cache) && $cache && $cache.respond_to?(:moves)
+        begin
+          data = $cache.moves
+          if data.respond_to?(:each_pair)
+            data.each_pair do |key, move|
+              name = move.respond_to?(:name) ? move.name.to_s : ""
+              out << [key, name] if key && !name.empty?
+            end
+          elsif data.respond_to?(:each_with_index)
+            data.each_with_index do |move, index|
+              next unless move
+              name = move.respond_to?(:name) ? move.name.to_s : ""
+              out << [index, name] if !name.empty? && index > 0
+            end
+          end
+        rescue Exception
+          out = []
+        end
+      end
+      if out.empty? && defined?(PBMoves) && PBMoves.respond_to?(:maxValue) && PBMoves.respond_to?(:getName)
+        (1..(PBMoves.maxValue rescue 0)).each do |id|
+          name = (PBMoves.getName(id) rescue "").to_s
+          out << [id, name] unless name.empty?
+        end
+      end
+      seen = {}
+      unique = []
+      out.each do |entry|
+        key, name = entry
+        next if key.nil? || name.to_s.empty? || seen[key.to_s]
+        seen[key.to_s] = true
+        unique << [key, name.to_s]
+      end
+      unique.sort_by { |entry| entry[1].downcase }
+    rescue Exception
+      []
+    end
+
+    def list_pokemon_moves(index_text)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      return NOPE unless pokemon.respond_to?(:moves)
+      moves = pokemon.moves || []
+      (0...4).map do |slot|
+        move = moves[slot]
+        key = pokemon_move_key(move)
+        name = key.nil? ? "" : wire_text(pokemon_move_name(key))
+        "M\t#{slot}\t#{wire_text(key)}\t#{name}"
+      end.join("\n")
+    rescue Exception => e
+      "Couldn't read Pokemon moves: #{e.class}: #{e.message}"
+    end
+
+    def list_pokemon_move_candidates
+      pokemon_move_catalog.map { |key, name| "C\t#{wire_text(key)}\t#{wire_text(name)}" }.join("\n")
+    rescue Exception => e
+      "Couldn't read move list: #{e.class}: #{e.message}"
+    end
+
+    def list_pokemon_statuses(index_text)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      return NOPE unless pokemon.respond_to?(:status)
+      current = pokemon_status_key(pokemon.status)
+      POKEMON_STATUSES.map do |key, _name|
+        "S\t#{key}\t#{current == key.to_s ? 1 : 0}"
+      end.join("\n")
+    rescue Exception => e
+      "Couldn't read Pokemon status: #{e.class}: #{e.message}"
+    end
+
+    def list_pokemon_stats(index_text)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      return NOPE unless pokemon.respond_to?(:iv) && pokemon.respond_to?(:ev)
+      out = []
+      [ ["I", pokemon.iv], ["E", pokemon.ev] ].each do |kind, values|
+        next unless values.is_a?(Array)
+        values[0, 6].each_with_index { |value, index| out << "#{kind}\t#{index}\t#{value.to_i}" }
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read Pokemon stats: #{e.class}: #{e.message}"
+    end
+
+    def set_pokemon_value(index_text, payload)
+      index = index_text.to_i
+      field, raw = payload.to_s.split("\t", 2)
+      return "Enter a whole number." unless raw.to_s =~ /\A\d+\z/
+      pokemon = pokes[index]
+      return "That Pokemon isn't in the current party." unless pokemon
+      return "Egg data can't be edited here." if pokemon.respond_to?(:egg?) && pokemon.egg?
+      value = raw.to_i
+      case field
+      when 'level'
+        return NOPE unless pokemon.respond_to?(:level=)
+        value = [[value, 1].max, max_level].min
+        pokemon.level = value
+        mon_calc(pokemon)
+      when 'exp'
+        return NOPE unless pokemon.respond_to?(:exp=)
+        value = [value, max_exp_of(pokemon)].min
+        pokemon.exp = value
+        mon_calc(pokemon)
+      when 'hp'
+        return NOPE unless pokemon.respond_to?(:hp=) && pokemon.respond_to?(:totalhp)
+        value = [[value, 0].max, pokemon.totalhp.to_i].min
+        pokemon.hp = value
+      when /\Aiv_([0-5])\z/
+        return NOPE unless pokemon.respond_to?(:iv) && pokemon.respond_to?(:iv=)
+        stats = pokemon.iv
+        return NOPE unless stats.is_a?(Array) && stats.length >= 6
+        slot = field[3, 1].to_i
+        stats = stats.dup
+        stats[slot] = [[value, 0].max, 31].min
+        pokemon.iv = stats
+        mon_calc(pokemon)
+        value = stats[slot]
+      when /\Aev_([0-5])\z/
+        return NOPE unless pokemon.respond_to?(:ev) && pokemon.respond_to?(:ev=)
+        stats = pokemon.ev
+        return NOPE unless stats.is_a?(Array) && stats.length >= 6
+        slot = field[3, 1].to_i
+        current_total = 0
+        stats.each_with_index { |n, i| current_total += n.to_i if i != slot }
+        maximum = [[252, 510 - current_total].min, 0].max
+        stats = stats.dup
+        stats[slot] = [[value, 0].max, maximum].min
+        pokemon.ev = stats
+        mon_calc(pokemon)
+        value = stats[slot]
+      else
+        return NOPE
+      end
+      "#{wire_text(pokemon_display_name(pokemon))} #{field} set to #{value}"
+    rescue Exception => e
+      "Couldn't change Pokemon: #{e.class}: #{e.message}"
+    end
+
+    def recover_pokemon(index_text)
+      pokemon = pokes[index_text.to_i]
+      return "That Pokemon isn't in the current party." unless pokemon
+      return "Eggs can't be recovered here." if pokemon.respond_to?(:egg?) && pokemon.egg?
+      pokemon.hp = pokemon.totalhp if pokemon.respond_to?(:hp=) && pokemon.respond_to?(:totalhp)
+      (mon_heal_status(pokemon) rescue nil)
+      (mon_heal_pp(pokemon) rescue nil)
+      "#{wire_text(pokemon_display_name(pokemon))} recovered"
+    rescue Exception => e
+      "Couldn't recover Pokemon: #{e.class}: #{e.message}"
+    end
+
+    def set_pokemon_move(index_text, payload)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      return NOPE unless pokemon.respond_to?(:moves) && pokemon.respond_to?(:moves=)
+      slot_text, raw_key = payload.to_s.split("\t", 2)
+      return "Choose a move slot first." unless slot_text.to_s =~ /\A[0-3]\z/
+      slot = slot_text.to_i
+      key = raw_key.to_s.strip
+      moves = (pokemon.moves || []).dup
+      return "This Pokemon has no move data." unless moves.is_a?(Array)
+      moves << nil while moves.length < 4
+      if key.empty?
+        moves[slot] = nil
+        pokemon.moves = moves
+        (pokemon.zmoves[slot] = nil rescue nil) if pokemon.respond_to?(:zmoves) && pokemon.zmoves.is_a?(Array)
+        return "Move slot cleared."
+      end
+      candidate = pokemon_move_catalog.find { |entry| entry[0].to_s == key }
+      return "That move isn't in this game's move list." unless candidate
+      move_key = candidate[0]
+      if pokemon.respond_to?(:pbLearnMoveAtIndex)
+        pokemon.pbLearnMoveAtIndex(move_key, slot)
+      elsif defined?(PBMove)
+        moves[slot] = PBMove.new(move_key)
+        pokemon.moves = moves
+        (pokemon.updateZMoveIndex(slot) rescue nil) if pokemon.respond_to?(:updateZMoveIndex)
+      else
+        return NOPE
+      end
+      "#{wire_text(pokemon_display_name(pokemon))} learned #{wire_text(candidate[1])}"
+    rescue Exception => e
+      "Couldn't change Pokemon move: #{e.class}: #{e.message}"
+    end
+
+    def set_pokemon_status(index_text, raw_status)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      return NOPE unless pokemon.respond_to?(:status=)
+      status = raw_status.to_s.strip.upcase
+      if status.empty? || status == "NONE"
+        if pokemon.respond_to?(:healStatus)
+          pokemon.healStatus
+        elsif pokemon.respond_to?(:heal_status)
+          pokemon.heal_status
+        else
+          pokemon.status = nil
+          pokemon.statusCount = 0 if pokemon.respond_to?(:statusCount=)
+        end
+        return "Pokemon status cleared."
+      end
+      allowed = POKEMON_STATUSES.find { |entry| entry[0].to_s == status }
+      return "That status isn't supported." unless allowed
+      pokemon.status = status.to_sym
+      pokemon.statusCount = 0 if pokemon.respond_to?(:statusCount=)
+      "#{wire_text(pokemon_display_name(pokemon))} status set to #{allowed[1]}"
+    rescue Exception => e
+      "Couldn't change Pokemon status: #{e.class}: #{e.message}"
+    end
+
+    def set_pokemon_item(index_text, raw_item)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      return NOPE unless pokemon.respond_to?(:item=) || pokemon.respond_to?(:setItem)
+      key = raw_item.to_s.strip
+      if key.empty? || key == "0"
+        value = nil
+        label = "No item"
+      else
+        value = gd? ? key.to_sym : key.to_i
+        if gd?
+          item = (GameData::Item.get(value) rescue nil)
+          return "That item isn't in this game's item list." unless item
+          label = item.name.to_s
+        else
+          return "That item isn't in this game's item list." if key.to_i <= 0
+          label = (PBItems.getName(key.to_i) rescue "").to_s
+          return "That item isn't in this game's item list." if label.empty?
+        end
+      end
+      if pokemon.respond_to?(:setItem)
+        pokemon.setItem(value)
+      else
+        pokemon.item = value
+      end
+      "#{wire_text(pokemon_display_name(pokemon))} held item set to #{wire_text(label)}"
+    rescue Exception => e
+      "Couldn't change Pokemon held item: #{e.class}: #{e.message}"
+    end
+
+    def actor_id_of(actor, index)
+      value = if actor.respond_to?(:actor_id) then actor.actor_id
+              elsif actor.respond_to?(:id) then actor.id
+              else index + 1 end
+      value.to_i
+    rescue Exception
+      index + 1
+    end
+
+    def actor_by_id(id_text)
+      id = id_text.to_i
+      actors.each_with_index do |actor, index|
+        return actor if actor_id_of(actor, index) == id
+      end
+      nil
+    end
+
+    def list_actors
+      return NOPE unless rpgm?
+      out = []
+      actors.each_with_index do |actor, index|
+        id = actor_id_of(actor, index)
+        name = wire_text(actor.respond_to?(:name) ? actor.name : "Actor #{id}")
+        level = actor.respond_to?(:level) ? actor.level.to_i : 0
+        hp = actor.respond_to?(:hp) ? actor.hp.to_i : 0
+        mhp = actor.respond_to?(:mhp) ? actor.mhp.to_i : (actor.respond_to?(:maxhp) ? actor.maxhp.to_i : 0)
+        mp = actor.respond_to?(:mp) ? actor.mp.to_i : (actor.respond_to?(:sp) ? actor.sp.to_i : 0)
+        mmp = actor.respond_to?(:mmp) ? actor.mmp.to_i : (actor.respond_to?(:maxsp) ? actor.maxsp.to_i : (actor.respond_to?(:maxmp) ? actor.maxmp.to_i : 0))
+        out << "A\t#{id}\t#{name}\t#{level}\t#{hp}\t#{mhp}\t#{mp}\t#{mmp}"
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read actors: #{e.class}: #{e.message}"
+    end
+
+    def set_actor_value(id_text, payload)
+      id = id_text.to_i
+      field, raw = payload.to_s.split("\t", 2)
+      return "Choose a character value first." if field.to_s.empty?
+      return "Enter a whole number." unless raw.to_s =~ /\A[-+]?\d+\z/
+      actor = actor_by_id(id)
+      return "That character is not in the current party." unless actor
+      return NOPE unless actor_value_fields.include?(field)
+      value = raw.to_i
+      case field
+      when 'level'
+        value = [[value, 1].max, (actor.respond_to?(:max_level) ? actor.max_level.to_i : 99)].min
+        result = set_actor_level(actor, value)
+        return result if result.is_a?(String)
+      when 'hp'
+        maximum = actor.respond_to?(:mhp) ? actor.mhp.to_i : actor.maxhp.to_i
+        actor.hp = [[value, 0].max, maximum].min
+      when 'mp'
+        maximum = actor.respond_to?(:mmp) ? actor.mmp.to_i : (actor.respond_to?(:maxsp) ? actor.maxsp.to_i : actor.maxmp.to_i)
+        if actor.respond_to?(:mp=)
+          actor.mp = [[value, 0].max, maximum].min
+        elsif actor.respond_to?(:sp=)
+          actor.sp = [[value, 0].max, maximum].min
+        else
+          return NOPE
+        end
+      when 'mhp', 'mmp'
+        result = set_actor_stat(actor, field, value)
+        return result if result.is_a?(String)
+      else
+        result = set_actor_stat(actor, field, value)
+        return result if result.is_a?(String)
+      end
+      actor.refresh if actor.respond_to?(:refresh)
+      "#{wire_text(actor.name)} #{field} set to #{value}"
+    rescue Exception => e
+      "Couldn't change character: #{e.class}: #{e.message}"
+    end
+
+    def set_actor_level(actor, level)
+      maximum = actor.respond_to?(:max_level) ? actor.max_level.to_i : 99
+      level = [[level.to_i, 1].max, maximum].min
+      if actor.respond_to?(:change_level)
+        actor.change_level(level, false)
+        return true
+      end
+      if actor.respond_to?(:level=)
+        actor.level = level
+        return true
+      end
+      if actor.respond_to?(:change_exp) && actor.respond_to?(:exp_for_level)
+        actor.change_exp(actor.exp_for_level(level), false)
+        return true
+      end
+      if actor.respond_to?(:exp=)
+        list = actor.respond_to?(:exp_list) ? actor.exp_list : (actor.instance_variable_get(:@exp_list) rescue nil)
+        return NOPE unless list && list.respond_to?(:[]) && list[level]
+        actor.exp = list[level]
+        return true
+      end
+      NOPE
+    rescue Exception => e
+      "Couldn't set character level: #{e.class}: #{e.message}"
+    end
+
+    def set_actor_stat(actor, name, value)
+      if engine == :ace && actor.respond_to?(:add_param) && actor.respond_to?(:param)
+        id = { 'mhp' => 0, 'mmp' => 1, 'atk' => 2, 'def' => 3, 'mat' => 4, 'mdf' => 5, 'agi' => 6, 'luk' => 7 }[name]
+        return NOPE unless id
+        actor.add_param(id, value - actor.param(id))
+        return true
+      end
+      if (engine == :xp || engine == :vx) && ['mhp', 'mmp'].include?(name)
+        key = name == 'mhp' ? :maxhp : (engine == :vx ? :maxsp : :maxsp)
+        plus = "#{key}_plus=".to_sym
+        return NOPE unless actor.respond_to?(key) && actor.respond_to?(plus)
+        actor.send(plus, actor.send("#{key}_plus").to_i + value - actor.send(key).to_i)
+        return true
+      end
+      key = if engine == :xp
+              { 'atk' => :str, 'def' => :pdef, 'mat' => :int, 'mdf' => :mdef, 'agi' => :agi, 'dex' => :dex }[name]
+            elsif engine == :vx
+              { 'atk' => :atk, 'def' => :def, 'mat' => :spi, 'agi' => :agi }[name]
+            else
+              nil
+            end
+      return NOPE unless key && actor.respond_to?(key)
+      plus = "#{key}_plus=".to_sym
+      return NOPE unless actor.respond_to?(plus)
+      actor.send(plus, actor.send("#{key}_plus").to_i + value - actor.send(key).to_i)
+      true
+    end
+
+    def recover_actor(id_text)
+      actor = actor_by_id(id_text)
+      return "That character is not in the current party." unless actor
+      if actor.respond_to?(:recover_all)
+        actor.recover_all
+      else
+        actor.hp = maxhp_of(actor) if actor.respond_to?(:hp=)
+        maxmp = maxmp_of(actor)
+        actor.mp = maxmp if actor.respond_to?(:mp=)
+        actor.sp = maxmp if actor.respond_to?(:sp=)
+        if actor.respond_to?(:states) && actor.respond_to?(:remove_state)
+          actor.states.dup.each { |state| actor.remove_state(state.respond_to?(:id) ? state.id : state) }
+        end
+      end
+      "#{wire_text(actor.name)} recovered"
+    rescue Exception => e
+      "Couldn't recover character: #{e.class}: #{e.message}"
+    end
+
+    def list_actor_collection(actor_id, collection)
+      actor = actor_by_id(actor_id)
+      return "That character is not in the current party." unless actor
+      if collection == 'skills'
+        data = defined?($data_skills) ? $data_skills : nil
+        current = actor.respond_to?(:skills) ? actor.skills : []
+        ids = current.map { |skill| skill.respond_to?(:id) ? skill.id.to_i : skill.to_i }
+        return "" unless data
+        out = []
+        (1...data.length).each do |id|
+          skill = data[id]
+          next unless skill
+          out << "C\tskill\t#{id}\t#{ids.include?(id) ? 1 : 0}\t#{wire_text(skill.name)}"
+        end
+        return out.join("\n")
+      elsif collection == 'states'
+        data = defined?($data_states) ? $data_states : nil
+        current = actor.respond_to?(:states) ? actor.states : []
+        ids = current.map { |state| state.respond_to?(:id) ? state.id.to_i : state.to_i }
+        return "" unless data
+        out = []
+        (1...data.length).each do |id|
+          state = data[id]
+          next unless state && !state.name.to_s.empty?
+          out << "C\tstate\t#{id}\t#{ids.include?(id) ? 1 : 0}\t#{wire_text(state.name)}"
+        end
+        return out.join("\n")
+      end
+      NOPE
+    rescue Exception => e
+      "Couldn't read character data: #{e.class}: #{e.message}"
+    end
+
+    def set_actor_collection(actor_id, payload)
+      parts = payload.to_s.split("\t", 3)
+      collection = parts[0].to_s
+      item_id = parts[1].to_i
+      enabled = parts[2] == '1'
+      actor = actor_by_id(actor_id)
+      return "That character is not in the current party." unless actor
+      if collection == 'skills'
+        return NOPE unless actor.respond_to?(:learn_skill) && actor.respond_to?(:forget_skill)
+        enabled ? actor.learn_skill(item_id) : actor.forget_skill(item_id)
+      elsif collection == 'states'
+        return NOPE unless actor.respond_to?(:add_state) && actor.respond_to?(:remove_state)
+        enabled ? actor.add_state(item_id) : actor.remove_state(item_id)
+      else
+        return NOPE
+      end
+      actor.refresh if actor.respond_to?(:refresh)
+      "ok"
+    rescue Exception => e
+      "Couldn't change character data: #{e.class}: #{e.message}"
+    end
+
+    def actor_equip_supported?(actor)
+      return actor.respond_to?(:equips) && actor.respond_to?(:change_equip) if engine != :xp
+      actor && actor.respond_to?(:equip) && actor.respond_to?(:weapon_id) &&
+        %w[armor1_id armor2_id armor3_id armor4_id].all? { |name| actor.respond_to?(name) }
+    rescue Exception
+      false
+    end
+
+    def actor_equip_ids(actor)
+      if engine == :xp
+        [actor.weapon_id, actor.armor1_id, actor.armor2_id, actor.armor3_id, actor.armor4_id]
+      else
+        actor.equips
+      end
+    rescue Exception
+      []
+    end
+
+    def xp_actor_can_equip?(actor, kind, slot, item_id, item)
+      return false unless engine == :xp && actor && item && item_id.to_i > 0
+      return false if slot.to_i == 0 && kind != 'weapon'
+      return false if slot.to_i > 0 && kind != 'armor'
+      if kind == 'armor'
+        return false unless item.respond_to?(:kind) && item.kind.to_i == slot.to_i - 1
+      end
+      classes = defined?($data_classes) ? $data_classes : nil
+      klass = classes && actor.respond_to?(:class_id) ? classes[actor.class_id.to_i] : nil
+      allowed = if kind == 'weapon'
+                  klass && klass.respond_to?(:weapon_set) ? klass.weapon_set : nil
+                else
+                  klass && klass.respond_to?(:armor_set) ? klass.armor_set : nil
+                end
+      return false unless allowed && allowed.include?(item_id.to_i)
+      true
+    rescue Exception
+      false
+    end
+
+    def list_actor_equips(actor_id)
+      actor = actor_by_id(actor_id)
+      return "That character is not in the current party." unless actor
+      return NOPE unless actor_equip_supported?(actor)
+      if engine == :xp
+        return actor_equip_ids(actor).each_with_index.map do |item_id, index|
+          kind = index == 0 ? 'weapon' : 'armor'
+          item = item_id.to_i > 0 ? (table_for(kind)[item_id.to_i] rescue nil) : nil
+          slot_name = index == 0 ? 'Weapon' : "Armor #{index}"
+          "Q\t#{index}\t#{item_id.to_i}\t#{kind}\t#{slot_name}\t#{wire_text(item && item.respond_to?(:name) ? item.name : 'None')}"
+        end.join("\n")
+      end
+      equip_slots = actor.respond_to?(:equip_slots) ? actor.equip_slots : []
+      terms = ($data_system && $data_system.respond_to?(:terms)) ? $data_system.terms : nil
+      etypes = terms && terms.respond_to?(:etypes) ? terms.etypes : []
+      actor.equips.each_with_index.map do |item, index|
+        slot_type = equip_slots[index].to_i rescue 0
+        slot_name = (etypes[slot_type].to_s rescue "")
+        slot_name = "Slot #{index + 1}" if slot_name.empty?
+        kind = item && defined?($data_weapons) && $data_weapons && $data_weapons[item.id] ? "weapon" : "armor"
+        item_id = item && item.respond_to?(:id) ? item.id.to_i : 0
+        item_name = item && item.respond_to?(:name) ? item.name.to_s : "None"
+        "Q\t#{index}\t#{item_id}\t#{kind}\t#{wire_text(slot_name)}\t#{wire_text(item_name)}"
+      end.join("\n")
+    rescue Exception => e
+      "Couldn't read equipment: #{e.class}: #{e.message}"
+    end
+
+    def list_equip_candidates(payload)
+      actor_id, slot_text = payload.to_s.split("\t", 2)
+      actor = actor_by_id(actor_id)
+      return "That character is not in the current party." unless actor
+      return NOPE unless actor_equip_supported?(actor)
+      slot = slot_text.to_i
+      slots = actor_equip_ids(actor)
+      return "That equipment slot doesn't exist." unless slot >= 0 && slot < slots.length
+      out = ["Q\tnone\t0\tNone"]
+      %w[weapon armor].each do |kind|
+        table = table_for(kind)
+        next unless table
+        (1...table.length).each do |id|
+          item = table[id]
+          next unless item
+          next if engine == :xp && !xp_actor_can_equip?(actor, kind, slot, id, item)
+          count = if engine == :xp && $game_party.respond_to?("#{kind}_number")
+                    ($game_party.send("#{kind}_number", id) rescue 0)
+                  elsif $game_party.respond_to?(:item_number)
+                    ($game_party.item_number(item) rescue 0)
+                  elsif $game_party.respond_to?("#{kind}_number")
+                    ($game_party.send("#{kind}_number", id) rescue 0)
+                  else
+                    0
+                  end
+          next unless count.to_i > 0
+          next if actor.respond_to?(:equippable?) && !(actor.equippable?(item) rescue false)
+          out << "Q\t#{kind}\t#{id}\t#{wire_text(item.name)}"
+        end
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read equipment choices: #{e.class}: #{e.message}"
+    end
+
+    def set_actor_equip(actor_id, payload)
+      parts = payload.to_s.split("\t", 3)
+      slot = parts[0].to_i
+      kind = parts[1].to_s
+      item_id = parts[2].to_i
+      actor = actor_by_id(actor_id)
+      return "That character is not in the current party." unless actor
+      return NOPE unless actor_equip_supported?(actor)
+      slots = actor_equip_ids(actor)
+      return "That equipment slot doesn't exist." unless slot >= 0 && slot < slots.length
+      if engine == :xp
+        expected_kind = slot == 0 ? 'weapon' : 'armor'
+        return "Choose an item for this equipment slot." unless kind == expected_kind
+        item = item_id > 0 ? (table_for(kind)[item_id] rescue nil) : nil
+        return "That item doesn't exist." if item_id > 0 && !item
+        return "That item can't be equipped in this slot." if item_id > 0 && !xp_actor_can_equip?(actor, kind, slot, item_id, item)
+        actor.equip(slot, item_id)
+        equipped_id = slot == 0 ? actor.weapon_id.to_i : actor.send("armor#{slot}_id").to_i
+        return "This item isn't in the party inventory or can't be equipped." unless equipped_id == item_id
+        actor.refresh if actor.respond_to?(:refresh)
+        return "ok"
+      end
+      item = if item_id == 0
+               nil
+             elsif %w[weapon armor].include?(kind)
+               table_for(kind)[item_id] rescue nil
+             else
+               return "Choose an equipment item first."
+             end
+      return "That item doesn't exist." if item_id > 0 && !item
+      return "This character can't equip that item." if item && actor.respond_to?(:equippable?) && !(actor.equippable?(item) rescue false)
+      actor.change_equip(slot, item)
+      actor.refresh if actor.respond_to?(:refresh)
+      "ok"
+    rescue Exception => e
+      "Couldn't change equipment: #{e.class}: #{e.message}"
+    end
+
+    def set_quantity(kind, payload)
+      key, count_text = payload.to_s.split("\t", 2)
+      return "Choose an item first." if key.to_s.empty?
+      return "Enter a quantity from 0 to 999999." unless count_text.to_s =~ /\A\d+\z/
+      count = [[count_text.to_i, 0].max, 999999].min
+      if ess?
+        return "The Essentials bag is unavailable." unless bag && kind == 'item'
+        item = gd? ? key.to_sym : key.to_i
+        current = bag_qty(item).to_i
+        if count < current
+          removed = if bag.respond_to?(:remove) then bag.remove(item, current - count)
+                    elsif bag.respond_to?(:pbDeleteItem) then bag.pbDeleteItem(item, current - count)
+                    else false end
+          return "This bag doesn't support removing that item." unless removed
+        elsif count > current
+          return "The bag is full or doesn't accept this amount." unless bag_add(item, count - current)
+        end
+      elsif rpgm?
+        return "Start or load a game first." unless $game_party
+        return NOPE unless %w[item weapon armor].include?(kind)
+        id = key.to_i
+        return "That item ID is invalid." unless id > 0
+        if engine == :xp
+          current = $game_party.send("#{kind}_number", id).to_i
+          $game_party.send("gain_#{kind}", id, count - current)
+        else
+          item = table_for(kind)[id] rescue nil
+          return "That item ID doesn't exist." unless item
+          current = $game_party.item_number(item).to_i
+          $game_party.gain_item(item, count - current)
+        end
+      else
+        return NOPE
+      end
+      actual = if ess?
+                 bag_qty(item).to_i
+               elsif engine == :xp
+                 $game_party.send("#{kind}_number", id).to_i
+               else
+                 $game_party.item_number(table_for(kind)[id]).to_i
+               end
+      actual == count ? "Quantity set to #{actual}" : "Game inventory limit set the quantity to #{actual}"
+    rescue Exception => e
+      "Couldn't set quantity: #{e.class}: #{e.message}"
+    end
+
+    # The game's System database contains the labels used by its own debug
+    # screen. Values remain in the game's live Game_Switches/Game_Variables.
+    def list_system
+      return "Start or load a game first." unless $game_switches && $game_variables
+      database = system_database
+      return "The game's System database is unavailable." unless database
+      switches = system_names(database, :switches)
+      variables = system_names(database, :variables)
+      return "The game's switch and variable tables are unavailable." unless switches && variables
+      out = []
+      [switches, variables].each_with_index do |names, group|
+        limit = names.length - 1
+        1.upto(limit) do |id|
+          name = wire_text(names[id])
+          name = (group == 0 ? "Switch #{id}" : "Variable #{id}") if name.empty?
+          if group == 0
+            value = ($game_switches[id] ? "1" : "0")
+            out << "S\t#{id}\t#{value}\t#{name}"
+          else
+            value = $game_variables[id]
+            if value.is_a?(Numeric)
+              type = 'number'
+              text = wire_text(value)
+            elsif value == true || value == false
+              type = 'boolean'
+              text = value ? 'true' : 'false'
+            elsif value.nil?
+              type = 'json'
+              text = 'null'
+            elsif value.is_a?(String)
+              type = 'string'
+              text = wire_text(value)
+            elsif value.is_a?(Array) || value.is_a?(Hash)
+              parser = json_module
+              if parser
+                serialized = json_generate_value(parser, value)
+                if serialized
+                  type = 'json'
+                  text = wire_text(serialized)
+                else
+                  type = 'complex'
+                  text = "<#{value.class}>"
+                end
+              else
+                type = 'complex'
+                text = "<#{value.class}>"
+              end
+            else
+              type = 'complex'
+              text = "<#{value.class}>"
+            end
+            out << "V\t#{id}\t#{type}\t#{text}\t#{name}"
+          end
+        end
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read game switches and variables: #{e.class}: #{e.message}"
+    end
+
+    def refresh_game_map
+      if $game_map && $game_map.respond_to?(:need_refresh=)
+        $game_map.need_refresh = true
+      end
+    rescue Exception
+      nil
+    end
+
+    def set_system_switch(id_text, value)
+      return "Start or load a game first." unless $game_switches
+      id = id_text.to_i
+      database = system_database
+      names = system_names(database, :switches)
+      return "That switch ID is not in this game's System database." unless id > 0 && names && id < names.length
+      return "Switch value must be 0 or 1." unless value == '0' || value == '1'
+      $game_switches[id] = (value == '1')
+      refresh_game_map
+      ""
+    rescue Exception => e
+      "Couldn't set switch #{id_text}: #{e.class}: #{e.message}"
+    end
+
+    def set_system_variable(id_text, value)
+      return "Start or load a game first." unless $game_variables
+      id = id_text.to_i
+      database = system_database
+      names = system_names(database, :variables)
+      return "That variable ID is not in this game's System database." unless id > 0 && names && id < names.length
+      parser = json_module
+      begin
+        # Valid JSON may change the variable's type; other input is stored as
+        # a Ruby String so ordinary text remains directly editable.
+        replacement = parser ? json_parse_value(parser, value.to_s) : value.to_s
+      rescue Exception
+        replacement = value.to_s
+      end
+      $game_variables[id] = replacement
+      refresh_game_map
+      ""
+    rescue Exception => e
+      "Couldn't set variable #{id_text}: #{e.class}: #{e.message}"
+    end
+
+    def map_info_table
+      if ess? && defined?($cache) && $cache && $cache.respond_to?(:mapinfos)
+        value = ($cache.mapinfos rescue nil)
+        return value if value
+      end
+      return $data_mapinfos if defined?($data_mapinfos) && $data_mapinfos
+      ext = case engine
+            when :xp, :essentials then 'rxdata'
+            when :vx then 'rvdata'
+            when :ace then 'rvdata2'
+            else return nil
+            end
+      (load_data("Data/MapInfos.#{ext}") rescue nil)
+    rescue Exception
+      nil
+    end
+
+    def map_info_name(info)
+      value = if info.respond_to?(:name)
+                (info.name rescue nil)
+              else
+                (info.instance_variable_get(:@name) rescue nil)
+              end
+      wire_text(value)
+    rescue Exception
+      ""
+    end
+
+    def map_info_parent(info)
+      value = if info.respond_to?(:parent_id)
+                (info.parent_id rescue nil)
+              elsif info.respond_to?(:parentId)
+                (info.parentId rescue nil)
+              else
+                (info.instance_variable_get(:@parent_id) rescue nil)
+              end
+      value.to_i
+    rescue Exception
+      0
+    end
+
+    def map_info_depth(id, table)
+      depth = 0
+      seen = {}
+      info = table.is_a?(Hash) ? table[id] : (table.is_a?(Array) ? table[id] : nil)
+      parent = map_info_parent(info)
+      while parent > 0 && depth < 32 && !seen[parent]
+        seen[parent] = true
+        ancestor = table.is_a?(Hash) ? table[parent] : (table.is_a?(Array) ? table[parent] : nil)
+        break unless ancestor
+        depth += 1
+        parent = map_info_parent(ancestor)
+      end
+      depth
+    rescue Exception
+      0
+    end
+
+    def map_info_entries
+      table = map_info_table
+      return [] unless table
+      out = []
+      if table.is_a?(Hash)
+        table.each do |id, info|
+          next unless id.to_s =~ /\A\d+\z/
+          out << [id.to_i, map_info_name(info)] if info
+        end
+      elsif table.is_a?(Array)
+        table.each_with_index do |info, id|
+          out << [id, map_info_name(info)] if id > 0 && info
+        end
+      end
+      out.sort_by { |entry| entry[0] }
+    rescue Exception
+      []
+    end
+
+    def list_maps
+      current = ($game_map && $game_map.respond_to?(:map_id)) ? $game_map.map_id.to_i : 0
+      table = map_info_table
+      x = ($game_player && $game_player.respond_to?(:x)) ? $game_player.x.to_i : nil
+      y = ($game_player && $game_player.respond_to?(:y)) ? $game_player.y.to_i : nil
+      direction = ($game_player && $game_player.respond_to?(:direction)) ? $game_player.direction.to_i : nil
+      map_info_entries.map do |id, name|
+        name = "Map #{id}" if name.empty?
+        here = id == current
+        map_x = here && !x.nil? ? x : ""
+        map_y = here && !y.nil? ? y : ""
+        map_direction = here && !direction.nil? ? direction : ""
+        "#{id}\t#{here ? 1 : 0}\t#{map_info_depth(id, table)}\t#{map_x}\t#{map_y}\t#{map_direction}\t#{name}"
+      end.join("\n")
+    rescue Exception => e
+      "Couldn't read map list: #{e.class}: #{e.message}"
+    end
+
+    def event_switches
+      switches = if defined?($game_self_switches) && $game_self_switches then $game_self_switches
+                elsif defined?($game_selfswitches) && $game_selfswitches then $game_selfswitches
+                else nil end
+      switches
+    rescue Exception
+      nil
+    end
+
+    def list_events
+      return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:events)
+      map_id = $game_map.respond_to?(:map_id) ? $game_map.map_id.to_i : 0
+      switches = event_switches
+      out = ["M\t#{map_id}"]
+      $game_map.events.each do |id, live|
+        next unless live
+        info = live.respond_to?(:event) ? live.event : nil
+        name = info && info.respond_to?(:name) ? info.name : nil
+        pages = info && info.respond_to?(:pages) ? info.pages : []
+        first_page = pages && pages[0]
+        commands = first_page && first_page.respond_to?(:list) ? first_page.list : []
+        name = "Event #{id}" if name.to_s.empty?
+        values = []
+        %w[A B C D].each do |letter|
+          value = false
+          if switches && switches.respond_to?(:[])
+            value = (switches[[map_id, id.to_i, letter]] rescue false)
+          end
+          values << (value ? 1 : 0)
+        end
+        x = live.respond_to?(:x) ? live.x.to_i : 0
+        y = live.respond_to?(:y) ? live.y.to_i : 0
+        out << "E\t#{id.to_i}\t#{wire_text(name)}\t#{x}\t#{y}\t#{values.join("\t")}\t#{pages ? pages.length : 0}\t#{commands ? commands.length : 0}"
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read map events: #{e.class}: #{e.message}"
+    end
+
+    def set_event_switch(id_text, payload)
+      letter, enabled = payload.to_s.split("\t", 2)
+      return "This game doesn't expose self-switches." unless event_switches && event_switches.respond_to?(:[]=)
+      return "Choose on or off." unless enabled == '1' || enabled == '0'
+      return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:map_id)
+      id = id_text.to_i
+      return "That event doesn't exist on this map." unless $game_map.respond_to?(:events) && $game_map.events[id]
+      switches = event_switches
+      return "This game doesn't expose self-switches." unless switches && switches.respond_to?(:[]=)
+      if letter == 'ALL'
+        %w[A B C D].each { |key| switches[[ $game_map.map_id.to_i, id, key ]] = (enabled == '1') }
+      else
+        return "Use a self-switch from A to D." unless %w[A B C D].include?(letter)
+        switches[[ $game_map.map_id.to_i, id, letter ]] = (enabled == '1')
+      end
+      refresh_game_map
+      "ok"
+    rescue Exception => e
+      "Couldn't change self-switch: #{e.class}: #{e.message}"
+    end
+
+    def list_minimap
+      return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:width) && $game_map.respond_to?(:height)
+      source_width = [[$game_map.width.to_i, 1].max, 8192].min
+      source_height = [[$game_map.height.to_i, 1].max, 8192].min
+      step = 1
+      while ((source_width + step - 1) / step) * ((source_height + step - 1) / step) > 65536
+        step += 1
+      end
+      width = (source_width + step - 1) / step
+      height = (source_height + step - 1) / step
+      px = $game_player && $game_player.respond_to?(:x) ? $game_player.x.to_i / step : -1
+      py = $game_player && $game_player.respond_to?(:y) ? $game_player.y.to_i / step : -1
+      grid = Array.new(height) { Array.new(width, '#') }
+      height.times do |y|
+        width.times do |x|
+          open = false
+          [2, 4, 6, 8].each do |direction|
+            begin
+              if $game_map.passable?(x * step, y * step, direction)
+                open = true
+                break
+              end
+            rescue Exception
+            end
+          end
+          grid[y][x] = '.' if open
+        end
+      end
+      events = []
+      if $game_map.respond_to?(:events)
+        $game_map.events.each do |event_id, event|
+          next unless event && event.respond_to?(:x) && event.respond_to?(:y)
+          x = event.x.to_i / step; y = event.y.to_i / step
+          grid[y][x] = 'E' if x >= 0 && y >= 0 && x < width && y < height
+          events << "E\t#{event_id.to_i}\t#{x}\t#{y}" if x >= 0 && y >= 0 && x < width && y < height
+        end
+      end
+      grid[py][px] = '@' if px >= 0 && py >= 0 && px < width && py < height
+      out = ["H\t#{width}\t#{height}\t#{px}\t#{py}"]
+      grid.each { |row| out << "R\t#{row.join}" }
+      out.concat(events)
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read map layout: #{e.class}: #{e.message}"
+    end
+
+    def battle_enemies
+      if ess? && @battle
+        battlers = @battle.respond_to?(:battlers) ? @battle.battlers : []
+        return battlers.compact.select { |b| foe?(@battle, b.index) }.map { |b| [b.index.to_i, b.name.to_s, b.hp.to_i, (b.respond_to?(:totalhp) ? b.totalhp.to_i : b.hp.to_i)] }
+      end
+      return [] unless $game_troop
+      values = $game_troop.respond_to?(:enemies) ? $game_troop.enemies : ($game_troop.respond_to?(:members) ? $game_troop.members : [])
+      values.each_with_index.map do |enemy, index|
+        [index, (enemy.respond_to?(:name) ? enemy.name.to_s : "Enemy #{index + 1}"), enemy.respond_to?(:hp) ? enemy.hp.to_i : 0,
+         (enemy.respond_to?(:mhp) ? enemy.mhp.to_i : (enemy.respond_to?(:maxhp) ? enemy.maxhp.to_i : 0))]
+      end
+    rescue Exception
+      []
+    end
+
+    def list_battle
+      return NEED_BATTLE unless in_battle?
+      battle_enemies.map { |row| "B\t#{row[0]}\t#{wire_text(row[1])}\t#{row[2]}\t#{row[3]}" }.join("\n")
+    rescue Exception => e
+      "Couldn't read battle: #{e.class}: #{e.message}"
+    end
+
+    def list_battle_actors
+      return NEED_BATTLE unless in_battle?
+      rows = if ess? && @battle
+               @battle.battlers.compact.reject { |battler| foe?(@battle, battler.index) }.map do |battler|
+                 [battler.index.to_i, battler.name.to_s, battler.hp.to_i,
+                  (battler.respond_to?(:totalhp) ? battler.totalhp.to_i : battler.hp.to_i)]
+               end
+             else
+               list = $game_party && $game_party.respond_to?(:battle_members) ? $game_party.battle_members : actors
+               list.each_with_index.map do |actor, index|
+                 [index, actor.respond_to?(:name) ? actor.name.to_s : "Actor #{index + 1}",
+                  actor.respond_to?(:hp) ? actor.hp.to_i : 0,
+                  actor.respond_to?(:mhp) ? actor.mhp.to_i : maxhp_of(actor).to_i]
+               end
+             end
+      rows.map { |row| "L\t#{row[0]}\t#{wire_text(row[1])}\t#{row[2]}\t#{row[3]}" }.join("\n")
+    rescue Exception => e
+      "Couldn't read party battle status: #{e.class}: #{e.message}"
+    end
+
+    def set_enemy_hp(index_text, hp_text)
+      return NEED_BATTLE unless in_battle?
+      return "Enter a non-negative HP value." unless hp_text.to_s =~ /\A\d+\z/
+      index = index_text.to_i
+      value = hp_text.to_i
+      if ess? && @battle
+        enemy = @battle.battlers.compact.find { |b| b.index.to_i == index && foe?(@battle, b.index) }
+        return "That enemy isn't in the current battle." unless enemy
+        max = enemy.respond_to?(:totalhp) ? enemy.totalhp.to_i : enemy.hp.to_i
+        target = [[value, 0].max, max].min
+        if enemy.respond_to?(:hp=)
+          enemy.hp = target
+        elsif enemy.respond_to?(:pbReduceHP) && target <= enemy.hp
+          enemy.pbReduceHP(enemy.hp - target, false)
+        else
+          return NOPE
+        end
+        enemy.pbFaint(true) if target == 0 && enemy.respond_to?(:pbFaint)
+      else
+        rows = $game_troop.respond_to?(:enemies) ? $game_troop.enemies : ($game_troop.respond_to?(:members) ? $game_troop.members : [])
+        enemy = rows[index]
+        return "That enemy isn't in the current battle." unless enemy
+        max = enemy.respond_to?(:mhp) ? enemy.mhp.to_i : enemy.maxhp.to_i
+        enemy.hp = [[value, 0].max, max].min
+        enemy.refresh if enemy.respond_to?(:refresh)
+      end
+      "Enemy HP updated"
+    rescue Exception => e
+      "Couldn't change enemy HP: #{e.class}: #{e.message}"
+    end
+
+    def safe_map_position(map)
+      width = map.width.to_i
+      height = map.height.to_i
+      return nil if width <= 0 || height <= 0
+      100.times do
+        x = rand(width)
+        y = rand(height)
+        next if map.respond_to?(:valid?) && !map.valid?(x, y)
+        passable = false
+        if map.respond_to?(:passableStrict?)
+          passable = (map.passableStrict?(x, y, 0, $game_player) rescue false)
+        elsif map.respond_to?(:passable?)
+        # RGSS uses the same directional values for XP, VX and VX Ace.
+        directions = [2, 4, 6, 8]
+          directions.each do |direction|
+            if (map.passable?(x, y, direction) rescue false)
+              passable = true
+              break
+            end
+          end
+        end
+        next unless passable
+        blocked = false
+        if map.respond_to?(:events)
+          map.events.values.each do |event|
+            next unless event.x == x && event.y == y
+            next if event.respond_to?(:through) && event.through
+            character = event.respond_to?(:character_name) ? event.character_name.to_s : ""
+            tile = event.respond_to?(:tile_id) ? event.tile_id.to_i : 0
+            if !character.empty? || tile > 0
+              blocked = true
+              break
+            end
+          end
+        end
+        return [x, y] unless blocked
+      end
+      nil
+    rescue Exception
+      nil
+    end
+
+    def warp_map(id_text, coordinate_text = "")
+      return "Start or load a game first." unless $game_player && $game_map
+      id = id_text.to_i
+      return "Enter a valid map ID." unless id > 0
+      info = map_info_table
+      exists = info.is_a?(Hash) ? (info[id] || info[id.to_s]) : (info.is_a?(Array) ? info[id] : nil)
+      return "That map ID is not in this game's MapInfos database." unless exists
+      map = Game_Map.new
+      map.setup(id)
+      position = nil
+      if !coordinate_text.to_s.empty?
+        coords = coordinate_text.to_s.split("\t", 2)
+        return "Enter both map coordinates." unless coords.length == 2 && coords[0] =~ /\A\d+\z/ && coords[1] =~ /\A\d+\z/
+        x = coords[0].to_i; y = coords[1].to_i
+        valid = x >= 0 && y >= 0 && x < map.width.to_i && y < map.height.to_i
+        valid = false if valid && map.respond_to?(:valid?) && !(map.valid?(x, y) rescue false)
+        return "That location is outside the map." unless valid
+        position = [x, y]
+      else
+        position = safe_map_position(map)
+      end
+      return "Couldn't find a passable landing tile on that map." unless position
+      x, y = position
+      if ess?
+        # Older Essentials versions use the pending-transfer fields from their
+        # debug menu. Newer Rejuvenation exposes a parameterized helper.
+        helper = (Object.new.method(:pbWarpToMap) rescue nil)
+        if helper && helper.arity != 0
+          return "The game's map warp failed." unless helper.call(id, x, y)
+          return "ok"
+        end
+        if defined?(Scene_Map) && defined?($scene) && $scene.is_a?(Scene_Map) && $scene.respond_to?(:transfer_player)
+          $game_temp.player_new_map_id = id
+          $game_temp.player_new_x = x
+          $game_temp.player_new_y = y
+          $game_temp.player_new_direction = 2
+          $scene.transfer_player
+          $game_map.refresh if $game_map.respond_to?(:refresh)
+        else
+          # Reborn and Desolation expose a zero-argument pbWarpToMap that opens
+          # their own interactive picker. Their debug menu applies the selected
+          # destination through MapFactory when it is opened outside Scene_Map;
+          # use the same game-owned transfer path with our already selected map
+          # and coordinates instead of rejecting the action from menus/battles.
+          return "This game doesn't expose a map transfer method for this screen." unless
+            defined?($MapFactory) && $MapFactory && $MapFactory.respond_to?(:setup) &&
+            $game_player.respond_to?(:moveto)
+          (Kernel.pbCancelVehicles rescue nil)
+          $MapFactory.setup(id)
+          $game_player.moveto(x, y)
+          $game_player.turn_down if $game_player.respond_to?(:turn_down)
+          $game_map.update if $game_map && $game_map.respond_to?(:update)
+          $game_map.autoplay if $game_map && $game_map.respond_to?(:autoplay)
+          $game_map.refresh if $game_map && $game_map.respond_to?(:refresh)
+        end
+      elsif engine == :xp
+        $game_temp.player_new_map_id = id
+        $game_temp.player_new_x = x
+        $game_temp.player_new_y = y
+        $game_temp.player_new_direction = 2
+        $game_temp.player_transferring = true
+      elsif engine == :vx || engine == :ace
+        return "This game does not expose the native transfer method." unless $game_player.respond_to?(:reserve_transfer)
+        $game_player.reserve_transfer(id, x, y, 2)
+      else
+        return NOPE
+      end
+      "ok"
+    rescue Exception => e
+      "Map warp failed: #{e.class}: #{e.message}"
+    end
+
     def list_items(_ignored = "")
       out = []
       case engine
@@ -3582,21 +5220,22 @@ module TyranorCheats
         if gd?
           GameData::Item.each do |i|
             n = i.name.to_s
-            out << "item\t#{i.id}\t#{n}" unless n.empty?
+            description = i.respond_to?(:description) ? wire_text(i.description) : ""
+            out << "item\t#{i.id}\t#{quantity_of('item', i.id)}\t#{wire_text(n)}\t#{description}" unless n.empty?
           end
           GameData::Species.each do |s|
             next if s.form != 0
             n = s.name.to_s
-            out << "pokemon\t#{s.species}\t#{n}" unless n.empty?
+            out << "pokemon\t#{s.species}\t0\t#{wire_text(n)}\t" unless n.empty?
           end
         else
           (1..(PBItems.maxValue rescue 0)).each do |i|
             n = (PBItems.getName(i) rescue "").to_s
-            out << "item\t#{i}\t#{n}" unless n.empty?
+            out << "item\t#{i}\t#{quantity_of('item', i)}\t#{wire_text(n)}\t" unless n.empty?
           end
           (1..(PBSpecies.maxValue rescue 0)).each do |i|
             n = (PBSpecies.getName(i) rescue "").to_s
-            out << "pokemon\t#{i}\t#{n}" unless n.empty?
+            out << "pokemon\t#{i}\t0\t#{wire_text(n)}\t" unless n.empty?
           end
         end
       when :xp, :vx, :ace
@@ -3607,21 +5246,515 @@ module TyranorCheats
             o = t[i]
             next unless o
             n = o.name.to_s
-            out << "#{kind}\t#{i}\t#{n}" unless n.empty?
+            description = o.respond_to?(:description) ? wire_text(o.description) : ""
+            out << "#{kind}\t#{i}\t#{quantity_of(kind, i)}\t#{wire_text(n)}\t#{description}" unless n.empty?
           end
         end
       end
       out.join("\n")
     end
 
+    def list_gold
+      amount = if ess?
+                 t = trainer
+                 t && t.respond_to?(:money) ? t.money.to_i : 0
+               elsif $game_party && $game_party.respond_to?(:gold)
+                 $game_party.gold.to_i
+               else
+                 0
+               end
+      "G\t#{amount}"
+    rescue Exception => e
+      "Couldn't read gold: #{e.class}: #{e.message}"
+    end
+
+    def quantity_of(kind, key)
+      if ess?
+        return 0 unless kind == 'item' && bag
+        bag_qty(gd? ? key.to_sym : key.to_i).to_i
+      elsif engine == :xp
+        $game_party ? $game_party.send("#{kind}_number", key.to_i).to_i : 0
+      elsif rpgm?
+        item = table_for(kind)[key.to_i] rescue nil
+        $game_party && item ? $game_party.item_number(item).to_i : 0
+      else
+        0
+      end
+    rescue Exception
+      0
+    end
+
     # ------------------------------------------------------ one-click actions
-    def run_action(name)
+    def run_action(name, options = "")
+      if name.to_s =~ /\AsaveSlot:(\d+)\z/
+        return save_slot($1)
+      end
+      if name.to_s =~ /\AloadSlot:(\d+)\z/
+        return load_slot($1)
+      end
+      return warp_map(name.to_s.split(':', 2)[1], options) if name.to_s.index('warp:') == 0
       case name
       when 'maxExp'        then max_exp
       when 'instantWin'    then instant_win
+      when 'killEnemies'   then kill_enemies
       when 'fullInventory' then full_inventory
+      when 'recoverParty'  then recover_party
+      when 'maxGold'       then max_gold
+      when 'forceVictory'  then force_victory
+      when 'forceEscape'   then force_escape
+      when 'saveScreen'    then open_native_screen(:save)
+      when 'loadScreen'    then open_native_screen(:load)
       else "Unknown action."
       end
+    end
+
+    def save_scene
+      return nil unless defined?(Scene_Save)
+      engine == :vx ? Scene_Save.new(true, false, false) : Scene_Save.new
+    rescue Exception
+      nil
+    end
+
+    def load_scene
+      return nil unless defined?(Scene_Load)
+      engine == :vx ? Scene_Load.new(false, false, false) : Scene_Load.new
+    rescue Exception
+      nil
+    end
+
+    def save_slot_path(slot)
+      id = slot.to_i
+      return nil if id < 1
+      if ess? && defined?(RTP) && RTP.respond_to?(:getSaveSlotPath)
+        return RTP.getSaveSlotPath(id)
+      end
+      if engine == :ace && defined?(DataManager) && DataManager.respond_to?(:make_filename)
+        return DataManager.make_filename(id - 1).to_s
+      end
+      scene = save_scene
+      return nil unless scene && scene.respond_to?(:make_filename, true)
+      scene.send(:make_filename, id - 1).to_s
+    rescue Exception
+      nil
+    end
+
+    def save_slots_supported?
+      if ess?
+        has_save = Object.private_method_defined?(:pbSave) || Object.method_defined?(:pbSave)
+        has_load = defined?(PokemonLoad) && class_method?(PokemonLoad, :pbTryLoadFile) &&
+                   class_method?(PokemonLoad, :startPlayingSaveFile)
+        return has_save && has_load && defined?(RTP) && RTP.respond_to?(:getSaveSlotPath)
+      end
+      if engine == :ace
+        return defined?(DataManager) && DataManager.respond_to?(:make_filename) &&
+               DataManager.respond_to?(:save_game) && DataManager.respond_to?(:load_game)
+      end
+      return false unless rpgm? && defined?(Scene_File) && defined?(Scene_Save) && defined?(Scene_Load)
+      has_filename = class_method?(Scene_File, :make_filename)
+      has_writer = class_method?(Scene_Save, :write_save_data)
+      has_reader = if engine == :xp
+                     class_method?(Scene_Load, :on_decision)
+                   else
+                     class_method?(Scene_Load, :read_save_data)
+                   end
+      has_filename && has_writer && has_reader
+    rescue Exception
+      false
+    end
+
+    def declared_save_slot_limit(owner)
+      return nil unless owner && owner.respond_to?(:const_defined?) && owner.respond_to?(:const_get)
+      [:SAVE_FILES, :SAVEFILE_MAX, :MAX_SAVE_FILES, :FILE_MAX].each do |name|
+        begin
+          next unless owner.const_defined?(name)
+          count = owner.const_get(name).to_i
+          return count if count > 0 && count <= 100
+        rescue Exception
+        end
+      end
+      nil
+    rescue Exception
+      nil
+    end
+
+    # Essentials uses numbered files with no configured slot ceiling. Build
+    # the picker from real save files, the current slot, and the first free
+    # slot instead of hiding saves after an arbitrary count.
+    def essentials_save_slot_ids
+      ids = {}
+      current = if defined?($Unidata) && $Unidata
+                  ($Unidata[:saveslot].to_i rescue 1)
+                else
+                  1
+                end
+      current = 1 if current < 1
+      ids[current] = true
+
+      listed = false
+      if defined?(RTP) && RTP.respond_to?(:getSaveFolder)
+        begin
+          folder = RTP.getSaveFolder.to_s
+          Dir.entries(folder).each do |filename|
+            next unless filename =~ /\AGame(?:_(\d+))?\.rxdata\z/i
+            slot_text = $1
+            next unless File.file?(File.join(folder, filename))
+            slot = slot_text ? slot_text.to_i : 1
+            ids[slot] = true if slot > 0
+          end
+          listed = true
+        rescue Exception
+        end
+      end
+
+      if listed
+        next_slot = 1
+        next_slot += 1 while ids[next_slot]
+        ids[next_slot] = true
+      else
+        # Keep the current slot usable if a custom RTP hides its save folder.
+        ids[current + 1] = true
+      end
+      ids.keys.sort
+    rescue Exception
+      [current > 0 ? current : 1]
+    end
+
+    def valid_save_slot_id?(id)
+      return false if id < 1
+      return essentials_save_slot_ids.include?(id) if ess?
+      id <= save_slot_limit
+    rescue Exception
+      false
+    end
+
+    def save_slot_limit
+      return essentials_save_slot_ids.max || 1 if ess?
+      if engine == :ace && defined?(DataManager) && DataManager.respond_to?(:savefile_max)
+        count = (DataManager.savefile_max.to_i rescue 0)
+        return [[count, 1].max, 100].min if count > 0
+      end
+      if defined?(Scene_File)
+        [Scene_File, (Scene_Save if defined?(Scene_Save)), (Scene_Load if defined?(Scene_Load))].compact.each do |klass|
+          count = declared_save_slot_limit(klass)
+          return count if count
+          begin
+            scene = klass == Scene_Load ? load_scene : save_scene
+            count = scene.instance_variable_get(:@file_max).to_i if scene
+            return count if count && count > 0 && count <= 100
+          rescue Exception
+          end
+        end
+      end
+      Object.constants.each do |constant_name|
+        begin
+          owner = Object.const_get(constant_name)
+          count = declared_save_slot_limit(owner) if owner.is_a?(Module)
+          return count if count
+        rescue Exception
+        end
+      end
+      engine == :ace ? 20 : 4
+    rescue Exception
+      engine == :ace ? 20 : 4
+    end
+
+    def list_save_slots
+      return NOPE unless save_slots_supported?
+      current = ess? && defined?($Unidata) && $Unidata ? ($Unidata[:saveslot].to_i rescue 1) :
+                (@selected_save_slot ? @selected_save_slot.to_i : 1)
+      current = 1 if current < 1
+      slot_ids = ess? ? essentials_save_slot_ids : (1..[[save_slot_limit.to_i, 1].max, 100].min).to_a
+      out = []
+      slot_ids.each do |id|
+        path = save_slot_path(id)
+        next if path.to_s.empty?
+        exists = File.file?(path) rescue false
+        modified = exists ? ((File.mtime(path).to_i rescue 0)) : 0
+        label = ess? ? (id == 1 ? "Game.rxdata" : "Game_#{id}.rxdata") : File.basename(path)
+        out << "S\t#{id}\t#{exists ? 1 : 0}\t#{id == current ? 1 : 0}\t#{modified}\t#{wire_text(label)}"
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read save slots: #{e.class}: #{e.message}"
+    end
+
+    def select_save_slot(id_text)
+      id = id_text.to_i
+      return "Enter a valid save slot." unless valid_save_slot_id?(id)
+      path = save_slot_path(id)
+      return "This game doesn't expose that save slot." if path.to_s.empty?
+      if ess? && defined?($Unidata) && $Unidata
+        $Unidata[:saveslot] = id
+        (saveClientData rescue nil)
+      else
+        @selected_save_slot = id
+      end
+      "ok"
+    rescue Exception => e
+      "Couldn't select save slot: #{e.class}: #{e.message}"
+    end
+
+    def save_slot(id_text)
+      id = id_text.to_i
+      return "Enter a valid save slot." unless valid_save_slot_id?(id)
+      path = save_slot_path(id)
+      return "This game doesn't expose that save slot." if path.to_s.empty?
+      result = select_save_slot(id)
+      return result unless result == "ok"
+      if ess?
+        saver = (Object.new.method(:pbSave) rescue nil)
+        return "This game doesn't expose its native save function." unless saver
+        return "The game couldn't save this slot." unless saver.call
+      elsif engine == :ace
+        return "The game couldn't save this slot." unless DataManager.save_game(id - 1)
+      else
+        scene = save_scene
+        return "This game's native save writer isn't available." unless scene && scene.respond_to?(:write_save_data, true)
+        scene.instance_variable_set(:@index, id - 1)
+        scene.instance_variable_set(:@file_index, id - 1)
+        if $game_temp && $game_temp.respond_to?(:last_file_index=)
+          $game_temp.last_file_index = id - 1
+        end
+        temporary = path.to_s + ".tyranor-tmp"
+        begin
+          File.delete(temporary) if File.file?(temporary)
+          File.open(temporary, "wb") { |file| scene.send(:write_save_data, file) }
+          File.rename(temporary, path)
+        rescue Exception
+          File.delete(temporary) rescue nil
+          raise
+        end
+        if $game_temp && $game_temp.respond_to?(:last_file_index=)
+          $game_temp.last_file_index = id - 1
+        end
+      end
+      "Save slot #{id} saved"
+    rescue Exception => e
+      "Couldn't save slot #{id_text}: #{e.class}: #{e.message}"
+    end
+
+    def load_slot(id_text)
+      id = id_text.to_i
+      return "Enter a valid save slot." unless valid_save_slot_id?(id)
+      path = save_slot_path(id)
+      return "This game doesn't expose that save slot." if path.to_s.empty?
+      return "That save slot is empty." unless File.file?(path)
+      result = select_save_slot(id)
+      return result unless result == "ok"
+      if ess?
+        # The game's loader owns migrations, custom save data, and map setup.
+        stub_scene = Class.new do
+          def pbEndScene; end
+        end.new
+        loader = PokemonLoad.new(stub_scene)
+        loader.send(:pbTryLoadFile, path)
+        return "The game's native loader rejected this save." unless loader.send(:startPlayingSaveFile, path)
+      elsif engine == :ace
+        return "The game couldn't load this slot." unless DataManager.load_game(id - 1)
+        SceneManager.goto(Scene_Map) if defined?(SceneManager) && defined?(Scene_Map)
+      elsif engine == :xp
+        scene = load_scene
+        return "This game's native load handler isn't available." unless scene && scene.respond_to?(:on_decision, true)
+        scene.send(:on_decision, path.to_s)
+      else
+        scene = load_scene
+        return "This game's native load reader isn't available." unless scene && scene.respond_to?(:read_save_data, true)
+        scene.instance_variable_set(:@index, id - 1)
+        scene.instance_variable_set(:@file_index, id - 1)
+        File.open(path, "rb") { |file| scene.send(:read_save_data, file) }
+        if $game_temp && $game_temp.respond_to?(:last_file_index=)
+          $game_temp.last_file_index = id - 1
+        end
+        $scene = Scene_Map.new if defined?(Scene_Map)
+        if scene.instance_variable_defined?(:@last_bgm) || scene.instance_variable_defined?(:@last_bgs)
+          RPG::BGM.fade(1500) if defined?(RPG::BGM) && RPG::BGM.respond_to?(:fade)
+          Graphics.fadeout(60) if defined?(Graphics) && Graphics.respond_to?(:fadeout)
+          Graphics.wait(40) if defined?(Graphics) && Graphics.respond_to?(:wait)
+          bgm = scene.instance_variable_get(:@last_bgm)
+          bgs = scene.instance_variable_get(:@last_bgs)
+          bgm.play if bgm && bgm.respond_to?(:play)
+          bgs.play if bgs && bgs.respond_to?(:play)
+        end
+      end
+      "Save slot #{id} loaded"
+    rescue Exception => e
+      "Couldn't load slot #{id_text}: #{e.class}: #{e.message}"
+    end
+
+    def delete_save_slot(id_text)
+      id = id_text.to_i
+      return "Enter a valid save slot." unless valid_save_slot_id?(id)
+      path = save_slot_path(id)
+      return "This game doesn't expose that save slot." if path.to_s.empty?
+      return "That save slot is empty." unless File.file?(path)
+      File.delete(path)
+      "Save slot #{id} deleted"
+    rescue Exception => e
+      "Couldn't delete save slot: #{e.class}: #{e.message}"
+    end
+
+    def consume_save_slot_index
+      return nil unless @selected_save_slot
+      index = @selected_save_slot.to_i - 1
+      @selected_save_slot = nil
+      index >= 0 ? index : nil
+    rescue Exception
+      @selected_save_slot = nil
+      nil
+    end
+
+    def recover_party
+      if ess?
+        return "You have no Pokemon yet." if pokes.empty?
+        pokes.each do |pokemon|
+          next if pokemon.respond_to?(:egg?) && pokemon.egg?
+          pokemon.hp = pokemon.totalhp if pokemon.respond_to?(:hp=) && pokemon.respond_to?(:totalhp)
+          (mon_heal_status(pokemon) rescue nil)
+          (mon_heal_pp(pokemon) rescue nil)
+        end
+        return "Party recovered"
+      end
+      return "Your party is empty." if actors.empty?
+      actors.each do |actor|
+        if actor.respond_to?(:recover_all)
+          actor.recover_all
+        else
+          actor.hp = maxhp_of(actor) if actor.respond_to?(:hp=)
+          maximum = maxmp_of(actor)
+          actor.mp = maximum if actor.respond_to?(:mp=)
+          actor.sp = maximum if actor.respond_to?(:sp=)
+          if actor.respond_to?(:states) && actor.respond_to?(:remove_state)
+            actor.states.dup.each { |state| actor.remove_state(state.respond_to?(:id) ? state.id : state) }
+          end
+        end
+      end
+      "Party recovered"
+    rescue Exception => e
+      "Couldn't recover party: #{e.class}: #{e.message}"
+    end
+
+    def max_gold
+      if ess?
+        t = trainer
+        return "Trainer data isn't ready yet. Start or load a game first." unless t
+        maximum = ess_money_limit
+        t.money = maximum
+        "Money set to #{t.money}"
+      elsif rpgm? && $game_party
+        maximum = rpgm_gold_limit
+        actual = set_rpgm_gold(maximum)
+        return "Gold set to #{actual}"
+      else
+        "Start or load a game first."
+      end
+    rescue Exception => e
+      "Couldn't maximize gold: #{e.class}: #{e.message}"
+    end
+
+    def force_victory
+      return instant_win if ess?
+      return NEED_BATTLE unless in_battle?
+      if defined?(BattleManager) && BattleManager.respond_to?(:process_victory)
+        BattleManager.process_victory
+        return "Battle victory requested"
+      end
+      foes = $game_troop.respond_to?(:enemies) ? $game_troop.enemies : $game_troop.members
+      foes.each { |enemy| enemy.hp = 0 if enemy && enemy.respond_to?(:hp=) }
+      scene = defined?($scene) ? $scene : nil
+      if scene && scene.respond_to?(:judge, true)
+        scene.send(:judge)
+        "Battle victory requested"
+      elsif scene && scene.respond_to?(:judge_win_loss, true)
+        scene.send(:judge_win_loss)
+        "Battle victory requested"
+      else
+        "Enemies defeated. Finish the current turn to complete the battle."
+      end
+    rescue Exception => e
+      "Couldn't finish battle: #{e.class}: #{e.message}"
+    end
+
+    def force_escape
+      return NEED_BATTLE unless in_battle?
+      if ess? && @battle
+        @battle.instance_variable_set(:@decision, 3)
+        return "Escape requested"
+      end
+      if defined?(BattleManager) && BattleManager.respond_to?(:process_escape)
+        saved_ratio = BattleManager.instance_variable_get(:@escape_ratio)
+        BattleManager.instance_variable_set(:@escape_ratio, 1.0)
+        begin
+          BattleManager.process_escape
+        ensure
+          BattleManager.instance_variable_set(:@escape_ratio, saved_ratio)
+        end
+        return "Escape requested"
+      end
+      scene = defined?($scene) ? $scene : nil
+      if engine == :xp && scene && scene.respond_to?(:update_phase2_escape, true)
+        return finish_xp_escape(scene) ? "Escape requested" : "This game's XP battle scene doesn't expose battle_end."
+      end
+      if scene && scene.respond_to?(:process_escape, true)
+        saved_ratio = scene.instance_variable_get(:@escape_ratio)
+        scene.instance_variable_set(:@escape_ratio, 100)
+        begin
+          scene.send(:process_escape)
+        ensure
+          scene.instance_variable_set(:@escape_ratio, saved_ratio)
+        end
+        return "Escape requested"
+      end
+      "This game's battle scene doesn't expose an immediate escape method."
+    rescue Exception => e
+      "Couldn't escape battle: #{e.class}: #{e.message}"
+    end
+
+    # XP ends battles through Scene_Battle#battle_end(result), rather than the
+    # BattleManager / process_escape entry points used by later generations.
+    def finish_xp_escape(scene)
+      return false unless scene && scene.respond_to?(:battle_end, true)
+      begin
+        $game_system.se_play($data_system.escape_se) if $game_system && $data_system && $data_system.respond_to?(:escape_se)
+      rescue Exception
+      end
+      begin
+        $game_system.bgm_play($game_temp.map_bgm) if $game_system && $game_temp && $game_temp.respond_to?(:map_bgm)
+      rescue Exception
+      end
+      scene.send(:battle_end, 1)
+      true
+    rescue Exception
+      false
+    end
+
+    def open_native_screen(kind)
+      if ess?
+        if kind == :save
+          return NOPE unless defined?(PokemonSaveScene) && defined?(PokemonSave)
+          scene = PokemonSaveScene.new
+          PokemonSave.new(scene).pbSaveScreen
+        else
+          return NOPE unless defined?(PokemonLoadScene) && defined?(PokemonLoad)
+          scene = PokemonLoadScene.new
+          PokemonLoad.new(scene).pbStartLoadScreen
+        end
+      elsif engine == :ace
+        return NOPE unless defined?(SceneManager)
+        scene_class = kind == :save ? Scene_Save : Scene_Load
+        return NOPE unless scene_class
+        SceneManager.call(scene_class)
+      else
+        scene_class = kind == :save ? Scene_Save : Scene_Load
+        return NOPE unless scene_class
+        $scene = if engine == :vx
+                   kind == :save ? scene_class.new(true, false, false) : scene_class.new(false, false, false)
+                 else
+                   scene_class.new
+                 end
+      end
+      "ok"
+    rescue Exception => e
+      "Couldn't open the game's #{kind} screen: #{e.class}: #{e.message}"
     end
 
     def max_exp
@@ -3639,13 +5772,9 @@ module TyranorCheats
         ac = actors
         return "Your party is empty." if ac.empty?
         ac.each do |a|
-          if a.respond_to?(:change_level) && a.respond_to?(:max_level)
-            a.change_level(a.max_level, false)
-          elsif a.respond_to?(:change_exp)
-            a.change_exp(99_999_999, false)
-          else
-            a.exp = 99_999_999
-          end
+          maximum = a.respond_to?(:max_level) ? a.max_level.to_i : 99
+          result = set_actor_level(a, maximum)
+          return result if result.is_a?(String)
         end
         "Party is at the maximum level"
       else
@@ -3671,11 +5800,40 @@ module TyranorCheats
         return NEED_BATTLE unless in_battle?
         foes = if $game_troop.respond_to?(:enemies) then $game_troop.enemies
                else $game_troop.members end
-        foes.each { |e| e.hp = 0 }
+        foes.each do |enemy|
+          next unless enemy && enemy.respond_to?(:hp=)
+          enemy.hp = 0
+          enemy.refresh if enemy.respond_to?(:refresh)
+        end
         "Enemies defeated. Finish the current turn to win."
       else
         NOPE
       end
+    end
+
+    def kill_enemies
+      return NEED_BATTLE unless in_battle?
+      foes = if ess? && @battle
+               @battle.battlers.compact.select { |battler| foe?(@battle, battler.index) && !battler.fainted? }
+             elsif $game_troop && $game_troop.respond_to?(:enemies)
+               $game_troop.enemies
+             elsif $game_troop
+               $game_troop.members
+             else
+               []
+             end
+      foes.each do |enemy|
+        if ess? && enemy.respond_to?(:pbReduceHP)
+          enemy.pbReduceHP(enemy.hp, false)
+          enemy.pbFaint(true) if enemy.respond_to?(:pbFaint)
+        elsif enemy.respond_to?(:hp=)
+          enemy.hp = 0
+          enemy.refresh if enemy.respond_to?(:refresh)
+        end
+      end
+      "Enemies defeated"
+    rescue Exception => e
+      "Couldn't defeat enemies: #{e.class}: #{e.message}"
     end
 
     def full_inventory
@@ -3783,7 +5941,8 @@ module TyranorCheats
         end
       end
       if on?('gold') && t
-        t.money = 999_999 if t.money < 999_999
+        maximum = ess_money_limit
+        t.money = maximum if t.money < maximum
       end
       keep_items if on?('items')
       if on?('fastText') && defined?($PokemonSystem) && $PokemonSystem
@@ -3819,8 +5978,8 @@ module TyranorCheats
         end
       end
       if on?('gold')
-        g = $game_party.instance_variable_get(:@gold).to_i
-        $game_party.instance_variable_set(:@gold, 99_999_999) if g < 99_999_999
+        maximum = rpgm_gold_limit
+        set_rpgm_gold(maximum) if rpgm_gold_value != maximum
       end
       keep_items if on?('items')
       common_map_cheats
@@ -3828,10 +5987,12 @@ module TyranorCheats
 
     def common_map_cheats
       if on?('noclip') && $game_player
+        @old_player_through = $game_player.through unless @through_forced
         $game_player.through = true
         @through_forced = true
       end
       if on?('noEncounter')
+        save_encounter_state
         $game_system.encounter_disabled = true if $game_system && $game_system.respond_to?(:encounter_disabled=)
         if $game_player && $game_player.instance_variable_defined?(:@encounter_count)
           $game_player.instance_variable_set(:@encounter_count, 99_999)
@@ -3857,13 +6018,19 @@ module TyranorCheats
         end
         have.each { |id, q| @item_snap[id] = q if q > (@item_snap[id] || 0) }
       else
-        h = $game_party.instance_variable_get(:@items)
-        return unless h.is_a?(Hash)
-        @item_snap.each do |id, q|
-          cur = h[id].to_i
-          h[id] = q if cur < q
+        %w[items weapons armors].each do |kind|
+          inventory = $game_party.instance_variable_get("@#{kind}")
+          next unless inventory.is_a?(Hash)
+          snapshot = (@item_snap[kind] ||= {})
+          snapshot.each do |id, quantity|
+            current = inventory[id].to_i
+            inventory[id] = quantity if current < quantity
+          end
+          inventory.each do |id, quantity|
+            quantity = quantity.to_i
+            snapshot[id] = quantity if quantity > (snapshot[id] || 0)
+          end
         end
-        h.each { |id, q| @item_snap[id] = q if q.to_i > (@item_snap[id] || 0) }
       end
     end
 
@@ -3877,8 +6044,10 @@ module TyranorCheats
         Game_Character.class_eval do
           alias_method :__ap_cheat_update, :update
           def update(*args)
-            if TyranorCheats.speed_on? && $game_player && self.equal?($game_player)
-              m = TyranorCheats.speed.to_f
+            is_player = ($game_player && self.equal?($game_player))
+            speed_this = (TyranorCheats.speed_on? && is_player) || (TyranorCheats.on?('eventSpeed') && !is_player)
+            if speed_this
+              m = is_player ? TyranorCheats.speed.to_f : 4.0
               m = 1.0 if m <= 0
               # Games store the walking speed in different ways, so scale
               # whichever one this game actually uses, for this frame only.
@@ -3887,7 +6056,9 @@ module TyranorCheats
               elsif instance_variable_defined?(:@move_time) && @move_time.is_a?(Numeric)
                 key = :@move_time; saved = @move_time; scaled = saved / m
               elsif @move_speed.is_a?(Numeric)
-                key = :@move_speed; saved = @move_speed; scaled = saved + TyranorCheats.speed_bonus
+                key = :@move_speed; saved = @move_speed
+                bonus = is_player ? TyranorCheats.speed_bonus : (Math.log(m) / Math.log(2))
+                scaled = saved + bonus
               end
               if key
                 instance_variable_set(key, scaled)
@@ -3904,12 +6075,420 @@ module TyranorCheats
         end
       end
 
+      if engine == :xp && defined?(Scene_File) && class_method?(Scene_File, :initialize)
+        Scene_File.class_eval do
+          alias_method :__ap_cheat_scene_file_initialize, :initialize
+          def initialize(*args)
+            __ap_cheat_scene_file_initialize(*args)
+            index = TyranorCheats.consume_save_slot_index
+            @file_index = index unless index.nil?
+          end
+        end
+      end
+
+      if (engine == :vx || engine == :ace) && defined?(Scene_File) && class_method?(Scene_File, :start)
+        Scene_File.class_eval do
+          alias_method :__ap_cheat_scene_file_start, :start
+          def start(*args)
+            __ap_cheat_scene_file_start(*args)
+            index = TyranorCheats.consume_save_slot_index
+            unless index.nil?
+              @index = index
+              @file_index = index
+              if instance_variable_defined?(:@savefile_windows)
+                windows = instance_variable_get(:@savefile_windows)
+                if windows.respond_to?(:each_with_index)
+                  windows.each_with_index do |window, window_index|
+                    window.selected = (window_index == index) if window && window.respond_to?(:selected=)
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+
+      if engine != :essentials && defined?(Game_Battler) && Game_Battler.method_defined?(:hp=)
+        Game_Battler.class_eval do
+          alias_method :__ap_cheat_hp_set, :hp=
+          def hp=(value)
+            current = (hp rescue 0).to_i
+            lower = value.to_i < current
+            attacker = TyranorCheats.xp_critical_attacker
+            if lower && attacker && TyranorCheats.on?('crit') &&
+                TyranorCheats.party_battler?(attacker) && TyranorCheats.enemy_battler?(self) &&
+                @damage.is_a?(Numeric) && @damage.to_i > 0 && !@critical
+              lost = current - value.to_i
+              if lost > 0
+                @critical = true
+                @damage = @damage.to_i + lost
+                value = current - (lost * 2)
+              end
+            end
+            if lower && TyranorCheats.on?('invincible') && TyranorCheats.party_battler?(self)
+              value = current
+            elsif lower && TyranorCheats.on?('oneHit') && TyranorCheats.enemy_battler?(self)
+              value = 0
+            end
+            __ap_cheat_hp_set(value)
+          end
+        end
+      end
+
+      # RPG Maker XP calculates damage inside its effect methods instead of
+      # exposing the later generations' make_attack_damage_value hook. Carry
+      # the attacking actor through the effect so hp= can double positive
+      # damage before XP applies it, keeping the critical flag, damage popup,
+      # HP clamp, and state updates in sync.
+      if engine == :xp && defined?(Game_Battler) && class_method?(Game_Battler, :attack_effect)
+        Game_Battler.class_eval do
+          alias_method :__ap_cheat_xp_attack_effect, :attack_effect
+          def attack_effect(attacker, *args)
+            TyranorCheats.with_xp_critical_attacker(attacker) do
+              __ap_cheat_xp_attack_effect(attacker, *args)
+            end
+          end
+
+          if method_defined?(:skill_effect)
+            alias_method :__ap_cheat_xp_skill_effect, :skill_effect
+            def skill_effect(user, skill, *args)
+              TyranorCheats.with_xp_critical_attacker(user) do
+                __ap_cheat_xp_skill_effect(user, skill, *args)
+              end
+            end
+          end
+        end
+      end
+
+      if engine == :xp && defined?(Scene_Battle) && class_method?(Scene_Battle, :make_item_action_result)
+        Scene_Battle.class_eval do
+          alias_method :__ap_cheat_xp_item_action_result, :make_item_action_result
+          def make_item_action_result(*args)
+            TyranorCheats.with_xp_critical_attacker(@active_battler) do
+              __ap_cheat_xp_item_action_result(*args)
+            end
+          end
+        end
+      end
+
+      if defined?(Game_Interpreter) && class_method?(Game_Interpreter, :update)
+        Game_Interpreter.class_eval do
+          alias_method :__ap_cheat_interpreter_update, :update
+          def update(*args)
+            if TyranorCheats.on?('eventSpeed')
+              @wait_count = 0 if @wait_count && @wait_count.to_i > 0
+              @wait_mode = "" if instance_variable_defined?(:@wait_mode)
+            end
+            __ap_cheat_interpreter_update(*args)
+          end
+        end
+      end
+
+      if defined?(Window_Message)
+        Window_Message.class_eval do
+          if TyranorCheats.class_method?(Window_Message, :update_message)
+            alias_method :__ap_cheat_update_message, :update_message
+            def update_message(*args)
+              if TyranorCheats.on?('fastText') || TyranorCheats.on?('msgSkip')
+                @show_fast = true if instance_variable_defined?(:@show_fast)
+                @wait_count = 0 if instance_variable_defined?(:@wait_count)
+              end
+              __ap_cheat_update_message(*args)
+            end
+          end
+          if TyranorCheats.class_method?(Window_Message, :update_input)
+            alias_method :__ap_cheat_update_input, :update_input
+            def update_input(*args)
+              if TyranorCheats.on?('msgSkip') && @pause && !TyranorCheats.message_choice_active?
+                @pause = false
+                (terminate_message rescue nil)
+                return true
+              end
+              __ap_cheat_update_input(*args)
+            end
+          end
+
+          # XP displays the whole message at once, then waits in update while
+          # @contents_showing is true. Its stock API has no update_input hook.
+          if TyranorCheats.engine == :xp &&
+              TyranorCheats.class_method?(Window_Message, :update) &&
+              TyranorCheats.class_method?(Window_Message, :terminate_message)
+            alias_method :__ap_cheat_xp_message_update, :update
+            def update(*args)
+              if TyranorCheats.on?('msgSkip') && @contents_showing && @pause &&
+                  !TyranorCheats.message_choice_active? && !@input_number_window
+                terminate_message
+                return
+              end
+              __ap_cheat_xp_message_update(*args)
+            end
+          end
+
+          # VX pauses through input_pause after update_message finishes a page.
+          # Keep page continuation logic and never consume a choice prompt.
+          if TyranorCheats.engine == :vx && TyranorCheats.class_method?(Window_Message, :input_pause)
+            alias_method :__ap_cheat_vx_input_pause, :input_pause
+            def input_pause(*args)
+              if TyranorCheats.on?('msgSkip') && !TyranorCheats.message_choice_active?
+                self.pause = false if respond_to?(:pause=)
+                if @text && !@text.empty?
+                  max_lines = (self.class.const_get(:MAX_LINE) rescue nil)
+                  new_page if instance_variable_defined?(:@line_count) && max_lines && @line_count >= max_lines.to_i
+                else
+                  terminate_message if respond_to?(:terminate_message)
+                end
+                return
+              end
+              __ap_cheat_vx_input_pause(*args)
+            end
+          end
+
+          # Ace uses a Fiber for each message. Fast display skips per-character
+          # yields; input_pause and timed waits are the only pause points to bypass.
+          if TyranorCheats.engine == :ace && TyranorCheats.class_method?(Window_Message, :update_show_fast)
+            alias_method :__ap_cheat_ace_update_show_fast, :update_show_fast
+            def update_show_fast(*args)
+              result = __ap_cheat_ace_update_show_fast(*args)
+              @show_fast = true if TyranorCheats.on?('fastText') || TyranorCheats.on?('msgSkip')
+              result
+            end
+          end
+          if TyranorCheats.engine == :ace && TyranorCheats.class_method?(Window_Message, :input_pause)
+            alias_method :__ap_cheat_ace_input_pause, :input_pause
+            def input_pause(*args)
+              # Choice lists use the message window's pause to wait for a
+              # selection. Fast-forward may dismiss ordinary message pauses,
+              # but must leave this wait to the game so the player can choose.
+              if TyranorCheats.on?('msgSkip') && !TyranorCheats.message_choice_active?
+                self.pause = false if respond_to?(:pause=)
+                return
+              end
+              __ap_cheat_ace_input_pause(*args)
+            end
+          end
+          if TyranorCheats.engine == :ace && TyranorCheats.class_method?(Window_Message, :wait)
+            alias_method :__ap_cheat_ace_wait, :wait
+            def wait(*args)
+              return if TyranorCheats.on?('msgSkip')
+              __ap_cheat_ace_wait(*args)
+            end
+          end
+        end
+      end
+
+      # Pokémon Essentials uses Window_AdvancedTextPokemon and advances its
+      # own formatted-character cursor. Apply the fast frame skip only for the
+      # duration of an update, clear scripted waits, and resume input-pause
+      # markers without touching the separate command-choice flow.
+      if engine == :essentials && defined?(Window_AdvancedTextPokemon) &&
+          class_method?(Window_AdvancedTextPokemon, :update)
+        Window_AdvancedTextPokemon.class_eval do
+          alias_method :__ap_cheat_ess_message_update, :update
+          def update(*args)
+            return __ap_cheat_ess_message_update(*args) unless TyranorCheats.on?('msgSkip')
+            previous_frameskip = instance_variable_get(:@frameskip)
+            instance_variable_set(:@frameskip, -999)
+            instance_variable_set(:@waitcount, 0)
+            begin
+              result = __ap_cheat_ess_message_update(*args)
+              resume if respond_to?(:pausing?) && pausing? && respond_to?(:resume)
+              result
+            ensure
+              instance_variable_set(:@frameskip, previous_frameskip)
+            end
+          end
+        end
+      end
+
+      if engine == :ace && defined?(Game_Battler) && class_method?(Game_Battler, :item_cri)
+        Game_Battler.class_eval do
+          alias_method :__ap_cheat_item_cri, :item_cri
+          def item_cri(user, item)
+            return 1.0 if TyranorCheats.on?('crit') &&
+              TyranorCheats.party_battler?(user) && TyranorCheats.enemy_battler?(self)
+            __ap_cheat_item_cri(user, item)
+          end
+        end
+      end
+
+      if (engine == :xp || engine == :vx) && defined?(Game_Battler) && class_method?(Game_Battler, :make_attack_damage_value)
+        Game_Battler.class_eval do
+          alias_method :__ap_cheat_attack_damage_value, :make_attack_damage_value
+          def make_attack_damage_value(attacker, *args)
+            result = __ap_cheat_attack_damage_value(attacker, *args)
+            if TyranorCheats.on?('crit') && TyranorCheats.party_battler?(attacker) &&
+                TyranorCheats.enemy_battler?(self) && @hp_damage.to_i > 0 && !@critical
+              @critical = true
+              multiplier = TyranorCheats.engine == :xp ? 2 : 3
+              @hp_damage = (@hp_damage.to_f * multiplier).to_i
+            end
+            result
+          end
+        end
+      end
+
+      if (engine == :xp || engine == :vx) && defined?(Game_Battler) && class_method?(Game_Battler, :make_obj_damage_value)
+        Game_Battler.class_eval do
+          alias_method :__ap_cheat_obj_damage_value, :make_obj_damage_value
+          def make_obj_damage_value(user, obj, *args)
+            result = __ap_cheat_obj_damage_value(user, obj, *args)
+            if TyranorCheats.on?('crit') && TyranorCheats.party_battler?(user) &&
+                TyranorCheats.enemy_battler?(self) && !@critical
+              multiplier = TyranorCheats.engine == :xp ? 2 : 3
+              hp_damage = instance_variable_get(:@hp_damage).to_i
+              mp_damage = instance_variable_get(:@mp_damage).to_i
+              if hp_damage > 0 || mp_damage > 0
+                @critical = true
+                @hp_damage = hp_damage * multiplier if hp_damage > 0
+                @mp_damage = mp_damage * multiplier if mp_damage > 0
+              end
+            end
+            result
+          end
+        end
+      end
+
+      # VX routes both skill availability checks and battle consumption through
+      # Game_Battler#calc_mp_cost, so returning zero there keeps the original
+      # battle flow and cost modifiers intact.
+      if engine == :vx && defined?(Game_Battler) && class_method?(Game_Battler, :calc_mp_cost)
+        Game_Battler.class_eval do
+          alias_method :__ap_cheat_calc_mp_cost, :calc_mp_cost
+          def calc_mp_cost(skill, *args)
+            return 0 if TyranorCheats.on?('freeSkill') && TyranorCheats.party_battler?(self)
+            __ap_cheat_calc_mp_cost(skill, *args)
+          end
+        end
+      end
+
+      if engine == :xp
+        if defined?(RPG::Skill) && class_method?(RPG::Skill, :sp_cost)
+          RPG::Skill.class_eval do
+            alias_method :__ap_cheat_sp_cost, :sp_cost
+            def sp_cost(*args)
+              return 0 if TyranorCheats.free_skill_cost_scope?
+              __ap_cheat_sp_cost(*args)
+            end
+          end
+        end
+
+        if defined?(Game_Battler) && class_method?(Game_Battler, :skill_can_use?)
+          Game_Battler.class_eval do
+            alias_method :__ap_cheat_skill_can_use, :skill_can_use?
+            def skill_can_use?(*args)
+              TyranorCheats.with_free_skill_cost(self) do
+                __ap_cheat_skill_can_use(*args)
+              end
+            end
+          end
+          preserve_keyword_forwarding(Game_Battler, :skill_can_use?)
+        end
+
+        if defined?(Scene_Battle) && class_method?(Scene_Battle, :make_skill_action_result)
+          Scene_Battle.class_eval do
+            alias_method :__ap_cheat_make_skill_action_result, :make_skill_action_result
+            def make_skill_action_result(*args)
+              TyranorCheats.with_free_skill_cost(@active_battler) do
+                __ap_cheat_make_skill_action_result(*args)
+              end
+            end
+          end
+          preserve_keyword_forwarding(Scene_Battle, :make_skill_action_result)
+        end
+
+        # The stock XP menu executes skills in Scene_Skill and also charges the
+        # RPG::Skill SP cost from there. Scope the override to the menu actor.
+        if defined?(Scene_Skill) && class_method?(Scene_Skill, :update)
+          Scene_Skill.class_eval do
+            alias_method :__ap_cheat_scene_skill_update, :update
+            def update(*args)
+              TyranorCheats.with_free_skill_cost(@actor) do
+                __ap_cheat_scene_skill_update(*args)
+              end
+            end
+          end
+          preserve_keyword_forwarding(Scene_Skill, :update)
+        end
+      end
+
+      if engine == :ace && defined?(Game_BattlerBase)
+        Game_BattlerBase.class_eval do
+          if method_defined?(:skill_mp_cost)
+            alias_method :__ap_cheat_skill_mp_cost, :skill_mp_cost
+            def skill_mp_cost(skill)
+              return 0 if TyranorCheats.on?('freeSkill') && TyranorCheats.party_battler?(self)
+              __ap_cheat_skill_mp_cost(skill)
+            end
+          end
+          if method_defined?(:skill_tp_cost)
+            alias_method :__ap_cheat_skill_tp_cost, :skill_tp_cost
+            def skill_tp_cost(skill)
+              return 0 if TyranorCheats.on?('freeSkill') && TyranorCheats.party_battler?(self)
+              __ap_cheat_skill_tp_cost(skill)
+            end
+          end
+        end
+      end
+
+      if (engine == :ace || engine == :xp || engine == :vx) && defined?(BattleManager) && BattleManager.respond_to?(:process_escape)
+        BattleManager.instance_eval do
+          alias_method :__ap_cheat_process_escape, :process_escape
+          define_method(:process_escape) do |*args|
+            if TyranorCheats.on?('escape')
+              saved = @escape_ratio
+              @escape_ratio = 1.0
+              begin
+                return __ap_cheat_process_escape(*args)
+              ensure
+                @escape_ratio = saved
+              end
+            end
+            __ap_cheat_process_escape(*args)
+          end
+        end
+      end
+
+      if (engine == :xp || engine == :vx) && defined?(Scene_Battle) && class_method?(Scene_Battle, :process_escape)
+        Scene_Battle.class_eval do
+          alias_method :__ap_cheat_process_escape, :process_escape
+          def process_escape(*args)
+            return __ap_cheat_process_escape(*args) unless TyranorCheats.on?('escape')
+            saved_ratio = instance_variable_get(:@escape_ratio)
+            instance_variable_set(:@escape_ratio, 100)
+            begin
+              __ap_cheat_process_escape(*args)
+            ensure
+              instance_variable_set(:@escape_ratio, saved_ratio)
+            end
+          end
+        end
+      end
+
+      if engine == :xp && defined?(Scene_Battle) && class_method?(Scene_Battle, :update_phase2_escape)
+        Scene_Battle.class_eval do
+          alias_method :__ap_cheat_update_phase2_escape, :update_phase2_escape
+          def update_phase2_escape(*args)
+            if TyranorCheats.on?('escape') && $game_temp && $game_temp.battle_can_escape
+              return TyranorCheats.finish_xp_escape(self)
+            end
+            __ap_cheat_update_phase2_escape(*args)
+          end
+        end
+      end
+
       return unless engine == :essentials
 
-      # No random battles: Essentials v19+ asks encounter_triggered?, v17 asks
-      # pbCanEncounter? (which already respects the game's own switch).
+      # Essentials versions differ between pbCanEncounter? and
+      # encounter_triggered?; the sample games use pbCanEncounter?.
       if defined?(PokemonEncounters)
         PokemonEncounters.class_eval do
+          if method_defined?(:pbCanEncounter?)
+            alias_method :__ap_cheat_can_encounter, :pbCanEncounter?
+            def pbCanEncounter?(*a)
+              return false if TyranorCheats.on?('noEncounter')
+              __ap_cheat_can_encounter(*a)
+            end
+          end
           if method_defined?(:encounter_triggered?)
             alias_method :__ap_cheat_enc, :encounter_triggered?
             def encounter_triggered?(enc_type, repel_active = false, triggered_by_step = true)
@@ -3921,11 +6500,22 @@ module TyranorCheats
       end
 
       # class names differ: PokeBattle_* (older) / Battle::* (v20+)
-      move_c   = ess21? ? Battle::Move    : (defined?(PokeBattle_Move) ? PokeBattle_Move : nil)
-      battler_c = ess21? ? Battle::Battler : (defined?(PokeBattle_Battler) ? PokeBattle_Battler : nil)
-      battle_c = ess21? ? Battle           : (defined?(PokeBattle_Battle) ? PokeBattle_Battle : nil)
+      move_c = ess_move_class
+      battler_c = ess_battler_class
+      battle_c = ess_battle_class
 
-      if move_c && move_c.method_defined?(:pbIsCritical?)
+      if move_c && class_method?(move_c, :pbCritRate?)
+        move_c.class_eval do
+          alias_method :__ap_cheat_critrate, :pbCritRate?
+          def pbCritRate?(*a)
+            attacker = a[0]
+            if TyranorCheats.on?('crit') && attacker && @battle && !TyranorCheats.foe?(@battle, attacker.index)
+              return 3 # Sample move scripts index the guaranteed [24, 8, 2, 1] ratio.
+            end
+            __ap_cheat_critrate(*a)
+          end
+        end
+      elsif move_c && class_method?(move_c, :pbIsCritical?)
         move_c.class_eval do
           alias_method :__ap_cheat_crit, :pbIsCritical?
           def pbIsCritical?(attacker, opponent)
@@ -3939,7 +6529,7 @@ module TyranorCheats
 
       if battler_c
         battler_c.class_eval do
-          if method_defined?(:pbReduceHP)
+          if TyranorCheats.class_method?(self, :pbReduceHP)
             alias_method :__ap_cheat_reduce, :pbReduceHP
             def pbReduceHP(amt, *rest)
               foe = TyranorCheats.foe?(@battle, @index)
@@ -3948,26 +6538,28 @@ module TyranorCheats
               __ap_cheat_reduce(amt, *rest)
             end
           end
-          if method_defined?(:pbReducePP)
+          if TyranorCheats.class_method?(self, :pbReducePP)
             alias_method :__ap_cheat_pp, :pbReducePP
-            def pbReducePP(move)
+            def pbReducePP(move, *args)
               return true if TyranorCheats.on?('freeSkill') && !TyranorCheats.foe?(@battle, @index)
-              __ap_cheat_pp(move)
+              __ap_cheat_pp(move, *args)
             end
           end
         end
+        preserve_keyword_forwarding(battler_c, :pbReduceHP)
+        preserve_keyword_forwarding(battler_c, :pbReducePP)
       end
 
       if battle_c
         battle_c.class_eval do
-          if method_defined?(:pbCommandPhase)
+          if TyranorCheats.class_method?(self, :pbCommandPhase)
             alias_method :__ap_cheat_cmd, :pbCommandPhase
             def pbCommandPhase(*a)
               TyranorCheats.battle = self
               __ap_cheat_cmd(*a)
             end
           end
-          if method_defined?(:pbEndOfBattle)
+          if TyranorCheats.class_method?(self, :pbEndOfBattle)
             alias_method :__ap_cheat_end, :pbEndOfBattle
             def pbEndOfBattle(*a)
               begin
@@ -3977,25 +6569,27 @@ module TyranorCheats
               end
             end
           end
-          if method_defined?(:pbCanRun?)
+          if TyranorCheats.class_method?(self, :pbCanRun?)
             alias_method :__ap_cheat_canrun, :pbCanRun?
-            def pbCanRun?(idx)
+            def pbCanRun?(*args)
+              idx = args[0]
               if TyranorCheats.on?('escape') && !@opponent && !(@cantescape || @cantRun) && !TyranorCheats.foe?(self, idx)
                 return true
               end
-              __ap_cheat_canrun(idx)
+              __ap_cheat_canrun(*args)
             end
           end
-          if method_defined?(:pbRun)
+          if TyranorCheats.class_method?(self, :pbRun)
             alias_method :__ap_cheat_run, :pbRun
-            def pbRun(idx, duringBattle = false)
+            def pbRun(*args)
+              idx = args[0]
               if TyranorCheats.on?('escape') && !@opponent && !(@cantescape || @cantRun) && !TyranorCheats.foe?(self, idx)
                 pbSEPlay("Battle flee") rescue nil
                 pbDisplayPaused(_INTL("Got away safely!"))
                 @decision = 3
                 return 1
               end
-              __ap_cheat_run(idx, duringBattle)
+              __ap_cheat_run(*args)
             end
           end
         end

@@ -173,6 +173,7 @@ class TynRuntimeUi(
                 controller.setPadVisible(true)
                 controller.pad.enterEditMode()
             },
+            { controller.pad.resetToDefaults() },
         ).also { cheatMenu = it }
         controller.releaseAllKeys()
         menu.show()
