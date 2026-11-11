@@ -57,9 +57,25 @@
     var toggles = flags.map(function (entry) {
       return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
     }).join("");
-    var gold = row("当前金币", '<span class="tm-badge">' + mod.getGold() + '</span>') + '<div class="tm-row">' + textInput("tm-gold", mod.getGold(), "number", 'min="0"') + button("设置", "set-gold", "primary") + button("拉满", "max-gold") + '</div>';
+    var cachedGold = context.gold == null ? "…" : context.gold;
+    var gold = row("当前金币", '<span class="tm-badge" id="tm-gold-current">' + cachedGold + '</span>') + '<div class="tm-row">' + textInput("tm-gold", cachedGold, "number", 'min="0"') + button("设置", "set-gold", "primary") + button("拉满", "max-gold") + '</div>';
     var party = '<div class="tm-row">' + button("全体恢复", "recover-party", "primary") + button("刷新页面", "render") + '</div>';
     content.innerHTML = '<div class="tm-grid">' + card("运行时开关", toggles) + card("金币", gold) + card("队伍", party) + '</div>';
+    // Render the panel before crossing the Ruby command-file bridge. One query
+    // used to block open() twice (the badge and input each called getGold).
+    setTimeout(function () {
+      if (!root || activeTab !== "quick") return;
+      try {
+        var value = mod.getGold();
+        context.gold = value;
+        var current = root.querySelector("#tm-gold-current");
+        var input = root.querySelector("#tm-gold");
+        if (current) current.textContent = String(value);
+        if (input && document.activeElement !== input) input.value = String(value);
+      } catch (error) {
+        console.warn("RGSS gold refresh failed", error);
+      }
+    }, 0);
   }
   function renderItems(content) {
     var kinds = '<select class="tm-select" id="tm-item-kind" data-action="item-kind"><option value="item">物品</option><option value="weapon">武器</option><option value="armor">护甲</option></select>';
