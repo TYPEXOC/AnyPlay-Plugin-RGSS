@@ -35,12 +35,27 @@ jobs:
       # ── 3. System dependencies ───────────────────────────────────────────────
       - name: Install system dependencies
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y \
-            build-essential cmake curl xxd \
-            autoconf automake libtool pkg-config \
-            libgdbm-dev libncurses5-dev libreadline-dev zlib1g-dev \
-            autotools-dev python3 git unzip
+          apt_options=(
+            -o Acquire::Retries=1
+            -o Acquire::http::Timeout=15
+            -o Acquire::https::Timeout=15
+          )
+          for attempt in 1 2 3; do
+            echo "Installing system dependencies (attempt ${attempt}/3)"
+            if sudo apt-get "${apt_options[@]}" update -y && \
+              sudo apt-get "${apt_options[@]}" install -y \
+                build-essential cmake curl xxd \
+                autoconf automake libtool pkg-config \
+                libgdbm-dev libncurses5-dev libreadline-dev zlib1g-dev \
+                autotools-dev python3 git unzip; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::Ubuntu package download failed; retrying in 20 seconds"
+              sleep 20
+            fi
+          done
+          exit 1
 
       # ── 4. Ruby  ──────────────────────────────────────
       - name: Set up Ruby
