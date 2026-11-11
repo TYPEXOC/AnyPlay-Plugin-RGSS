@@ -4681,13 +4681,13 @@ module TyranorCheats
         actor.refresh if actor.respond_to?(:refresh)
         return "ok"
       end
-      item = if item_id == 0
-               nil
-             elsif %w[weapon armor].include?(kind)
-               table_for(kind)[item_id] rescue nil
-             else
-               return "Choose an equipment item first."
-             end
+      if item_id == 0
+        item = nil
+      elsif %w[weapon armor].include?(kind)
+        item = (table_for(kind)[item_id] rescue nil)
+      else
+        return "Choose an equipment item first."
+      end
       return "That item doesn't exist." if item_id > 0 && !item
       return "This character can't equip that item." if item && actor.respond_to?(:equippable?) && !(actor.equippable?(item) rescue false)
       actor.change_equip(slot, item)
@@ -4856,8 +4856,9 @@ module TyranorCheats
             when :xp, :essentials then 'rxdata'
             when :vx then 'rvdata'
             when :ace then 'rvdata2'
-            else return nil
+            else nil
             end
+      return nil unless ext
       (load_data("Data/MapInfos.#{ext}") rescue nil)
     rescue Exception
       nil
@@ -5921,6 +5922,9 @@ module TyranorCheats
       reply = handle(cmd.to_s, a.to_s, b.to_s)
       File.open(REPLY + ".tmp", "wb") { |f| f.write("#{id}\t#{reply}") }
       File.rename(REPLY + ".tmp", REPLY)
+      if cmd == 'list' && a == 'capabilities'
+        AnyPlayLog.write("cheat capability handshake: engine=#{engine} response_bytes=#{reply.to_s.bytesize}")
+      end
     rescue Exception => e
       AnyPlayLog.error("cheats poll: #{e.class}: #{e.message}") rescue nil
     end
@@ -6619,6 +6623,7 @@ module TyranorCheats
   end
 end
 TYRANOR_CHEATS_LAYER
+  AnyPlayLog.write("cheat layer initialized")
 rescue Exception => e
   detail = (e.backtrace || []).first(8).join("\n  ") rescue ""
   AnyPlayLog.error("cheat layer disabled during preload: #{e.class}: #{e.message}\n  #{detail}") rescue nil
