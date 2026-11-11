@@ -56,7 +56,7 @@ class TyranorCheatPanel(
     private var minimapEventSelected: ((Int) -> Unit)? = null
     private var currentGoldView: TextView? = null
     private var speedCheck: CheckBox? = null
-    private var capabilities: TyranorCheatController.Capabilities? = null
+    private var capabilities: TyranorCheatController.Capabilities? = runtimeGeneration?.let(::stockCapabilities)
     private var capabilitiesLoaded = false
     private var capabilityAttempts = 0
     private var capabilityGeneration = 0
@@ -222,6 +222,37 @@ class TyranorCheatPanel(
         Tab.ABOUT -> activity.getString(R.string.tyn_cheat_tab_about)
     }
 
+    /** Standard RPG Maker features are known from the selected RGSS generation. */
+    private fun stockCapabilities(generation: Int): TyranorCheatController.Capabilities {
+        val commonToggles = setOf(
+            "hpmp", "gold", "status", "items", "noclip", "noEncounter", "speed",
+            "fastText", "eventSpeed", "oneHit", "invincible", "msgSkip", "crit", "escape", "freeSkill",
+        )
+        return when (generation) {
+            1 -> TyranorCheatController.Capabilities(
+                engine = "xp",
+                toggles = commonToggles,
+                values = setOf("gold", "level", "exp", "atk", "def", "mat", "mdf", "agi", "dex", "speed"),
+                features = setOf("actors"),
+                actorValues = setOf("level", "hp", "mhp", "mp", "mmp", "atk", "def", "mat", "mdf", "agi", "dex"),
+            )
+            2 -> TyranorCheatController.Capabilities(
+                engine = "vx",
+                toggles = commonToggles,
+                values = setOf("gold", "level", "exp", "atk", "def", "mat", "agi", "speed"),
+                features = setOf("actors"),
+                actorValues = setOf("level", "hp", "mhp", "mp", "mmp", "atk", "def", "mat", "agi"),
+            )
+            else -> TyranorCheatController.Capabilities(
+                engine = "ace",
+                toggles = commonToggles + "tp",
+                values = setOf("gold", "level", "exp", "atk", "def", "mat", "mdf", "agi", "luk", "speed"),
+                features = setOf("actors"),
+                actorValues = setOf("level", "hp", "mhp", "mp", "mmp", "atk", "def", "mat", "mdf", "agi", "luk"),
+            )
+        }
+    }
+
     private fun renderTab() {
         val target = content ?: return
         minimapEventSelected = null
@@ -250,31 +281,6 @@ class TyranorCheatPanel(
         target.removeAllViews()
         currentCard = null
         speedCheck = null
-        // Pad editing and diagnostics are host features; they do not depend on
-        // the game Ruby bridge's capability handshake.
-        val needsCapabilities = selectedTab !in setOf(Tab.KEYS, Tab.ABOUT)
-        if (needsCapabilities && (!capabilitiesLoaded || capabilities?.engine == "unknown")) {
-            section(when (selectedTab) {
-                Tab.ITEMS -> R.string.tyn_cheat_section_items
-                Tab.CHARACTER -> R.string.tyn_cheat_section_character
-                Tab.SYSTEM -> R.string.tyn_cheat_section_system
-                Tab.MAP -> R.string.tyn_cheat_section_exploration
-                Tab.BATTLE -> R.string.tyn_cheat_section_battle
-                Tab.SAVE -> R.string.tyn_cheat_section_save
-                else -> R.string.tyn_cheat_section_quick
-            })
-            note(if (capabilitiesLoaded) R.string.tyn_cheat_capabilities_unavailable
-                else R.string.tyn_cheat_capabilities_loading)
-            if (capabilitiesLoaded) {
-                addRow(button(R.string.tyn_cheat_refresh) {
-                    capabilityAttempts = 0
-                    capabilitiesLoaded = false
-                    requestCapabilities(capabilityGeneration)
-                    renderTab()
-                })
-            }
-            return
-        }
         when (selectedTab) {
             Tab.QUICK -> {
                 section(R.string.tyn_cheat_section_quick)
@@ -1496,6 +1502,11 @@ class TyranorCheatPanel(
             if (panel == null) return@loadCapabilities
             if (result.engine == "unknown" && capabilityAttempts < 12) {
                 activity.window.decorView.postDelayed({ requestCapabilities(generation) }, 500)
+            } else if (result.engine == "unknown") {
+                // Keep the generation-based stock profile visible if this game
+                // does not answer the optional runtime capability query.
+                if (capabilities == null) runtimeGeneration?.let { capabilities = stockCapabilities(it) }
+                renderTab()
             } else {
                 capabilities = result
                 capabilitiesLoaded = true

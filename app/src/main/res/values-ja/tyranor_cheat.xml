@@ -65,8 +65,6 @@
     <string name="tyn_cheat_apply">適用</string>
     <string name="tyn_cheat_run">実行</string>
     <string name="tyn_cheat_applied">適用しました</string>
-    <string name="tyn_cheat_capabilities_loading">このゲームで使用できるチート機能を読み込み中…</string>
-    <string name="tyn_cheat_capabilities_unavailable">ゲーム機能を取得できませんでした。タップして再試行してください。</string>
     <string name="tyn_cheat_runtime_badge_generation">RGSS %1$d</string>
     <string name="tyn_cheat_system_search">スイッチ・変数名または ID を検索</string>
     <string name="tyn_cheat_system_loading">ゲームのスイッチと変数を読み込み中…</string>
