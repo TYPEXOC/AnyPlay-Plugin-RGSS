@@ -3573,25 +3573,39 @@ module AnyPlayPerf
                       end
                     end
                   end
-                  auto = counts.select { |k, _| k < 384 }.values.inject(0) { |t, c| t + c }
+                  w = lambda { |m| AnyPlayLog.write(m) }
+                  auto_ids = counts.keys.select { |k| k < 384 }
+                  auto = auto_ids.inject(0) { |t, k| t + counts[k] }
                   ids = counts.keys.select { |k| k >= 384 }.sort
-                  info = lambda do |id|
-                    "#{id}x#{counts[id]}(row=#{(id - 384) / 8},prio=#{pr ? pr[id] : '?'},tag=#{tt ? tt[id] : '?'})"
+                  lane = lambda { |k| ((k - 384) / 8) / 365 }
+                  w.call("tilemap v2: map=#{md.xsize}x#{md.ysize}x#{md.zsize} priorities=#{pr ? pr.xsize : 'nil'} " \
+                         "autotile_cells=#{auto} tileset_ids=#{ids.size} max_row=#{ids.last ? (ids.last - 384) / 8 : '-'}")
+                  names = (tset.autotile_names rescue nil)
+                  slots = (0..6).map do |i|
+                    bm = (@tilemap.autotiles[i] rescue nil)
+                    uses = auto_ids.select { |k| k / 48 - 1 == i }.inject(0) { |t, k| t + counts[k] }
+                    dims = bm ? ((bm.disposed? ? "disposed" : "#{bm.width}x#{bm.height}") rescue "?") : "nil"
+                    "#{i}:#{names ? names[i] : '?'}(#{dims},uses=#{uses})"
                   end
-                  out = "tilemap ids: map=#{md.xsize}x#{md.ysize}x#{md.zsize} priorities=#{pr ? pr.xsize : 'nil'} " \
-                        "autotile_cells=#{auto} tileset_ids=#{ids.size} max_id=#{ids.last} max_row=#{ids.last ? (ids.last - 384) / 8 : '-'}"
-                  top = counts.keys.select { |k| k >= 384 }.sort_by { |k| -counts[k] }.first(25)
-                  out << "\n  most used: " + top.map { |k| info.call(k) }.join(" ")
-                  out << "\n  highest rows: " + ids.last(12).map { |k| info.call(k) }.join(" ")
+                  w.call("autotile slots: " + slots.join(" "))
+                  lanes = Hash.new(0)
+                  ids.each { |k| lanes[lane.call(k)] += counts[k] }
+                  w.call("tileset lane usage (365 rows per lane): " + lanes.sort.map { |l, c| "lane#{l}=#{c}" }.join(" "))
+                  tagc = Hash.new(0)
+                  ids.each { |k| tagc["tag#{tt ? tt[k] : '?'}/prio#{pr ? pr[k] : '?'}"] += counts[k] }
+                  w.call("tag/prio usage: " + tagc.sort_by { |_, v| -v }.first(14).map { |k, v| "#{k}=#{v}" }.join(" "))
+                  (0..2).each do |l|
+                    li = ids.select { |k| lane.call(k) == l }.sort_by { |k| -counts[k] }.first(10)
+                    w.call("lane#{l} top: " + li.map { |k| "#{k}x#{counts[k]}t#{tt ? tt[k] : '?'}p#{pr ? pr[k] : '?'}" }.join(" "))
+                  end
                   if tt
-                    grass = ids.select { |k| tt[k] == 2 }.first(20)
-                    out << "\n  grass (tag 2): " + (grass.empty? ? "none" : grass.map { |k| info.call(k) }.join(" "))
+                    grass = ids.select { |k| tt[k] == 2 }.sort_by { |k| -counts[k] }.first(14)
+                    w.call("grass (tag 2): " + (grass.empty? ? "none" : grass.map { |k| "#{k}x#{counts[k]}(lane#{lane.call(k)},p#{pr ? pr[k] : '?'})" }.join(" ")))
                   end
                   if pr
                     odd = counts.keys.select { |k| k >= 48 && (k >= pr.xsize || pr[k] > 5) }.first(10)
-                    out << "\n  bad priority ids: " + odd.inspect unless odd.empty?
+                    w.call("bad priority ids: " + odd.inspect) unless odd.empty?
                   end
-                  AnyPlayLog.write(out)
                 rescue Exception => e
                   AnyPlayLog.write("tilemap ids dump failed: #{e.class}: #{e.message}") rescue nil
                 end
@@ -3611,6 +3625,12 @@ module AnyPlayPerf
       # "nil.id" quietly giving a number instead of an error.
       if defined?(PBMoves) && !(defined?(GameData) && defined?(GameData::Move)) && !nil.respond_to?(:id)
         NilClass.class_eval { def id; 4; end }
+      end
+      # Insurgence's wild-battle transition calls bm.radial_blur on a bitmap that is nil in one
+      # of its random variants (seen: "undefined method `radial_blur' for nil"). Let that one call
+      # do nothing so the battle starts instead of the game stopping.
+      unless nil.respond_to?(:radial_blur)
+        NilClass.class_eval { def radial_blur(*a); nil; end }
       end
     end
   rescue Exception
