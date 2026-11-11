@@ -66,8 +66,7 @@
     },
     setVariable: function (id, value) { return invoke("setVariable", [id, value]); },
     listMaps: function (query, offset, limit) {
-      return page(invoke("listMaps") || [], query, offset, limit,
-        function (entry) { return entry.name; }, function (entry) { return entry.id; });
+      return invoke("listMaps", [query, offset, limit]) || { total: 0, values: [] };
     },
     currentPosition: function () { return invoke("currentPosition"); },
     teleport: function (mapId, x, y, direction, fade) {
