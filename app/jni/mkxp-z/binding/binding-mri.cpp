@@ -4363,11 +4363,27 @@ module TyranorCheats
         mhp = actor.respond_to?(:mhp) ? actor.mhp.to_i : (actor.respond_to?(:maxhp) ? actor.maxhp.to_i : 0)
         mp = actor.respond_to?(:mp) ? actor.mp.to_i : (actor.respond_to?(:sp) ? actor.sp.to_i : 0)
         mmp = actor.respond_to?(:mmp) ? actor.mmp.to_i : (actor.respond_to?(:maxsp) ? actor.maxsp.to_i : (actor.respond_to?(:maxmp) ? actor.maxmp.to_i : 0))
-        out << "A\t#{id}\t#{name}\t#{level}\t#{hp}\t#{mhp}\t#{mp}\t#{mmp}"
+        stats = actor_value_fields.reject { |field| %w[level hp mhp mp mmp].include?(field) }.map do |field|
+          value = actor_stat_value(actor, field)
+          "#{field}=#{value.to_i}" unless value.nil?
+        end.compact
+        out << (["A", id, name, level, hp, mhp, mp, mmp] + stats).join("\t")
       end
       out.join("\n")
     rescue Exception => e
       "Couldn't read actors: #{e.class}: #{e.message}"
+    end
+
+    def actor_stat_value(actor, name)
+      key = case engine
+            when :xp then { 'atk' => :str, 'def' => :pdef, 'mat' => :int, 'mdf' => :mdef, 'agi' => :agi, 'dex' => :dex }[name]
+            when :vx then { 'atk' => :atk, 'def' => :def, 'mat' => :spi, 'agi' => :agi }[name]
+            when :ace then { 'atk' => :atk, 'def' => :def, 'mat' => :mat, 'mdf' => :mdf, 'agi' => :agi, 'luk' => :luk }[name]
+            end
+      return nil unless key && actor.respond_to?(key)
+      actor.send(key)
+    rescue Exception
+      nil
     end
 
     def set_actor_value(id_text, payload)

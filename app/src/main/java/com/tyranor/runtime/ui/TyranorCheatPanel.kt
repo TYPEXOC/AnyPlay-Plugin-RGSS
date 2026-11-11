@@ -777,7 +777,7 @@ class TyranorCheatPanel(
                     "mhp" -> actor.maxHp
                     "mp" -> actor.mp
                     "mmp" -> actor.maxMp
-                    else -> 0
+                    else -> actor.stats[field] ?: 0
                 }
                 promptNumber(activity.getString(label), initial.toString()) { value ->
                     manager.setActorValue(actor.id, field, value) { result -> activity.runOnUiThread {

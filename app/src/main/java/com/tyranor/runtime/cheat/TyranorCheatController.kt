@@ -95,7 +95,8 @@ class TyranorCheatController(
         val hp: Int,
         val maxHp: Int,
         val mp: Int,
-        val maxMp: Int
+        val maxMp: Int,
+        val stats: Map<String, Int> = emptyMap()
     )
 
     data class PokemonEntry(
@@ -416,11 +417,16 @@ class TyranorCheatController(
         send("list\tactors", 30_000L) { raw ->
             val out = mutableListOf<ActorEntry>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 8)
-                if (p.size != 8 || p[0] != "A") return@forEach
+                val p = line.split('\t')
+                if (p.size < 8 || p[0] != "A") return@forEach
                 val id = p[1].toIntOrNull() ?: return@forEach
+                val stats = p.drop(8).mapNotNull { field ->
+                    val pair = field.split('=', limit = 2)
+                    if (pair.size != 2) return@mapNotNull null
+                    pair[1].toIntOrNull()?.let { pair[0] to it }
+                }.toMap()
                 out.add(ActorEntry(id, p[2], p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0,
-                    p[5].toIntOrNull() ?: 0, p[6].toIntOrNull() ?: 0, p[7].toIntOrNull() ?: 0))
+                    p[5].toIntOrNull() ?: 0, p[6].toIntOrNull() ?: 0, p[7].toIntOrNull() ?: 0, stats))
             }
             onResult(out)
         }
