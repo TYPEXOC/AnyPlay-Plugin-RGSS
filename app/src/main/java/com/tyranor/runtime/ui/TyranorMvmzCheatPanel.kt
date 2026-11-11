@@ -34,6 +34,7 @@ class TyranorMvmzCheatPanel(
     private val enterPadEdit: () -> Unit,
     private val resetPad: () -> Unit,
     private val keepRuntimeActionsOnTop: () -> Unit,
+    private val restoreGameInputFocus: () -> Unit,
 ) {
     private val webView = WebView(activity)
     @Volatile private var pageLoaded = false
@@ -43,6 +44,7 @@ class TyranorMvmzCheatPanel(
     init {
         webView.apply {
             setBackgroundColor(Color.TRANSPARENT)
+            visibility = View.GONE
             isFocusable = true
             isFocusableInTouchMode = true
             settings.javaScriptEnabled = true
@@ -92,7 +94,9 @@ class TyranorMvmzCheatPanel(
     fun dismiss() {
         if (destroyed) return
         openRequested = false
+        webView.clearFocus()
         webView.visibility = View.GONE
+        restoreGameInputFocus()
     }
 
     fun destroy() {
@@ -112,14 +116,22 @@ class TyranorMvmzCheatPanel(
         keepRuntimeActionsOnTop()
     }
 
-    private fun closePanel() {
+    private fun closePanel(restoreFocus: Boolean) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             openRequested = false
-            webView.visibility = View.GONE
+            if (!destroyed) {
+                webView.clearFocus()
+                webView.visibility = View.GONE
+                if (restoreFocus) restoreGameInputFocus()
+            }
         } else {
             activity.runOnUiThread {
                 openRequested = false
-                if (!destroyed) webView.visibility = View.GONE
+                if (!destroyed) {
+                    webView.clearFocus()
+                    webView.visibility = View.GONE
+                    if (restoreFocus) restoreGameInputFocus()
+                }
             }
         }
     }
@@ -150,7 +162,7 @@ class TyranorMvmzCheatPanel(
         private val cheats: TyranorCheatController,
     ) {
         @JavascriptInterface
-        fun onPanelClosed() = closePanel()
+        fun onPanelClosed(restoreFocus: Boolean) = closePanel(restoreFocus)
 
         /** Called only from WebView's JavaScript bridge thread, never from Android's main thread. */
         @JavascriptInterface

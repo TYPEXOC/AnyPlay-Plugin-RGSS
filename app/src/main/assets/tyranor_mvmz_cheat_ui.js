@@ -9,7 +9,7 @@
   var userDragged = false; // 用户手动拖拽过，positionLauncher 不再覆盖
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
-  var context = { actorId: 0, itemKind: "item", systemKind: "switch" };
+  var context = { actorId: 0, actorEntries: null, itemKind: "item", systemKind: "switch" };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -83,12 +83,15 @@
   function renderActors(content) {
     var actors = mod.listActors();
     if (!actors.length) { content.innerHTML = '<div class="tm-note">当前队伍没有角色</div>'; return; }
+    context.actorEntries = actors;
     if (!context.actorId || !actors.some(function (a) { return a.id === context.actorId; })) context.actorId = actors[0].id;
     content.innerHTML = '<div class="tm-row">' + actorSelect(actors) + button("恢复", "recover-actor", "primary") + '</div><div id="tm-actor-body"></div>';
-    root.querySelector("#tm-actor").value = String(context.actorId); renderActorBody();
+    root.querySelector("#tm-actor").value = String(context.actorId); renderActorBody(actors);
   }
-  function renderActorBody() {
-    var actor = mod.listActors().filter(function (a) { return a.id === context.actorId; })[0];
+  function renderActorBody(actors) {
+    actors = actors || mod.listActors();
+    context.actorEntries = actors;
+    var actor = actors.filter(function (a) { return a.id === context.actorId; })[0];
     if (!actor) return;
     var stats = ["level","hp","mp","mhp","mmp","atk","def","mat","mdf","agi","luk"].map(function (key) {
       return '<div class="tm-item"><span class="tm-name">' + key.toUpperCase() + '</span>' + textInput("tm-stat-" + key, actor[key], "number", 'style="width:94px"') + button("设置", "set-stat", "", 'data-key="' + key + '"') + '</div>';
@@ -294,11 +297,11 @@
     if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); render(); });
     if (action === "item-kind" || action === "render-items") return loadItems();
     if (action === "set-item") return run(function () { mod.setItemCount(context.itemKind, node.dataset.id, inputValue("tm-count-" + node.dataset.id)); }, function () { toast("数量已修改"); loadItems(); });
-    if (action === "actor-select") { context.actorId = Number(node.value); return renderActorBody(); }
+    if (action === "actor-select") { context.actorId = Number(node.value); return renderActorBody(context.actorEntries || []); }
     if (action === "recover-actor") return run(function () { mod.recoverActor(context.actorId); }, function () { toast("角色已恢复"); renderActorBody(); });
     if (action === "set-stat") return run(function () { mod.setActorStat(context.actorId, node.dataset.key, inputValue("tm-stat-" + node.dataset.key)); }, function () { toast("属性已修改"); renderActorBody(); });
-    if (action === "learn-skill" || action === "forget-skill") return run(function () { return action === "learn-skill" ? mod.learnSkill(context.actorId, inputValue("tm-skill-id")) : mod.forgetSkill(context.actorId, inputValue("tm-skill-id")); }, renderActorBody);
-    if (action === "add-state" || action === "remove-state") return run(function () { return action === "add-state" ? mod.addState(context.actorId, inputValue("tm-state-id")) : mod.removeState(context.actorId, inputValue("tm-state-id")); }, renderActorBody);
+    if (action === "learn-skill" || action === "forget-skill") return run(function () { return action === "learn-skill" ? mod.learnSkill(context.actorId, inputValue("tm-skill-id")) : mod.forgetSkill(context.actorId, inputValue("tm-skill-id")); }, function () { renderActorBody(); });
+    if (action === "add-state" || action === "remove-state") return run(function () { return action === "add-state" ? mod.addState(context.actorId, inputValue("tm-state-id")) : mod.removeState(context.actorId, inputValue("tm-state-id")); }, function () { renderActorBody(); });
     if (action === "change-equip") return run(function () { mod.changeEquip(context.actorId, inputValue("tm-equip-slot"), inputValue("tm-equip-kind"), inputValue("tm-equip-id")); }, function () { toast("装备已更换"); renderActorBody(); });
     if (action === "system-kind" || action === "render-system") return loadSystem();
     if (action === "set-system") return run(function () { var id = node.dataset.id; if (context.systemKind === "switch") mod.setSwitch(id, checked("tm-system-" + id)); else { var raw = inputValue("tm-system-" + id); var value; try { value = JSON.parse(raw); } catch (_) { value = raw; } mod.setVariable(id, value); } }, function () { toast("系统值已修改"); loadSystem(); });
@@ -333,7 +336,7 @@
       try { available = !!bridge.isAvailable(); } catch (e) { available = false; }
       if (!available) { toast("当前未启用虚拟按键", true); return; }
       try { bridge.enterEdit(); } catch (e) { toast(String(e && e.message || e), true); return; }
-      close();
+      close(false);
       return;
     }
     if (action === "reset-keys") {
@@ -364,10 +367,10 @@
     ["touchstart","touchmove","touchend","pointerdown","pointerup","mousedown","mouseup","keydown","keyup","wheel"].forEach(function (name) { root.addEventListener(name, block); });
     render();
   }
-  function close() {
+  function close(restoreGameFocus) {
     if (!root) return false;
     root.remove(); root = null;
-    try { if (window.TyranorCheatNative) window.TyranorCheatNative.onPanelClosed(); } catch (_) {}
+    try { if (window.TyranorCheatNative) window.TyranorCheatNative.onPanelClosed(restoreGameFocus !== false); } catch (_) {}
     return true;
   }
   function toggle() { if (root) close(); else open(); }

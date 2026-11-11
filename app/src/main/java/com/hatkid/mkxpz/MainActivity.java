@@ -1223,6 +1223,7 @@ public class MainActivity extends SDLActivity
                 mCopyTextEnabled,
                 mSpeedUp,
                 mSessionDir,
+                this::restoreGameSurfaceFocus,
                 this::exportDiagnostics
             );
         }
@@ -1261,6 +1262,22 @@ public class MainActivity extends SDLActivity
                 }
             });
         }, "tyn-rgss-diagnostics-export").start();
+    }
+
+    /** Return keyboard/game input to SDL after the RGSS cheat WebView closes. */
+    public void restoreGameSurfaceFocus()
+    {
+        runOnUiThread(() -> {
+            if (mSurface == null || isFinishing() || isDestroyed()) return;
+            View surface = mSurface;
+            surface.post(() -> {
+                if (mSurface == surface && !isFinishing() && !isDestroyed()) {
+                    surface.requestFocus();
+                    TynRuntimeDiagnostics.append(mSessionDir,
+                        "Restored SDL surface input focus after closing RGSS cheat panel");
+                }
+            });
+        });
     }
 
     @Override

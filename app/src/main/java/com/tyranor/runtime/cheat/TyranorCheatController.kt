@@ -194,6 +194,10 @@ class TyranorCheatController(
     private val replyFile = File(dir, "tyranor_cheat_reply.txt")
     private val handler = Handler(Looper.getMainLooper())
 
+    private companion object {
+        const val REPLY_POLL_INTERVAL_MS = 16L
+    }
+
     private class Pending(
         val id: Int,
         val line: String,
@@ -239,7 +243,7 @@ class TyranorCheatController(
                 answered = true
             }
             if (answered) pump()
-            handler.postDelayed(this, 80)
+            handler.postDelayed(this, REPLY_POLL_INTERVAL_MS)
         }
     }
 
@@ -731,7 +735,7 @@ class TyranorCheatController(
     private fun startPolling() {
         if (polling) return
         polling = true
-        handler.postDelayed(pollRunnable, 80)
+        handler.postDelayed(pollRunnable, REPLY_POLL_INTERVAL_MS)
     }
 
     fun shutdown() {

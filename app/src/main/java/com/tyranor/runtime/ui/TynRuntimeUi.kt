@@ -52,6 +52,7 @@ class TynRuntimeUi(
     private val copyTextEnabled: Boolean,
     private val speedUp: Int,
     private val sessionDir: File?,
+    private val onRestoreGameInputFocus: Runnable,
     private val onExportDiagnostics: Runnable,
 ) {
     private val density = activity.resources.displayMetrics.density
@@ -140,6 +141,16 @@ class TynRuntimeUi(
                 },
             )
         }
+
+        // Load the local cheat WebView under the startup screen so the first tap does not
+        // pay WebView startup and asset parsing costs.
+        if (cheats != null) {
+            root.post {
+                if (cheatMenu == null && !activity.isFinishing && !activity.isDestroyed) {
+                    cheatMenu = createCheatMenu(cheats)
+                }
+            }
+        }
     }
 
     /** Called (from any thread) when the game has drawn its first frame. */
@@ -162,22 +173,27 @@ class TynRuntimeUi(
     }
 
     private fun openCheats() {
-        val cheatController = cheats ?: return
-        val menu = cheatMenu ?: TyranorMvmzCheatPanel(
-            activity,
-            root,
-            cheatController,
-            padAvailable = { true },
-            enterPadEdit = {
-                controller.setPadVisible(true)
-                controller.pad.enterEditMode()
-            },
-            resetPad = { controller.pad.resetToDefaults() },
-            keepRuntimeActionsOnTop = { actionBar?.bringToFront() },
-        ).also { cheatMenu = it }
+        val menu = cheatMenu ?: cheats?.let { createCheatMenu(it).also { created -> cheatMenu = created } } ?: return
         controller.releaseAllKeys()
         menu.show()
     }
+
+    private fun createCheatMenu(cheatController: TyranorCheatController) = TyranorMvmzCheatPanel(
+        activity,
+        root,
+        cheatController,
+        padAvailable = { true },
+        enterPadEdit = {
+            controller.setPadVisible(true)
+            controller.pad.enterEditMode()
+        },
+        resetPad = { controller.pad.resetToDefaults() },
+        keepRuntimeActionsOnTop = { actionBar?.bringToFront() },
+        restoreGameInputFocus = {
+            controller.releaseAllKeys()
+            onRestoreGameInputFocus.run()
+        },
+    )
 
     fun onPause() {
         fastForwardEnabled = false
