@@ -343,7 +343,7 @@ class TyranorCheatPanel(
             setTextColor(primaryTextColor)
             setHintTextColor(secondaryTextColor)
             textSize = 14f
-            singleLine = true
+            isSingleLine = true
             background = GradientDrawable().apply {
                 setColor(inputColor)
                 cornerRadius = 9f * activity.resources.displayMetrics.density
@@ -697,7 +697,7 @@ class TyranorCheatPanel(
             setTextColor(primaryTextColor)
             setHintTextColor(secondaryTextColor)
             textSize = 14f
-            singleLine = true
+            isSingleLine = true
             background = GradientDrawable().apply {
                 setColor(inputColor)
                 cornerRadius = 9f * activity.resources.displayMetrics.density
@@ -1720,7 +1720,7 @@ class TyranorCheatPanel(
         setTextColor(primaryTextColor)
         setHintTextColor(secondaryTextColor)
         textSize = 14f
-        singleLine = true
+        isSingleLine = true
         background = GradientDrawable().apply {
             setColor(inputColor)
             cornerRadius = 9f * activity.resources.displayMetrics.density
