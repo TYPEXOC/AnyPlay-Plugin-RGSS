@@ -14,7 +14,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import com.tyranor.runtime.input.PadOverlayPrefs
 import com.tyranor.runtime.input.TyranorMouseController
 import com.tyranor.runtime.input.TyranorPadController
@@ -35,30 +34,18 @@ class TyranorRuntimeActionBar(
 ) {
     private val padButton = ActionIcon(activity, Icon.PAD, primaryColor, onPrimaryColor)
     private val mouseButton = ActionIcon(activity, Icon.MOUSE, primaryColor, onPrimaryColor)
-    private val bar: LinearLayout
+    private val cheatButton: ActionIcon?
 
     init {
         val density = activity.resources.displayMetrics.density
-        bar = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            clipChildren = false
-            clipToPadding = false
-        }
         // Keep the pad control visible even when the pad starts hidden, so the player can
         // enable it without leaving the game.
-        bar.addView(padButton, LinearLayout.LayoutParams(dp(48, density), dp(48, density)))
-        bar.addView(mouseButton, LinearLayout.LayoutParams(dp(48, density), dp(48, density)).apply {
-            topMargin = dp(10, density)
-        })
-        if (showCheats) {
-            bar.addView(ActionIcon(activity, Icon.CHEAT, primaryColor, onPrimaryColor).apply {
+        cheatButton = if (showCheats) {
+            ActionIcon(activity, Icon.CHEAT, primaryColor, onPrimaryColor).apply {
                 contentDescription = activity.getString(R.string.tyn_runtime_cheat_button)
                 setOnClickListener { onCheats() }
-            }, LinearLayout.LayoutParams(dp(48, density), dp(48, density)).apply {
-                topMargin = dp(10, density)
-            })
-        }
+            }
+        } else null
         padButton.contentDescription = activity.getString(R.string.tyn_runtime_pad_button)
         padButton.setOnClickListener {
             pad.setPadVisible(!pad.pad.isPadVisible())
@@ -69,27 +56,18 @@ class TyranorRuntimeActionBar(
             mouse.setEnabled(!mouse.isEnabled)
             refresh()
         }
-        parent.addView(bar, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
-            topMargin = dp(16, density)
-            marginStart = dp(16, density)
-        })
-        for (index in 0 until bar.childCount) {
-            bindMoveGesture(activity, parent, bar, bar.getChildAt(index), density)
-        }
-        val savedPosition = PadOverlayPrefs.actionBarPosition(activity)
-        bar.post {
-            val params = bar.layoutParams as? FrameLayout.LayoutParams ?: return@post
-            val maxLeft = (parent.width - bar.width).coerceAtLeast(0)
-            val maxTop = (parent.height - bar.height).coerceAtLeast(0)
-            params.gravity = Gravity.TOP or Gravity.LEFT
-            if (savedPosition != null) {
-                params.leftMargin = (savedPosition.first * maxLeft).roundToInt()
-                params.topMargin = (savedPosition.second * maxTop).roundToInt()
-            } else {
-                params.leftMargin = dp(16, density).coerceIn(0, maxLeft)
-                params.topMargin = dp(16, density).coerceIn(0, maxTop)
-            }
-            bar.layoutParams = params
+        val actions = listOfNotNull(
+            RuntimeAction("pad", padButton, 0),
+            RuntimeAction("mouse", mouseButton, 1),
+            cheatButton?.let { RuntimeAction("cheat", it, 2) },
+        )
+        actions.forEach { action ->
+            parent.addView(
+                action.view,
+                FrameLayout.LayoutParams(dp(BUTTON_SIZE_DP, density), dp(BUTTON_SIZE_DP, density), Gravity.TOP or Gravity.LEFT),
+            )
+            positionAction(activity, parent, action, density)
+            bindMoveGesture(activity, parent, action, density)
         }
         refresh()
     }
@@ -100,19 +78,47 @@ class TyranorRuntimeActionBar(
     }
 
     fun bringToFront() {
-        bar.bringToFront()
+        padButton.bringToFront()
+        mouseButton.bringToFront()
+        cheatButton?.bringToFront()
     }
 
     private fun dp(value: Int, density: Float) = (value * density).toInt()
 
-    /** Match MVMZ's launcher gesture: taps activate, an 8dp drag moves and persists the whole group. */
+    private data class RuntimeAction(val id: String, val view: ActionIcon, val defaultIndex: Int)
+
+    private fun positionAction(
+        context: Activity,
+        parent: FrameLayout,
+        action: RuntimeAction,
+        density: Float,
+    ) {
+        action.view.post {
+            val params = action.view.layoutParams as? FrameLayout.LayoutParams ?: return@post
+            val maxLeft = (parent.width - action.view.width).coerceAtLeast(0)
+            val maxTop = (parent.height - action.view.height).coerceAtLeast(0)
+            val saved = PadOverlayPrefs.runtimeActionPosition(context, action.id)
+            params.gravity = Gravity.TOP or Gravity.LEFT
+            if (saved != null) {
+                params.leftMargin = (saved.first * maxLeft).roundToInt()
+                params.topMargin = (saved.second * maxTop).roundToInt()
+            } else {
+                params.leftMargin = dp(DEFAULT_LEFT_DP, density).coerceIn(0, maxLeft)
+                params.topMargin = dp(DEFAULT_TOP_DP + action.defaultIndex * ACTION_GAP_DP, density)
+                    .coerceIn(0, maxTop)
+            }
+            action.view.layoutParams = params
+        }
+    }
+
+    /** Each action is independently draggable; a tap still invokes that action. */
     private fun bindMoveGesture(
         context: Activity,
         parent: FrameLayout,
-        bar: LinearLayout,
-        target: View,
+        action: RuntimeAction,
         density: Float,
     ) {
+        val target = action.view
         var pointerId = -1
         var startRawX = 0f
         var startRawY = 0f
@@ -124,7 +130,7 @@ class TyranorRuntimeActionBar(
         target.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    val params = bar.layoutParams as? FrameLayout.LayoutParams ?: return@setOnTouchListener false
+                    val params = target.layoutParams as? FrameLayout.LayoutParams ?: return@setOnTouchListener false
                     pointerId = event.getPointerId(event.actionIndex)
                     startRawX = event.rawX
                     startRawY = event.rawY
@@ -140,22 +146,23 @@ class TyranorRuntimeActionBar(
                     val dy = event.rawY - startRawY
                     if (!moved && abs(dx) + abs(dy) < dragThreshold) return@setOnTouchListener true
                     moved = true
-                    val params = bar.layoutParams as? FrameLayout.LayoutParams ?: return@setOnTouchListener true
-                    val maxLeft = (parent.width - bar.width).coerceAtLeast(0)
-                    val maxTop = (parent.height - bar.height).coerceAtLeast(0)
+                    val params = target.layoutParams as? FrameLayout.LayoutParams ?: return@setOnTouchListener true
+                    val maxLeft = (parent.width - target.width).coerceAtLeast(0)
+                    val maxTop = (parent.height - target.height).coerceAtLeast(0)
                     params.gravity = Gravity.TOP or Gravity.LEFT
                     params.leftMargin = (startLeft + dx).roundToInt().coerceIn(0, maxLeft)
                     params.topMargin = (startTop + dy).roundToInt().coerceIn(0, maxTop)
-                    bar.layoutParams = params
+                    target.layoutParams = params
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     if (pointerId != -1 && moved) {
-                        val params = bar.layoutParams as? FrameLayout.LayoutParams
-                        val maxLeft = (parent.width - bar.width).coerceAtLeast(0)
-                        val maxTop = (parent.height - bar.height).coerceAtLeast(0)
-                        PadOverlayPrefs.saveActionBarPosition(
+                        val params = target.layoutParams as? FrameLayout.LayoutParams
+                        val maxLeft = (parent.width - target.width).coerceAtLeast(0)
+                        val maxTop = (parent.height - target.height).coerceAtLeast(0)
+                        PadOverlayPrefs.saveRuntimeActionPosition(
                             context,
+                            action.id,
                             if (maxLeft == 0) 0f else (params?.leftMargin ?: 0).toFloat() / maxLeft,
                             if (maxTop == 0) 0f else (params?.topMargin ?: 0).toFloat() / maxTop,
                         )
@@ -177,6 +184,13 @@ class TyranorRuntimeActionBar(
     }
 
     private enum class Icon { PAD, MOUSE, CHEAT }
+
+    private companion object {
+        const val BUTTON_SIZE_DP = 48
+        const val DEFAULT_LEFT_DP = 16
+        const val DEFAULT_TOP_DP = 16
+        const val ACTION_GAP_DP = 58
+    }
 
     private class ActionIcon(
         activity: Activity,
