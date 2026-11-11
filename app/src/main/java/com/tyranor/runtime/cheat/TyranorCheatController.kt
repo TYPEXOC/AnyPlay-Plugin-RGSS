@@ -685,7 +685,11 @@ class TyranorCheatController(
     // trailing spaces while keeping the tab-delimited command protocol intact.
     private fun cleanPayload(s: String) = s.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
 
-    private fun send(line: String, timeoutMs: Long = 8000L, onResult: ((String) -> Unit)?) {
+    private fun send(line: String, onResult: ((String) -> Unit)?) {
+        send(line, 8000L, onResult)
+    }
+
+    private fun send(line: String, timeoutMs: Long, onResult: ((String) -> Unit)?) {
         if (!ready) {
             onResult?.invoke("The game is still loading. Try again in a moment.")
             return
