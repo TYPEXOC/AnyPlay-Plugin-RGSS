@@ -55,15 +55,13 @@ class TynRuntimeUi(
     private val onExportDiagnostics: Runnable,
 ) {
     private val density = activity.resources.displayMetrics.density
-    private val rgssGeneration = sessionDir?.let { File(it, "rgss_version") }
-        ?.takeIf(File::isFile)
-        ?.let { runCatching { it.readText().trim().toIntOrNull() }.getOrNull() }
     private val root = FrameLayout(activity)
     private val loading = FrameLayout(activity)
     private val controller: TyranorPadController
     private val mouseController: TyranorMouseController
     private val cheats = if (cheatsEnabled) TyranorCheatController(activity, gameKey) else null
-    private var cheatMenu: TyranorCheatPanel? = null
+    private var cheatMenu: TyranorMvmzCheatPanel? = null
+    private var actionBar: TyranorRuntimeActionBar? = null
     private var dialog: Dialog? = null
     private var loadingGone = false
     private var fastForwardEnabled = false
@@ -101,7 +99,7 @@ class TynRuntimeUi(
         loading.addView(box, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         root.addView(loading, FrameLayout.LayoutParams(-1, -1))
 
-        TyranorRuntimeActionBar(
+        actionBar = TyranorRuntimeActionBar(
             activity,
             root,
             controller,
@@ -165,19 +163,17 @@ class TynRuntimeUi(
 
     private fun openCheats() {
         val cheatController = cheats ?: return
-        val menu = cheatMenu ?: TyranorCheatPanel(
+        val menu = cheatMenu ?: TyranorMvmzCheatPanel(
             activity,
             root,
             cheatController,
-            primaryColor,
-            onPrimaryColor,
-            { onExportDiagnostics.run() },
-            {
+            padAvailable = { true },
+            enterPadEdit = {
                 controller.setPadVisible(true)
                 controller.pad.enterEditMode()
             },
-            { controller.pad.resetToDefaults() },
-            runtimeGeneration = rgssGeneration,
+            resetPad = { controller.pad.resetToDefaults() },
+            keepRuntimeActionsOnTop = { actionBar?.bringToFront() },
         ).also { cheatMenu = it }
         controller.releaseAllKeys()
         menu.show()
@@ -194,7 +190,7 @@ class TynRuntimeUi(
         fastForwardEnabled = false
         writeFastForwardState()
         dialog?.dismiss()
-        cheatMenu?.dismiss()
+        cheatMenu?.destroy()
         cheats?.shutdown()
         mouseController.shutdown()
         controller.shutdown()

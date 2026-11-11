@@ -35,10 +35,11 @@ class TyranorRuntimeActionBar(
 ) {
     private val padButton = ActionIcon(activity, Icon.PAD, primaryColor, onPrimaryColor)
     private val mouseButton = ActionIcon(activity, Icon.MOUSE, primaryColor, onPrimaryColor)
+    private val bar: LinearLayout
 
     init {
         val density = activity.resources.displayMetrics.density
-        val bar = LinearLayout(activity).apply {
+        bar = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             clipChildren = false
@@ -96,6 +97,10 @@ class TyranorRuntimeActionBar(
     fun refresh() {
         padButton.isActive = pad.pad.isPadVisible()
         mouseButton.isActive = mouse.isEnabled
+    }
+
+    fun bringToFront() {
+        bar.bringToFront()
     }
 
     private fun dp(value: Int, density: Float) = (value * density).toInt()

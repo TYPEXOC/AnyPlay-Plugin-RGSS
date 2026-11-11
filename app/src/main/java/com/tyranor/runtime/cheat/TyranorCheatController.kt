@@ -256,6 +256,9 @@ class TyranorCheatController(
 
     fun isEnabled(toggle: TyranorCheatToggle): Boolean = enabledNames().contains(toggle.wireName)
 
+    /** The Ruby command channel has completed its initial state restore. */
+    fun isReady(): Boolean = ready
+
     fun speedMultiplier(): Float = prefs.getFloat(speedKey, 2f)
 
     /**
