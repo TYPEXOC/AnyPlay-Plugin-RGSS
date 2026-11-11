@@ -3580,7 +3580,7 @@ module TyranorCheats
       case name
       when 'noclip'
         if $game_player && @through_forced
-          $game_player.through = @old_player_through.nil? ? false : @old_player_through
+          set_player_through($game_player, @old_player_through.nil? ? false : @old_player_through)
         end
         @through_forced = false
         @old_player_through = nil
@@ -3608,6 +3608,39 @@ module TyranorCheats
       when 'items'
         @item_snap = nil
       end
+    end
+
+    def player_through(player)
+      return player.through if player.respond_to?(:through)
+      return player.instance_variable_get(:@through) if player.instance_variable_defined?(:@through)
+      nil
+    rescue Exception
+      nil
+    end
+
+    def set_player_through(player, value)
+      return false unless player
+      if player.respond_to?(:through=)
+        player.through = value
+      elsif player.respond_to?(:through) || player.instance_variable_defined?(:@through)
+        # Some XP games keep the standard @through state but remove the writer.
+        # Updating the backing ivar preserves Game_Character#passable? behavior.
+        player.instance_variable_set(:@through, value)
+        unless @through_writer_fallback_logged
+          AnyPlayLog.write("noclip: #{player.class} has no through=; updated @through directly")
+          @through_writer_fallback_logged = true
+        end
+      else
+        unless @noclip_unsupported_logged
+          AnyPlayLog.error("noclip unavailable: #{player.class} exposes neither through= nor @through")
+          @noclip_unsupported_logged = true
+        end
+        return false
+      end
+      true
+    rescue Exception => e
+      AnyPlayLog.error("noclip write failed: #{e.class}: #{e.message}") rescue nil
+      false
     end
 
     def save_encounter_state
@@ -5901,14 +5934,17 @@ module TyranorCheats
 
     # ---------------------------------------------------------- per frame
     def frame
-      return if @errors > 30
-      install_hooks
       @tick += 1
       poll if (@tick % 6) == 0
+      install_hooks
       apply unless @on.empty?
     rescue Exception => e
       @errors += 1
-      AnyPlayLog.error("cheats: #{e.class}: #{e.message}") rescue nil
+      # A broken optional cheat must not stop command polling; otherwise the
+      # panel can no longer query capabilities or turn that cheat back off.
+      if @errors == 1 || (@errors % 120) == 0
+        AnyPlayLog.error("cheat frame error (#{@errors}): #{e.class}: #{e.message}") rescue nil
+      end
     end
 
     def poll
@@ -6012,9 +6048,12 @@ module TyranorCheats
 
     def common_map_cheats
       if on?('noclip') && $game_player
-        @old_player_through = $game_player.through unless @through_forced
-        $game_player.through = true
-        @through_forced = true
+        unless @through_forced
+          @old_player_through = player_through($game_player)
+          @through_forced = set_player_through($game_player, true)
+        else
+          set_player_through($game_player, true)
+        end
       end
       if on?('noEncounter')
         save_encounter_state

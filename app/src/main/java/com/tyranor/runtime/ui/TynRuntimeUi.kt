@@ -55,6 +55,9 @@ class TynRuntimeUi(
     private val onExportDiagnostics: Runnable,
 ) {
     private val density = activity.resources.displayMetrics.density
+    private val rgssGeneration = sessionDir?.let { File(it, "rgss_version") }
+        ?.takeIf(File::isFile)
+        ?.let { runCatching { it.readText().trim().toIntOrNull() }.getOrNull() }
     private val root = FrameLayout(activity)
     private val loading = FrameLayout(activity)
     private val controller: TyranorPadController
@@ -174,6 +177,7 @@ class TynRuntimeUi(
                 controller.pad.enterEditMode()
             },
             { controller.pad.resetToDefaults() },
+            runtimeGeneration = rgssGeneration,
         ).also { cheatMenu = it }
         controller.releaseAllKeys()
         menu.show()

@@ -41,6 +41,7 @@ class TyranorCheatPanel(
     private val onExportDiagnostics: () -> Unit,
     private val onEditPad: () -> Unit,
     private val onResetPad: () -> Unit,
+    private val runtimeGeneration: Int? = null,
 ) {
     private enum class Tab { QUICK, ITEMS, CHARACTER, SYSTEM, MAP, BATTLE, SAVE, KEYS, ABOUT }
 
@@ -58,6 +59,8 @@ class TyranorCheatPanel(
     private var capabilities: TyranorCheatController.Capabilities? = null
     private var capabilitiesLoaded = false
     private var capabilityAttempts = 0
+    private var capabilityGeneration = 0
+    private var capabilityRequestInFlight = false
     private val darkMode =
         (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     private val panelColor = if (darkMode) 0xFF171A18.toInt() else 0xFFF7F8F7.toInt()
@@ -119,7 +122,13 @@ class TyranorCheatPanel(
         host.addView(scrim, ViewGroup.LayoutParams(-1, -1))
         panel = scrim
         renderTab()
-        requestCapabilities()
+        val generation = ++capabilityGeneration
+        capabilityAttempts = 0
+        if (capabilitiesLoaded && capabilities?.engine != "unknown") {
+            refreshCapabilities(generation)
+        } else {
+            requestCapabilities(generation)
+        }
     }
 
     fun handleBack(): Boolean {
@@ -140,8 +149,8 @@ class TyranorCheatPanel(
         minimapEventSelected = null
         currentGoldView = null
         speedCheck = null
-        capabilities = null
-        capabilitiesLoaded = false
+        capabilityGeneration++
+        capabilityRequestInFlight = false
         capabilityAttempts = 0
         activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED)
     }
@@ -159,7 +168,9 @@ class TyranorCheatPanel(
         }
         addView(title, LinearLayout.LayoutParams(0, -2, 1f))
         val runtimeBadge = TextView(activity).apply {
-            text = activity.getString(R.string.tyn_cheat_runtime_badge)
+            text = runtimeGeneration?.takeIf { it in 1..3 }
+                ?.let { activity.getString(R.string.tyn_cheat_runtime_badge_generation, it) }
+                ?: activity.getString(R.string.tyn_cheat_runtime_badge)
             gravity = Gravity.CENTER
             setTextColor(if (darkMode) 0xFFC9D2CC.toInt() else 0xFF53605A.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
@@ -239,14 +250,29 @@ class TyranorCheatPanel(
         target.removeAllViews()
         currentCard = null
         speedCheck = null
-        if (!capabilitiesLoaded) {
+        // Pad editing and diagnostics are host features; they do not depend on
+        // the game Ruby bridge's capability handshake.
+        val needsCapabilities = selectedTab !in setOf(Tab.KEYS, Tab.ABOUT)
+        if (needsCapabilities && (!capabilitiesLoaded || capabilities?.engine == "unknown")) {
             section(when (selectedTab) {
+                Tab.ITEMS -> R.string.tyn_cheat_section_items
+                Tab.CHARACTER -> R.string.tyn_cheat_section_character
                 Tab.SYSTEM -> R.string.tyn_cheat_section_system
                 Tab.MAP -> R.string.tyn_cheat_section_exploration
+                Tab.BATTLE -> R.string.tyn_cheat_section_battle
                 Tab.SAVE -> R.string.tyn_cheat_section_save
                 else -> R.string.tyn_cheat_section_quick
             })
-            note(R.string.tyn_cheat_capabilities_loading)
+            note(if (capabilitiesLoaded) R.string.tyn_cheat_capabilities_unavailable
+                else R.string.tyn_cheat_capabilities_loading)
+            if (capabilitiesLoaded) {
+                addRow(button(R.string.tyn_cheat_refresh) {
+                    capabilityAttempts = 0
+                    capabilitiesLoaded = false
+                    requestCapabilities(capabilityGeneration)
+                    renderTab()
+                })
+            }
             return
         }
         when (selectedTab) {
@@ -1460,18 +1486,35 @@ class TyranorCheatPanel(
         TyranorCheatToggle.FREE_SKILL_COST -> R.string.tyn_cheat_free_skill
     })
 
-    private fun requestCapabilities() {
-        if (panel == null || capabilitiesLoaded) return
+    private fun requestCapabilities(generation: Int) {
+        if (panel == null || generation != capabilityGeneration || capabilityRequestInFlight) return
         capabilityAttempts++
+        capabilityRequestInFlight = true
         manager.loadCapabilities { result ->
+            if (generation != capabilityGeneration) return@loadCapabilities
+            capabilityRequestInFlight = false
             if (panel == null) return@loadCapabilities
             if (result.engine == "unknown" && capabilityAttempts < 12) {
-                activity.window.decorView.postDelayed({ requestCapabilities() }, 500)
+                activity.window.decorView.postDelayed({ requestCapabilities(generation) }, 500)
             } else {
                 capabilities = result
                 capabilitiesLoaded = true
                 renderTab()
             }
+        }
+    }
+
+    /** Refresh dynamic flags on reopen without hiding the last successful page behind a spinner. */
+    private fun refreshCapabilities(generation: Int) {
+        if (panel == null || generation != capabilityGeneration || capabilityRequestInFlight) return
+        capabilityRequestInFlight = true
+        manager.loadCapabilities { result ->
+            if (generation != capabilityGeneration) return@loadCapabilities
+            capabilityRequestInFlight = false
+            if (panel == null || result.engine == "unknown") return@loadCapabilities
+            capabilities = result
+            capabilitiesLoaded = true
+            renderTab()
         }
     }
 

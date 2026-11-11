@@ -7,6 +7,8 @@ object PadOverlayPrefs {
     private const val PREFS = "tyranor_pad_overlay"
     private const val KEY_X = "fab_x"
     private const val KEY_Y = "fab_y"
+    private const val KEY_ACTION_BAR_X = "action_bar_x"
+    private const val KEY_ACTION_BAR_Y = "action_bar_y"
     private const val KEY_VISIBLE = "pad_visible"
 
     fun fabPosition(context: Context): Pair<Float, Float> {
@@ -25,5 +27,18 @@ object PadOverlayPrefs {
     fun saveFabPosition(context: Context, x: Float, y: Float) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putFloat(KEY_X, x).putFloat(KEY_Y, y).apply()
+    }
+
+    fun actionBarPosition(context: Context): Pair<Float, Float>? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!prefs.contains(KEY_ACTION_BAR_X) || !prefs.contains(KEY_ACTION_BAR_Y)) return null
+        return prefs.getFloat(KEY_ACTION_BAR_X, 0.02f) to prefs.getFloat(KEY_ACTION_BAR_Y, 0.025f)
+    }
+
+    fun saveActionBarPosition(context: Context, x: Float, y: Float) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putFloat(KEY_ACTION_BAR_X, x.coerceIn(0f, 1f))
+            .putFloat(KEY_ACTION_BAR_Y, y.coerceIn(0f, 1f))
+            .apply()
     }
 }

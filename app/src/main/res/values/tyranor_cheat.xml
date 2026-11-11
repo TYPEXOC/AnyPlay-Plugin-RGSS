@@ -65,7 +65,9 @@
     <string name="tyn_cheat_apply">应用</string>
     <string name="tyn_cheat_run">执行</string>
     <string name="tyn_cheat_applied">已应用</string>
-    <string name="tyn_cheat_capabilities_loading">正在识别当前游戏支持的功能…</string>
+    <string name="tyn_cheat_capabilities_loading">正在读取当前游戏可用的作弊功能…</string>
+    <string name="tyn_cheat_capabilities_unavailable">暂时无法获取游戏功能，请重试。</string>
+    <string name="tyn_cheat_runtime_badge_generation">RGSS %1$d</string>
     <string name="tyn_cheat_system_search">搜索开关或变量名称、编号</string>
     <string name="tyn_cheat_system_loading">正在读取游戏开关与变量…</string>
     <string name="tyn_cheat_system_empty">没有找到匹配的开关或变量。</string>

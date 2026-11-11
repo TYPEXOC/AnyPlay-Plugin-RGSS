@@ -65,7 +65,9 @@
     <string name="tyn_cheat_apply">Apply</string>
     <string name="tyn_cheat_run">Run</string>
     <string name="tyn_cheat_applied">Applied</string>
-    <string name="tyn_cheat_capabilities_loading">Detecting features supported by this game…</string>
+    <string name="tyn_cheat_capabilities_loading">Loading cheat features available in this game…</string>
+    <string name="tyn_cheat_capabilities_unavailable">Game features are temporarily unavailable. Tap to retry.</string>
+    <string name="tyn_cheat_runtime_badge_generation">RGSS %1$d</string>
     <string name="tyn_cheat_system_search">Search switch or variable name or ID</string>
     <string name="tyn_cheat_system_loading">Reading game switches and variables…</string>
     <string name="tyn_cheat_system_empty">No matching switches or variables.</string>
