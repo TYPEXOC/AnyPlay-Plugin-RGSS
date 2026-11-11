@@ -33,8 +33,13 @@
     <string name="tyn_cheat_items_empty">没有找到可用项目。</string>
     <string name="tyn_cheat_give">获取</string>
     <string name="tyn_cheat_unlimited_hp_mp">生命与魔力不减</string>
+    <string name="tyn_cheat_unlimited_hp_pp">HP 与招式 PP 不减</string>
     <string name="tyn_cheat_unlimited_tp">技能点不减</string>
+    <string name="tyn_cheat_custom_points_lock">自定义 points 不减</string>
+    <string name="tyn_cheat_custom_points">自定义点数（points）</string>
     <string name="tyn_cheat_unlimited_gold">金币不减</string>
+    <string name="tyn_cheat_unlimited_coins">游戏币不减</string>
+    <string name="tyn_cheat_coins">游戏币</string>
     <string name="tyn_cheat_status_immunity">异常状态免疫</string>
     <string name="tyn_cheat_unlimited_items">物品不减</string>
     <string name="tyn_cheat_noclip">穿墙</string>

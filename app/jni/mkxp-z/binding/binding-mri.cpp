@@ -3184,6 +3184,8 @@ module TyranorCheats
   @errors = 0
   @hooked = false
   @item_snap = nil
+  @points_snap = nil
+  @coins_snap = nil
   @old_textspeed = nil
   @through_forced = false
   @old_player_through = nil
@@ -3347,6 +3349,39 @@ module TyranorCheats
     # Essentials: the player object, the bag, and the party (v17 and v21 names)
     def trainer; $player || $Trainer; end
     def bag; $bag || $PokemonBag; end
+    def coin_resource
+      return nil unless ess? && defined?($PokemonGlobal) && $PokemonGlobal
+      return nil unless $PokemonGlobal.respond_to?(:coins) && $PokemonGlobal.respond_to?(:coins=)
+      return nil unless $PokemonGlobal.coins.is_a?(Numeric)
+      $PokemonGlobal
+    rescue Exception
+      nil
+    end
+    def coins_supported?; !coin_resource.nil?; end
+    def maintain_coins
+      return unless on?('coins')
+      resource = coin_resource
+      return unless resource
+      if @coins_snap.nil?
+        @coins_snap = resource.coins
+      elsif resource.coins > @coins_snap
+        @coins_snap = resource.coins
+      elsif resource.coins < @coins_snap
+        resource.coins = @coins_snap
+      end
+    rescue Exception
+    end
+    def set_coins(value)
+      resource = coin_resource
+      return nil unless resource
+      maximum = if defined?(MAXCOINS) then MAXCOINS.to_i else 999_999 end
+      target = [[value.to_i, 0].max, [maximum, 0].max].min
+      resource.coins = target
+      @coins_snap = target if on?('coins')
+      target
+    rescue Exception
+      nil
+    end
     def bag_add(id, q)
       bag.respond_to?(:add) ? bag.add(id, q) : bag.pbStoreItem(id, q)
     end
@@ -3508,6 +3543,8 @@ module TyranorCheats
       @on = {}
       names.to_s.split(',').each { |n| @on[n] = true unless n.empty? }
       @item_snap = nil
+      @points_snap = nil
+      @coins_snap = nil
       write_state
       ""
     end
@@ -3522,6 +3559,7 @@ module TyranorCheats
         save_encounter_state if name == 'noEncounter'
         @on[name] = true
         @item_snap = nil if name == 'items'
+        @points_snap = {} if name == 'points'
       else
         @on.delete(name)
         toggle_off(name)
@@ -3533,6 +3571,8 @@ module TyranorCheats
     def toggle_supported?(name)
       case name
       when 'tp'                         then engine == :ace
+      when 'points'                     then custom_points_supported?
+      when 'coins'                      then coins_supported?
       when 'fastText'                   then fast_text_supported?
       when 'msgSkip'                    then message_skip_supported?
       when 'eventSpeed'                 then defined?(Game_Interpreter) && class_method?(Game_Interpreter, :update)
@@ -3588,6 +3628,45 @@ module TyranorCheats
       end
     end
 
+    # Custom game resources have no engine-wide API. Treat a public numeric
+    # Game_Actor#points / #points= pair as a conventional custom points field;
+    # unrelated private ivars are deliberately not guessed or modified.
+    def custom_points_supported?
+      return false unless rpgm? && defined?(Game_Actor)
+      current_actors = actors
+      return false if current_actors.empty?
+      current_actors.all? do |actor|
+        actor.respond_to?(:points) && actor.respond_to?(:points=) && actor.points.is_a?(Numeric)
+      end
+    rescue Exception
+      false
+    end
+
+    def custom_points_key(actor)
+      actor.object_id.to_s
+    rescue Exception
+      actor.to_s
+    end
+
+    def maintain_custom_points(actor)
+      return unless on?('points') && custom_points_supported?
+      return unless actor && actor.respond_to?(:points) && actor.respond_to?(:points=)
+      current = actor.points
+      return unless current.is_a?(Numeric)
+      @points_snap ||= {}
+      key = custom_points_key(actor)
+      if @points_snap.has_key?(key)
+        if current > @points_snap[key]
+          @points_snap[key] = current
+        elsif current < @points_snap[key]
+          actor.points = @points_snap[key]
+        end
+      else
+        @points_snap[key] = current
+      end
+    rescue Exception
+    end
+
     def toggle_off(name)
       case name
       when 'noclip'
@@ -3619,6 +3698,10 @@ module TyranorCheats
         @old_textspeed = nil
       when 'items'
         @item_snap = nil
+      when 'points'
+        @points_snap = nil
+      when 'coins'
+        @coins_snap = nil
       end
     end
 
@@ -3719,6 +3802,10 @@ module TyranorCheats
           mon_calc(p)
         end
         "EXP set for all Pokemon"
+      when 'coins'
+        value = set_coins(n)
+        return NOPE if value.nil?
+        "Coins set to #{value}"
       else
         NOPE
       end
@@ -3760,6 +3847,14 @@ module TyranorCheats
           end
         end
         "Party EXP set to #{n}"
+      when 'points'
+        return NOPE unless custom_points_supported?
+        ac = actors
+        return "Your party is empty." if ac.empty?
+        ac.each do |actor|
+          return NOPE unless set_custom_points(actor, n)
+        end
+        "Party points set to #{n}"
       when 'atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'dex'
         set_stat(name, n)
       else
@@ -3973,7 +4068,7 @@ module TyranorCheats
     def list_capabilities
       out = ["E\t#{engine}"]
       toggles = if ess?
-                  %w[hpmp gold status items noclip noEncounter speed fastText eventSpeed oneHit invincible msgSkip]
+                  %w[hpmp gold coins status items noclip noEncounter speed fastText eventSpeed oneHit invincible msgSkip]
                 elsif rpgm?
                   %w[hpmp gold status items noclip noEncounter speed fastText eventSpeed oneHit invincible msgSkip]
                 else
@@ -3982,6 +4077,7 @@ module TyranorCheats
       toggles.each { |name| out << "T\t#{name}" if toggle_supported?(name) }
       %w[crit escape freeSkill].each { |name| out << "T\t#{name}" if toggle_supported?(name) }
       out << "T\ttp" if engine == :ace
+      out << "T\tpoints" if custom_points_supported?
       values = case engine
                when :essentials then %w[gold level exp]
                when :xp then %w[gold level exp atk def mat mdf agi dex]
@@ -3989,6 +4085,8 @@ module TyranorCheats
                when :ace then %w[gold level exp atk def mat mdf agi luk]
                else []
                end
+      values << 'coins' if coins_supported?
+      values << 'points' if custom_points_supported?
       values.each { |name| out << "V\t#{name}" }
       out << "V\tspeed" if engine != :unknown
       out << "F\tevents" if $game_map && $game_map.respond_to?(:events)
@@ -4026,12 +4124,14 @@ module TyranorCheats
     end
 
     def actor_value_fields
-      case engine
+      fields = case engine
       when :xp then %w[level hp mhp mp mmp atk def mat mdf agi dex]
       when :vx then %w[level hp mhp mp mmp atk def mat agi]
       when :ace then %w[level hp mhp mp mmp atk def mat mdf agi luk]
       else []
       end
+      fields << 'points' if custom_points_supported?
+      fields
     end
 
     def pokemon_display_name(pokemon)
@@ -4426,6 +4526,7 @@ module TyranorCheats
     end
 
     def actor_stat_value(actor, name)
+      return actor.points if name == 'points' && actor.respond_to?(:points)
       key = case engine
             when :xp then { 'atk' => :str, 'def' => :pdef, 'mat' => :int, 'mdf' => :mdef, 'agi' => :agi, 'dex' => :dex }[name]
             when :vx then { 'atk' => :atk, 'def' => :def, 'mat' => :spi, 'agi' => :agi }[name]
@@ -4466,6 +4567,8 @@ module TyranorCheats
       when 'mhp', 'mmp'
         result = set_actor_stat(actor, field, value)
         return result if result.is_a?(String)
+      when 'points'
+        return NOPE unless custom_points_supported? && set_custom_points(actor, value)
       else
         result = set_actor_stat(actor, field, value)
         return result if result.is_a?(String)
@@ -4474,6 +4577,19 @@ module TyranorCheats
       "#{wire_text(actor.name)} #{field} set to #{value}"
     rescue Exception => e
       "Couldn't change character: #{e.class}: #{e.message}"
+    end
+
+    def set_custom_points(actor, value)
+      return false unless actor && actor.respond_to?(:points) && actor.respond_to?(:points=)
+      return false unless actor.points.is_a?(Numeric)
+      actor.points = value
+      if on?('points')
+        @points_snap ||= {}
+        @points_snap[custom_points_key(actor)] = value
+      end
+      true
+    rescue Exception
+      false
     end
 
     def set_actor_level(actor, level)
@@ -6021,6 +6137,7 @@ module TyranorCheats
         maximum = ess_money_limit
         t.money = maximum if t.money < maximum
       end
+      maintain_coins if on?('coins')
       keep_items if on?('items')
       if on?('fastText') && defined?($PokemonSystem) && $PokemonSystem
         @old_textspeed = $PokemonSystem.textspeed if @old_textspeed.nil?
@@ -6036,7 +6153,7 @@ module TyranorCheats
 
     def apply_rpgm
       return unless $game_party
-      if on?('hpmp') || on?('tp') || on?('status')
+      if on?('hpmp') || on?('tp') || on?('status') || on?('points')
         actors.each do |a|
           if on?('hpmp')
             a.hp = maxhp_of(a)
@@ -6045,6 +6162,7 @@ module TyranorCheats
             elsif a.respond_to?(:sp=) then a.sp = mp end
           end
           a.tp = a.max_tp if on?('tp') && a.respond_to?(:tp=) && a.respond_to?(:max_tp)
+          maintain_custom_points(a) if on?('points')
           if on?('status')
             if a.respond_to?(:clear_states)
               a.clear_states

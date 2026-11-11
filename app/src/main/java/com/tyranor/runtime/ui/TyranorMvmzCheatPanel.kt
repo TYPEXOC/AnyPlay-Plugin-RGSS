@@ -162,6 +162,12 @@ class TyranorMvmzCheatPanel(
         private val cheats: TyranorCheatController,
     ) {
         @JavascriptInterface
+        fun uiLanguageTag(): String = host.intent
+            ?.getStringExtra("com.tyranor.runtime.extra.UI_LANGUAGE_TAG")
+            ?.takeIf { it.isNotBlank() }
+            ?: host.resources.configuration.locale?.toLanguageTag().orEmpty()
+
+        @JavascriptInterface
         fun onPanelClosed(restoreFocus: Boolean) = closePanel(restoreFocus)
 
         /** Called only from WebView's JavaScript bridge thread, never from Android's main thread. */

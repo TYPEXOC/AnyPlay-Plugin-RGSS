@@ -33,8 +33,13 @@
     <string name="tyn_cheat_items_empty">該当する項目がありません。</string>
     <string name="tyn_cheat_give">入手</string>
     <string name="tyn_cheat_unlimited_hp_mp">HP・MP減少なし</string>
+    <string name="tyn_cheat_unlimited_hp_pp">HP・技PP減少なし</string>
     <string name="tyn_cheat_unlimited_tp">TP減少なし</string>
+    <string name="tyn_cheat_custom_points_lock">カスタム points を固定</string>
+    <string name="tyn_cheat_custom_points">カスタムポイント（points）</string>
     <string name="tyn_cheat_unlimited_gold">ゴールド減少なし</string>
+    <string name="tyn_cheat_unlimited_coins">コイン減少なし</string>
+    <string name="tyn_cheat_coins">コイン</string>
     <string name="tyn_cheat_status_immunity">状態異常無効</string>
     <string name="tyn_cheat_unlimited_items">アイテム減少なし</string>
     <string name="tyn_cheat_noclip">壁を通り抜ける</string>

@@ -288,15 +288,24 @@ class TyranorCheatPanel(
                 toggle(TyranorCheatToggle.ONE_HIT_KILL)
                 toggle(TyranorCheatToggle.ALWAYS_CRIT)
                 toggle(TyranorCheatToggle.UNLIMITED_HPMP)
+                toggle(TyranorCheatToggle.UNLIMITED_TP)
+                toggle(TyranorCheatToggle.CUSTOM_POINTS_LOCK)
                 toggle(TyranorCheatToggle.UNLIMITED_GOLD)
+                toggle(TyranorCheatToggle.UNLIMITED_COINS)
+                toggle(TyranorCheatToggle.STATUS_IMMUNITY)
+                toggle(TyranorCheatToggle.UNLIMITED_ITEMS)
                 toggle(TyranorCheatToggle.WALK_THROUGH_WALLS)
                 toggle(TyranorCheatToggle.NO_ENCOUNTERS)
                 toggle(TyranorCheatToggle.SPEED_BOOST)
                 toggle(TyranorCheatToggle.FAST_TEXT)
                 toggle(TyranorCheatToggle.EVENT_SPEED)
                 toggle(TyranorCheatToggle.MESSAGE_SKIP)
+                toggle(TyranorCheatToggle.ESCAPE_ALWAYS)
+                toggle(TyranorCheatToggle.FREE_SKILL_COST)
                 if (capabilities?.values?.contains("gold") == true) showCurrentGold()
                 value(R.string.tyn_cheat_gold, "gold", false)
+                value(R.string.tyn_cheat_coins, "coins", false)
+                value(R.string.tyn_cheat_custom_points, "points", false)
                 if (capabilities?.values?.contains("gold") == true) action(R.string.tyn_cheat_max_gold, "maxGold")
                 if (capabilities?.features?.let { "actors" in it || "pokemonParty" in it } == true) {
                     action(R.string.tyn_cheat_recover_party, "recoverParty")
@@ -309,9 +318,12 @@ class TyranorCheatPanel(
                 section(R.string.tyn_cheat_section_character)
                 toggle(TyranorCheatToggle.UNLIMITED_HPMP)
                 toggle(TyranorCheatToggle.UNLIMITED_TP)
+                toggle(TyranorCheatToggle.CUSTOM_POINTS_LOCK)
+                toggle(TyranorCheatToggle.UNLIMITED_COINS)
                 toggle(TyranorCheatToggle.STATUS_IMMUNITY)
                 toggle(TyranorCheatToggle.UNLIMITED_ITEMS)
                 value(R.string.tyn_cheat_gold, "gold", false)
+                value(R.string.tyn_cheat_coins, "coins", false)
                 value(R.string.tyn_cheat_level, "level", false)
                 value(R.string.tyn_cheat_exp, "exp", false)
                 value(R.string.tyn_cheat_attack, "atk", false)
@@ -795,7 +807,8 @@ class TyranorCheatPanel(
             "mdf" to R.string.tyn_cheat_magic_defense,
             "agi" to R.string.tyn_cheat_agility,
             "luk" to R.string.tyn_cheat_luck,
-            "dex" to R.string.tyn_cheat_dexterity
+            "dex" to R.string.tyn_cheat_dexterity,
+            "points" to R.string.tyn_cheat_custom_points
         ).filter { capabilities?.actorValues?.contains(it.first) == true }
         if (fields.isEmpty()) return
         val labels = fields.map { activity.getString(it.second) }.toTypedArray()
@@ -1474,9 +1487,13 @@ class TyranorCheatPanel(
     }
 
     private fun toggleLabel(toggle: TyranorCheatToggle): String = activity.getString(when (toggle) {
-        TyranorCheatToggle.UNLIMITED_HPMP -> R.string.tyn_cheat_unlimited_hp_mp
+        TyranorCheatToggle.UNLIMITED_HPMP -> if (capabilities?.engine == "essentials")
+            R.string.tyn_cheat_unlimited_hp_pp
+        else R.string.tyn_cheat_unlimited_hp_mp
         TyranorCheatToggle.UNLIMITED_TP -> R.string.tyn_cheat_unlimited_tp
+        TyranorCheatToggle.CUSTOM_POINTS_LOCK -> R.string.tyn_cheat_custom_points_lock
         TyranorCheatToggle.UNLIMITED_GOLD -> R.string.tyn_cheat_unlimited_gold
+        TyranorCheatToggle.UNLIMITED_COINS -> R.string.tyn_cheat_unlimited_coins
         TyranorCheatToggle.STATUS_IMMUNITY -> R.string.tyn_cheat_status_immunity
         TyranorCheatToggle.UNLIMITED_ITEMS -> R.string.tyn_cheat_unlimited_items
         TyranorCheatToggle.WALK_THROUGH_WALLS -> R.string.tyn_cheat_noclip

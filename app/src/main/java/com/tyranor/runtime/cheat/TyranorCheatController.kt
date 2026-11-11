@@ -24,7 +24,9 @@ enum class TyranorCheatToggle(
     // Character states
     UNLIMITED_HPMP("hpmp", "Unlimited HP/MP", TyranorCheatSection.CHARACTER),
     UNLIMITED_TP("tp", "Unlimited TP", TyranorCheatSection.CHARACTER),
+    CUSTOM_POINTS_LOCK("points", "Lock custom points", TyranorCheatSection.CHARACTER),
     UNLIMITED_GOLD("gold", "Unlimited Gold", TyranorCheatSection.CHARACTER),
+    UNLIMITED_COINS("coins", "Unlimited Coins", TyranorCheatSection.CHARACTER),
     STATUS_IMMUNITY("status", "Status ailment immunity", TyranorCheatSection.CHARACTER),
     UNLIMITED_ITEMS("items", "Unlimited Items", TyranorCheatSection.CHARACTER),
 

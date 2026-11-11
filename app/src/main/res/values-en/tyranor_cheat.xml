@@ -33,8 +33,13 @@
     <string name="tyn_cheat_items_empty">No matching entries.</string>
     <string name="tyn_cheat_give">Get</string>
     <string name="tyn_cheat_unlimited_hp_mp">Unlimited HP and MP</string>
+    <string name="tyn_cheat_unlimited_hp_pp">Unlimited HP and move PP</string>
     <string name="tyn_cheat_unlimited_tp">Unlimited TP</string>
+    <string name="tyn_cheat_custom_points_lock">Lock custom points</string>
+    <string name="tyn_cheat_custom_points">Custom points (points)</string>
     <string name="tyn_cheat_unlimited_gold">Unlimited gold</string>
+    <string name="tyn_cheat_unlimited_coins">Unlimited coins</string>
+    <string name="tyn_cheat_coins">Coins</string>
     <string name="tyn_cheat_status_immunity">Status immunity</string>
     <string name="tyn_cheat_unlimited_items">Unlimited items</string>
     <string name="tyn_cheat_noclip">Walk through walls</string>

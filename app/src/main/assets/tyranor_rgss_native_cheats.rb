@@ -18,6 +18,72 @@ begin
       @native_window_dirty = true
       @native_window_refresh_tick = 0
 
+      def self.native_window_language
+        tag = (ENV["TYRANOR_UI_LANGUAGE_TAG"] rescue "").to_s.downcase
+        tag = (ENV["LANG"] rescue "").to_s.downcase if tag.empty?
+        return :en if tag.index("en") == 0
+        return :ja if tag.index("ja") == 0
+        :zh
+      rescue Exception
+        :zh
+      end
+
+      def self.native_window_text(chinese)
+        return chinese if native_window_language == :zh
+        en = {
+          "快捷" => "Quick", "物品" => "Items", "角色" => "Characters", "系统" => "System",
+          "地图" => "Map", "战斗" => "Battle", "存档" => "Saves",
+          "无敌" => "Invincibility", "一击必杀" => "One-hit kill", "必定暴击" => "Always critical",
+          "穿墙" => "Walk through walls", "禁止遇敌" => "No encounters", "事件加速" => "Speed up events",
+          "对话快进" => "Skip message pauses", "HP/MP 不减" => "Unlimited HP/MP", "金币不减" => "Unlimited gold",
+          "游戏币不减" => "Unlimited coins", "物品不减" => "Unlimited items", "自定义 points 不减" => "Lock custom points",
+          "移动加速" => "Speed boost", "开" => "On", "关" => "Off", "全队恢复" => "Recover party",
+          "物品补至 99" => "Set items to 99", "金币最大" => "Max gold", "队伍等级设为 99" => "Set party level to 99",
+          "自定义 points 设为 9999999" => "Set custom points to 9999999", "游戏币设为最大" => "Max coins",
+          "RPG Maker 修改器 · RGSS" => "RPG Maker Cheats · RGSS", "Enter 切换开关或执行操作；PageUp/PageDown 切换分类" => "Enter: toggle/run · PageUp/PageDown: change tab",
+          "Enter 在类别行切换物品/武器/护甲；Enter +1，← -1，→ +10" => "Enter: change category · Enter +1 · Left -1 · Right +10",
+          "当前类别" => "Category", "当前队伍没有角色" => "The party has no characters", "当前队伍没有宝可梦" => "The party has no Pokémon",
+          "开关 Enter 切换；变量 ←/→ -/+1" => "Switch: Enter toggles · Variable: Left/Right -/+1",
+          "Enter 恢复宝可梦，←/→ 调整等级" => "Enter: recover Pokémon · Left/Right: change level",
+          "Enter 恢复角色，←/→ 调整等级" => "Enter: recover character · Left/Right: change level",
+          "请先进入游戏存档" => "Load a save first", "开关" => "Switch", "变量" => "Variable", "当前位置" => "Current location",
+          "游戏没有命名的开关或变量" => "This game has no named switches or variables", "Enter 传送到选中地图的安全位置" => "Enter: warp to a safe point on this map",
+          "地图列表不可用" => "Map list unavailable", "当前不在战斗中" => "Not in battle", "击败全部敌人" => "Defeat all enemies",
+          "强制胜利" => "Force victory", "强制逃跑" => "Force escape", "Enter 执行选中的战斗操作" => "Enter: run the selected battle action",
+          "Enter 保存，→ 读取已有存档" => "Enter: save · Right: load existing save", "存档接口在此游戏中不可用" => "Save slots are unavailable in this game",
+          "这个存档槽是空的" => "This save slot is empty", "操作失败" => "Operation failed", "没有可用物品数据" => "No item data available",
+          "↑↓选择  Enter确认  Esc关闭  PageUp/PageDown切换分类" => "Up/Down: select · Enter: confirm · Esc: close · PageUp/PageDown: change tab"
+        }
+        ja = {
+          "快捷" => "クイック", "物品" => "アイテム", "角色" => "キャラクター", "系统" => "システム",
+          "地图" => "マップ", "战斗" => "戦闘", "存档" => "セーブ",
+          "无敌" => "無敵", "一击必杀" => "一撃必殺", "必定暴击" => "クリティカル確定",
+          "穿墙" => "壁抜け", "禁止遇敌" => "エンカウントなし", "事件加速" => "イベント高速化",
+          "对话快进" => "メッセージ早送り", "HP/MP 不减" => "HP/MP 減少なし", "金币不减" => "所持金減少なし",
+          "游戏币不减" => "コイン減少なし", "物品不减" => "アイテム減少なし", "自定义 points 不减" => "カスタムポイント固定",
+          "移动加速" => "移動速度アップ", "开" => "オン", "关" => "オフ", "全队恢复" => "パーティ全回復",
+          "物品补至 99" => "アイテムを99個にする", "金币最大" => "所持金を最大にする", "队伍等级设为 99" => "パーティレベルを99にする",
+          "自定义 points 设为 9999999" => "カスタムポイントを9999999にする", "游戏币设为最大" => "コインを最大にする",
+          "RPG Maker 修改器 · RGSS" => "RPG Maker 改造パネル · RGSS", "Enter 切换开关或执行操作；PageUp/PageDown 切换分类" => "Enter: 切替 / 実行 · PageUp/PageDown: タブ切替",
+          "Enter 在类别行切换物品/武器/护甲；Enter +1，← -1，→ +10" => "Enter: 種類変更 · Enter +1 · ← -1 · → +10",
+          "当前类别" => "種類", "当前队伍没有角色" => "パーティにキャラクターがいません", "当前队伍没有宝可梦" => "パーティにポケモンがいません",
+          "开关 Enter 切换；变量 ←/→ -/+1" => "スイッチ: Enterで切替 · 変数: ←/→ -/+1",
+          "Enter 恢复宝可梦，←/→ 调整等级" => "Enter: 回復 · ←/→: レベル変更",
+          "Enter 恢复角色，←/→ 调整等级" => "Enter: 回復 · ←/→: レベル変更",
+          "请先进入游戏存档" => "先にセーブデータを読み込んでください", "开关" => "スイッチ", "变量" => "変数", "当前位置" => "現在地",
+          "游戏没有命名的开关或变量" => "名前付きスイッチ / 変数がありません", "Enter 传送到选中地图的安全位置" => "Enter: 選択したマップの安全な位置へ移動",
+          "地图列表不可用" => "マップ一覧を利用できません", "当前不在战斗中" => "戦闘中ではありません", "击败全部敌人" => "敵をすべて倒す",
+          "强制胜利" => "強制勝利", "强制逃跑" => "強制逃走", "Enter 执行选中的战斗操作" => "Enter: 選択した戦闘操作を実行",
+          "Enter 保存，→ 读取已有存档" => "Enter: 保存 · →: 既存セーブを読み込む", "存档接口在此游戏中不可用" => "このゲームではセーブ機能を利用できません",
+          "这个存档槽是空的" => "このセーブスロットは空です", "操作失败" => "操作に失敗しました", "没有可用物品数据" => "アイテムデータがありません",
+          "↑↓选择  Enter确认  Esc关闭  PageUp/PageDown切换分类" => "↑↓: 選択 · Enter: 決定 · Esc: 閉じる · PageUp/PageDown: タブ切替"
+        }
+        table = native_window_language == :ja ? ja : en
+        table[chinese.to_s] || chinese
+      rescue Exception
+        chinese
+      end
+
       def self.native_window_write_state(value)
         File.open(WINDOW_STATE, "wb") { |file| file.write(value.to_s) }
       rescue Exception
@@ -131,8 +197,10 @@ begin
       end
 
       def self.native_window_tabs
-        [["快捷", :quick], ["物品", :items], ["角色", :actors], ["系统", :system],
-         ["地图", :map], ["战斗", :battle], ["存档", :saves]]
+        [[native_window_text("快捷"), :quick], [native_window_text("物品"), :items],
+         [native_window_text("角色"), :actors], [native_window_text("系统"), :system],
+         [native_window_text("地图"), :map], [native_window_text("战斗"), :battle],
+         [native_window_text("存档"), :saves]]
       end
 
       def self.native_window_rows
@@ -158,20 +226,29 @@ begin
       end
 
       def self.native_window_quick_rows
-        @native_window_help = "Enter 切换开关或执行操作；PageUp/PageDown 切换分类"
+        @native_window_help = native_window_text("Enter 切换开关或执行操作；PageUp/PageDown 切换分类")
         rows = []
-        flags = [["无敌", "invincible"], ["一击必杀", "oneHit"], ["必定暴击", "crit"],
-                 ["穿墙", "noclip"], ["禁止遇敌", "noEncounter"], ["事件加速", "eventSpeed"],
-                 ["对话快进", "msgSkip"], ["HP/MP 不减", "hpmp"], ["金币不减", "gold"],
-                 ["物品不减", "items"], ["移动加速", "speed"]]
+        flags = [[native_window_text("无敌"), "invincible"], [native_window_text("一击必杀"), "oneHit"],
+                 [native_window_text("必定暴击"), "crit"], [native_window_text("穿墙"), "noclip"],
+                 [native_window_text("禁止遇敌"), "noEncounter"], [native_window_text("事件加速"), "eventSpeed"],
+                 [native_window_text("对话快进"), "msgSkip"], [native_window_text("HP/MP 不减"), "hpmp"],
+                 [native_window_text("金币不减"), "gold"], [native_window_text("游戏币不减"), "coins"],
+                 [native_window_text("物品不减"), "items"], [native_window_text("自定义 points 不减"), "points"],
+                 [native_window_text("移动加速"), "speed"]]
         flags.each do |label, name|
           next unless toggle_supported?(name)
-          rows << ["#{label}：#{on?(name) ? '开' : '关'}", :toggle, name]
+          rows << ["#{label}: #{native_window_text(on?(name) ? '开' : '关')}", :toggle, name]
         end
-        rows << ["全队恢复", :run, "recoverParty"]
-        rows << ["物品补至 99", :run, "fullInventory"]
-        rows << ["金币最大", :run, "maxGold"]
-        rows << ["队伍等级设为 99", :value, "level"]
+        rows << [native_window_text("全队恢复"), :run, "recoverParty"]
+        rows << [native_window_text("物品补至 99"), :run, "fullInventory"]
+        rows << [native_window_text("金币最大"), :run, "maxGold"]
+        rows << [native_window_text("队伍等级设为 99"), :value, "level"]
+        if toggle_supported?("points")
+          rows << [native_window_text("自定义 points 设为 9999999"), :value, "points", "9999999"]
+        end
+        if toggle_supported?("coins")
+          rows << [native_window_text("游戏币设为最大"), :value, "coins", "99999"]
+        end
         rows
       end
 
@@ -179,8 +256,9 @@ begin
         rows = []
         kinds = ess? ? ["item"] : ["item", "weapon", "armor"]
         kind = kinds[@native_window_item_kind % kinds.length]
-        @native_window_help = "Enter 在类别行切换物品/武器/护甲；Enter +1，← -1，→ +10"
-        rows << ["当前类别：#{kind == 'item' ? '物品' : (kind == 'weapon' ? '武器' : '护甲')}（Enter 切换）", :item_kind]
+        @native_window_help = native_window_text("Enter 在类别行切换物品/武器/护甲；Enter +1，← -1，→ +10")
+        category = kind == 'item' ? "物品" : (kind == 'weapon' ? "武器" : "护甲")
+        rows << ["#{native_window_text('当前类别')}: #{native_window_text(category)} (Enter)", :item_kind]
         if ess?
           if gd?
             GameData::Item.each do |item|
@@ -203,7 +281,7 @@ begin
             rows << ["##{id} #{item.name}  x#{quantity_of(kind, id)}", :item, kind, id]
           end
         end
-        rows = [["没有可用物品数据", :note]] if rows.empty?
+        rows = [[native_window_text("没有可用物品数据"), :note]] if rows.empty?
         rows
       end
 
@@ -219,7 +297,7 @@ begin
             suffix = pokemon.respond_to?(:egg?) && pokemon.egg? ? "  (蛋)" : ""
             rows << ["#{name} Lv#{level}  HP #{hp}/#{max_hp}#{suffix}", :pokemon, index]
           end
-        @native_window_help = "Enter 恢复宝可梦，←/→ 调整等级"
+        @native_window_help = native_window_text("Enter 恢复宝可梦，←/→ 调整等级")
         else
           actors.each_with_index do |actor, index|
             id = actor_id_of(actor, index)
@@ -227,17 +305,18 @@ begin
             level = actor.respond_to?(:level) ? actor.level.to_i : 0
             hp = actor.respond_to?(:hp) ? actor.hp.to_i : 0
             max_hp = actor.respond_to?(:mhp) ? actor.mhp.to_i : (actor.respond_to?(:maxhp) ? actor.maxhp.to_i : hp)
-            rows << ["#{name} Lv#{level}  HP #{hp}/#{max_hp}", :actor, id]
+            points = actor.respond_to?(:points) && actor.points.is_a?(Numeric) ? "  points #{actor.points.to_i}" : ""
+            rows << ["#{name} Lv#{level}  HP #{hp}/#{max_hp}#{points}", :actor, id]
           end
-        @native_window_help = "Enter 恢复角色，←/→ 调整等级"
+        @native_window_help = native_window_text("Enter 恢复角色，←/→ 调整等级")
         end
-        rows = [["当前队伍没有角色", :note]] if rows.empty?
+        rows = [[native_window_text("当前队伍没有角色"), :note]] if rows.empty?
         rows
       end
 
       def self.native_window_system_rows
         rows = []
-        return [["请先进入游戏存档", :note]] unless $game_switches && $game_variables
+        return [[native_window_text("请先进入游戏存档"), :note]] unless $game_switches && $game_variables
         database = system_database
         switch_names = system_names(database, :switches) || []
         variable_names = system_names(database, :variables) || []
@@ -245,18 +324,18 @@ begin
         (1...switch_limit).each do |id|
           name = switch_names[id].to_s
           next if name.empty?
-          value = ($game_switches[id] rescue false) ? "开" : "关"
-          rows << ["开关 ##{id} #{name}：#{value}", :switch, id]
+          value = ($game_switches[id] rescue false) ? native_window_text("开") : native_window_text("关")
+          rows << ["#{native_window_text('开关')} ##{id} #{name}: #{value}", :switch, id]
         end
         variable_limit = variable_names.size
         (1...variable_limit).each do |id|
           name = variable_names[id].to_s
           next if name.empty?
           value = ($game_variables[id] rescue nil)
-          rows << ["变量 ##{id} #{name}：#{value}", :variable, id]
+          rows << ["#{native_window_text('变量')} ##{id} #{name}: #{value}", :variable, id]
         end
-        @native_window_help = "开关 Enter 切换；变量 ←/→ -/+1"
-        rows = [["游戏没有命名的开关或变量", :note]] if rows.empty?
+        @native_window_help = native_window_text("开关 Enter 切换；变量 ←/→ -/+1")
+        rows = [[native_window_text("游戏没有命名的开关或变量"), :note]] if rows.empty?
         rows
       end
 
@@ -265,20 +344,20 @@ begin
         rows = map_info_entries.map do |entry|
           id, name = entry
           here = id.to_i == current
-          ["#{here ? '▶ ' : ''}##{id} #{name}#{here ? '（当前位置）' : ''}", :map, id]
+          ["#{here ? '▶ ' : ''}##{id} #{name}#{here ? ' (' + native_window_text('当前位置') + ')' : ''}", :map, id]
         end
-        @native_window_help = "Enter 传送到选中地图的安全位置"
-        rows = [["地图列表不可用", :note]] if rows.empty?
+        @native_window_help = native_window_text("Enter 传送到选中地图的安全位置")
+        rows = [[native_window_text("地图列表不可用"), :note]] if rows.empty?
         rows
       end
 
       def self.native_window_battle_rows
         rows = []
-        rows << ["当前不在战斗中", :note] unless in_battle?
-        rows << ["击败全部敌人", :run, "killEnemies"]
-        rows << ["强制胜利", :run, "forceVictory"]
-        rows << ["强制逃跑", :run, "forceEscape"]
-        @native_window_help = "Enter 执行选中的战斗操作"
+        rows << [native_window_text("当前不在战斗中"), :note] unless in_battle?
+        rows << [native_window_text("击败全部敌人"), :run, "killEnemies"]
+        rows << [native_window_text("强制胜利"), :run, "forceVictory"]
+        rows << [native_window_text("强制逃跑"), :run, "forceEscape"]
+        @native_window_help = native_window_text("Enter 执行选中的战斗操作")
         rows
       end
 
@@ -414,7 +493,7 @@ begin
         when :run
           result = run_action(row[2])
         when :value
-          result = set_value(row[2], "99")
+          result = set_value(row[2], row[3] || "99")
         when :item
           kind = row[2]
           key = row[3]
@@ -454,7 +533,7 @@ begin
         when :save
           id = row[2].to_i
           if action == :right
-            result = row[3] ? load_slot(id.to_s) : "这个存档槽是空的"
+            result = row[3] ? load_slot(id.to_s) : native_window_text("这个存档槽是空的")
             close_native_window if result.to_s.index("loaded")
           else
             result = save_slot(id.to_s)
@@ -477,7 +556,7 @@ begin
         contents.clear
         contents.font.size = 19 if contents.font.respond_to?(:size=)
         contents.font.color = Color.new(240, 245, 242)
-        contents.draw_text(0, 0, contents.width - 44, 28, "RPG Maker 修改器 · RGSS", 0)
+        contents.draw_text(0, 0, contents.width - 44, 28, native_window_text("RPG Maker 修改器 · RGSS"), 0)
         contents.draw_text(contents.width - 42, 0, 38, 28, "×", 2)
         tab_y = 38
         tab_width = contents.width / native_window_tabs.length
@@ -518,7 +597,7 @@ begin
         contents.font.color = Color.new(177, 190, 183)
         message = @native_window_message.to_s
         message = @native_window_help.to_s if message.empty?
-        message = "↑↓选择  Enter确认  Esc关闭  PageUp/PageDown切换分类" if message.empty?
+        message = native_window_text("↑↓选择  Enter确认  Esc关闭  PageUp/PageDown切换分类") if message.empty?
         contents.draw_text(0, footer_top, contents.width, 24, message, 0)
         @native_window_dirty = false
       rescue Exception => error

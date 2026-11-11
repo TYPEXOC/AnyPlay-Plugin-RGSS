@@ -6,6 +6,13 @@
 (function () {
   "use strict";
 
+  try {
+    window.TyranorModLanguageTag = window.TyranorCheatNative &&
+      window.TyranorCheatNative.uiLanguageTag ? window.TyranorCheatNative.uiLanguageTag() : "";
+  } catch (_) {
+    window.TyranorModLanguageTag = "";
+  }
+
   function invoke(method, args) {
     var bridge = window.TyranorCheatNative;
     if (!bridge) throw new Error("RGSS 修改器桥未连接");

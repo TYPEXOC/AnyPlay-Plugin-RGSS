@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.ContentResolver;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.InputDevice;
@@ -77,6 +78,7 @@ public class MainActivity extends SDLActivity
     public static final String EXTRA_DIAGNOSTIC_GAME_TITLE = "com.tyranor.runtime.extra.DIAGNOSTIC_GAME_TITLE";
     private static final String TYN_ACTION_LAUNCH = "com.tyranor.runtime.action.LAUNCH";
     private static final String TYN_EXTRA_PROTOCOL_VERSION = "com.tyranor.runtime.extra.PROTOCOL_VERSION";
+    private static final String TYN_EXTRA_UI_LANGUAGE_TAG = "com.tyranor.runtime.extra.UI_LANGUAGE_TAG";
     private static final String TYN_EXTRA_FOLDER = "com.tyranor.runtime.extra.FOLDER_PATH";
     private static final String TYN_EXTRA_TITLE = "com.tyranor.runtime.extra.GAME_TITLE";
     private static final String TYN_EXTRA_GAME_ID = "com.tyranor.runtime.extra.GAME_ID";
@@ -119,6 +121,7 @@ public class MainActivity extends SDLActivity
     private boolean mWaitingForStoragePermission;
     private boolean mRtpScanNeedsRefresh;
     private String mTynGameTitle;
+    private String mTynUiLanguageTag;
     private PendingIntent mTynSaveSessionEndedCallback;
     private boolean mTynSaveSessionEndedCallbackSent;
     private ScheduledExecutorService mTranslationSync;
@@ -322,6 +325,31 @@ public class MainActivity extends SDLActivity
     {
         mInvalidLaunchRequest = true;
         Log.e(TAG, reason);
+    }
+
+    private void applyTynUiLanguage(Intent intent)
+    {
+        if (intent == null || !TYN_ACTION_LAUNCH.equals(intent.getAction())) return;
+        String requestedTag = intent.getStringExtra(TYN_EXTRA_UI_LANGUAGE_TAG);
+        if (requestedTag == null || requestedTag.trim().isEmpty()) return;
+
+        Locale locale = Locale.forLanguageTag(requestedTag.trim());
+        String language = locale.getLanguage();
+        if (!"zh".equals(language) && !"en".equals(language) && !"ja".equals(language)) {
+            Log.w(TAG, "Ignoring unsupported TYN UI language tag: " + requestedTag);
+            return;
+        }
+
+        mTynUiLanguageTag = locale.toLanguageTag();
+        Configuration override = new Configuration();
+        override.setLocale(locale);
+        override.setLayoutDirection(locale);
+        applyOverrideConfiguration(override);
+        try {
+            Os.setenv("TYRANOR_UI_LANGUAGE_TAG", mTynUiLanguageTag, true);
+        } catch (Exception error) {
+            Log.w(TAG, "Could not expose TYN UI language to Ruby scripts", error);
+        }
     }
 
     @Override
@@ -1162,6 +1190,16 @@ public class MainActivity extends SDLActivity
             finish();
             return;
         }
+        String requestedTag = intent.getStringExtra(TYN_EXTRA_UI_LANGUAGE_TAG);
+        if (requestedTag != null && !requestedTag.trim().isEmpty()) {
+            Locale locale = Locale.forLanguageTag(requestedTag.trim());
+            String normalizedTag = locale.toLanguageTag();
+            if (mTynUiLanguageTag != null && !mTynUiLanguageTag.equalsIgnoreCase(normalizedTag)) {
+                Log.i(TAG, "Closing the current game session so the new TYN UI language can take effect");
+                finish();
+                return;
+            }
+        }
         if (!new File(dir).getAbsolutePath().equals(GAME_FOLDER)) {
             Toast.makeText(this, "Closing the running game. Open the new game again.", Toast.LENGTH_LONG).show();
             finish(); // onDestroy() exits the process, so the next launch is clean
@@ -1172,7 +1210,9 @@ public class MainActivity extends SDLActivity
     protected void onCreate(Bundle savedInstanceState)
     {
         // Must be before super.onCreate(): picks the game folder before SDL starts.
-        applyGameDirFromIntent(getIntent());
+        Intent launchIntent = getIntent();
+        applyTynUiLanguage(launchIntent);
+        applyGameDirFromIntent(launchIntent);
 
         super.onCreate(savedInstanceState);
         if (mInvalidLaunchRequest) {
