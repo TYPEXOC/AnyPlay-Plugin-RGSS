@@ -192,6 +192,8 @@ class TyranorCheatController(
     private val cmdFile = File(dir, "tyranor_cheat_cmd.txt")
     private val tmpFile = File(dir, "tyranor_cheat_cmd.tmp")
     private val replyFile = File(dir, "tyranor_cheat_reply.txt")
+    private val runtimeStateFile = File(dir, "tyranor_cheat_state.txt")
+    private val nativeWindowStateFile = File(dir, "tyranor_cheat_window_state.txt")
     private val handler = Handler(Looper.getMainLooper())
 
     private companion object {
@@ -251,19 +253,45 @@ class TyranorCheatController(
         cmdFile.delete()
         tmpFile.delete()
         replyFile.delete()
+        runtimeStateFile.delete()
+        nativeWindowStateFile.delete()
         // Gives the game the saved checkboxes as soon as it starts running.
         enqueue("restore\t${speedMultiplier()}\t${enabledNames().joinToString(",")}", 0L) { ready = true }
     }
 
-    private fun enabledNames(): Set<String> =
-        prefs.getStringSet(togglesKey, emptySet())?.toSet() ?: emptySet()
+    private fun syncRuntimeState() {
+        val fields = runCatching { runtimeStateFile.readText().split('\t', limit = 2) }.getOrNull() ?: return
+        if (fields.size != 2) return
+        val speed = fields[0].toFloatOrNull()?.takeIf { it > 0f } ?: return
+        val enabled = fields[1].split(',').filter { it.isNotBlank() }.toMutableSet()
+        prefs.edit().putFloat(speedKey, speed.coerceIn(0.25f, 8f)).putStringSet(togglesKey, enabled).apply()
+    }
+
+    private fun enabledNames(): Set<String> {
+        syncRuntimeState()
+        return prefs.getStringSet(togglesKey, emptySet())?.toSet() ?: emptySet()
+    }
 
     fun isEnabled(toggle: TyranorCheatToggle): Boolean = enabledNames().contains(toggle.wireName)
 
     /** The Ruby command channel has completed its initial state restore. */
     fun isReady(): Boolean = ready
 
-    fun speedMultiplier(): Float = prefs.getFloat(speedKey, 2f)
+    fun speedMultiplier(): Float {
+        syncRuntimeState()
+        return prefs.getFloat(speedKey, 2f)
+    }
+
+    fun openNativeWindow(onResult: (String) -> Unit = {}) {
+        send("run\tnativeMenu", onResult)
+    }
+
+    fun closeNativeWindow(onResult: (String) -> Unit = {}) {
+        send("run\tcloseNativeMenu", onResult)
+    }
+
+    fun isNativeWindowOpen(): Boolean =
+        runCatching { nativeWindowStateFile.readText().trim() == "1" }.getOrDefault(false)
 
     /**
      * Checkbox tapped. [onResult] gets "" when it worked, otherwise a message
@@ -739,8 +767,11 @@ class TyranorCheatController(
     }
 
     fun shutdown() {
+        syncRuntimeState()
         handler.removeCallbacks(pollRunnable)
         polling = false
         queue.clear()
+        runtimeStateFile.delete()
+        nativeWindowStateFile.delete()
     }
 }

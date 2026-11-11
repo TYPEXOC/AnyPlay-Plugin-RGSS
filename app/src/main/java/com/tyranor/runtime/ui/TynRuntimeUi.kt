@@ -1,6 +1,7 @@
 package com.tyranor.runtime.ui
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.Dialog
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -167,15 +168,39 @@ class TynRuntimeUi(
     /** Back button. Returns true when handled (closes edit mode, or asks "Close game?"). */
     fun onBack(): Boolean {
         if (cheatMenu?.handleBack() == true) return true
+        if (cheats?.isNativeWindowOpen() == true) {
+            cheats.closeNativeWindow()
+            return true
+        }
         if (controller.handleBack()) return true
         showCloseDialog()
         return true
     }
 
     private fun openCheats() {
-        val menu = cheatMenu ?: cheats?.let { createCheatMenu(it).also { created -> cheatMenu = created } } ?: return
-        controller.releaseAllKeys()
-        menu.show()
+        val cheatController = cheats ?: return
+        AlertDialog.Builder(activity)
+            .setTitle(R.string.tyn_cheat_title)
+            .setItems(
+                arrayOf(
+                    activity.getString(R.string.tyn_runtime_cheat_panel_webview),
+                    activity.getString(R.string.tyn_runtime_cheat_panel_native),
+                ),
+            ) { _, which ->
+                controller.releaseAllKeys()
+                if (which == 0) {
+                    val menu = cheatMenu ?: createCheatMenu(cheatController).also { cheatMenu = it }
+                    menu.show()
+                } else if (which == 1) {
+                    cheatController.openNativeWindow { message ->
+                        if (message.isNotBlank() && !message.startsWith("RGSS cheat window")) {
+                            Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun createCheatMenu(cheatController: TyranorCheatController) = TyranorMvmzCheatPanel(

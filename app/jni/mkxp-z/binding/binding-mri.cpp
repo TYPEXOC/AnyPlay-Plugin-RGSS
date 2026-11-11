@@ -3171,6 +3171,8 @@ module TyranorCheats
   DIR   = "/data/data/com.tyranor.runtime.rgss/cache"
   CMD   = DIR + "/tyranor_cheat_cmd.txt"
   REPLY = DIR + "/tyranor_cheat_reply.txt"
+  STATE = DIR + "/tyranor_cheat_state.txt"
+  WINDOW_STATE = DIR + "/tyranor_cheat_window_state.txt"
   NOPE  = "This cheat doesn't work in this type of game."
   NEED_BATTLE = "You are not in a battle right now."
 
@@ -3317,6 +3319,13 @@ module TyranorCheats
 
     def on?(name); @on[name] ? true : false; end
     def speed_on?; @on['speed'] ? true : false; end
+    def write_state
+      File.open(STATE + ".tmp", "wb") do |file|
+        file.write("#{@speed}\t#{@on.keys.join(',')}")
+      end
+      File.rename(STATE + ".tmp", STATE)
+    rescue Exception
+    end
     def speed_bonus
       m = @speed.to_f
       m = 1.0 if m <= 0
@@ -3499,12 +3508,14 @@ module TyranorCheats
       @on = {}
       names.to_s.split(',').each { |n| @on[n] = true unless n.empty? }
       @item_snap = nil
+      write_state
       ""
     end
 
     def toggle(name, enable)
       unless toggle_supported?(name)
         @on.delete(name)
+        write_state
         return "#{NOPE}"
       end
       if enable
@@ -3515,6 +3526,7 @@ module TyranorCheats
         @on.delete(name)
         toggle_off(name)
       end
+      write_state
       ""
     end
 
@@ -3667,6 +3679,7 @@ module TyranorCheats
         return "Enter a number above 0." unless s > 0
         @speed = [[s, 0.25].max, 8.0].min
         @on['speed'] = true
+        write_state
         return "Speed x#{@speed}"
       end
       n = v.to_s.strip
@@ -5359,6 +5372,8 @@ module TyranorCheats
       when 'forceEscape'   then force_escape
       when 'saveScreen'    then open_native_screen(:save)
       when 'loadScreen'    then open_native_screen(:load)
+      when 'nativeMenu'    then open_native_window
+      when 'closeNativeMenu' then close_native_window
       else "Unknown action."
       end
     end
@@ -5936,6 +5951,7 @@ module TyranorCheats
     def frame
       @tick += 1
       poll if (@tick % 6) == 0
+      install_native_window_hook if respond_to?(:install_native_window_hook)
       install_hooks
       apply unless @on.empty?
     rescue Exception => e

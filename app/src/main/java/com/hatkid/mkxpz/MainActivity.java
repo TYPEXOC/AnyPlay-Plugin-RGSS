@@ -379,9 +379,14 @@ public class MainActivity extends SDLActivity
             File mkxpCompat = new File(mSessionDir, "tyranor_mkxp_compat.rb");
             File win32Compat = new File(mSessionDir, "tyranor_win32_compat.rb");
             File inputCompat = new File(mSessionDir, "tyranor_input_compat.rb");
+            File nativeCheatWindow = mCheatsEnabled
+                ? new File(mSessionDir, "tyranor_rgss_native_cheats.rb") : null;
             copyAssetToFile("tyranor_mkxp_compat.rb", mkxpCompat);
             copyAssetToFile("tyranor_win32_compat.rb", win32Compat);
             copyAssetToFile("tyranor_input_compat.rb", inputCompat);
+            if (nativeCheatWindow != null) {
+                copyAssetToFile("tyranor_rgss_native_cheats.rb", nativeCheatWindow);
+            }
             TynRuntimeDiagnostics.append(mSessionDir,
                 "Runtime setup: copied MKXP, Win32API, and input-update compatibility preloads");
 
@@ -435,6 +440,11 @@ public class MainActivity extends SDLActivity
             JSONArray postloadScripts = stringArray(config.opt("postloadScript"));
             if (isPostloadScriptsEnabled()) {
                 appendGameRootScript(postloadScripts, "postload.rb", "postload");
+            }
+            if (nativeCheatWindow != null && !containsString(postloadScripts, nativeCheatWindow.getAbsolutePath())) {
+                postloadScripts.put(nativeCheatWindow.getAbsolutePath());
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "RGSS native cheat window registered as an internal postload script");
             }
             config.put("postloadScript", postloadScripts);
             writeAtomically(new File(mSessionDir, "mkxp.json"), config.toString());

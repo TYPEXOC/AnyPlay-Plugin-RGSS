@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tyn_cheat_title">RPG Maker Modifier</string>
+    <string name="tyn_runtime_cheat_panel_webview">Current panel (WebView)</string>
+    <string name="tyn_runtime_cheat_panel_native">RGSS native window</string>
     <string name="tyn_cheat_runtime_badge">RGSS</string>
     <string name="tyn_cheat_close">Close mod panel</string>
     <string name="tyn_cheat_tab_quick">Quick</string>
