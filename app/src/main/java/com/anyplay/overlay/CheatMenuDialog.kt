@@ -143,7 +143,20 @@ class CheatMenuDialog(
                 initial = manager.speedMultiplier().toString()
             )
         )
-        content.addView(giveRow())
+        content.addView(giveRow(
+            title = "Give Item",
+            pickTitle = "Select item",
+            amountHint = "Qty",
+            emptyMsg = "No items found. Start or load a game first.",
+            accepts = { it.kind != "pokemon" }
+        ))
+        content.addView(giveRow(
+            title = "Give Pokémon",
+            pickTitle = "Select Pokémon",
+            amountHint = "Level",
+            emptyMsg = "This game has no Pokémon.",
+            accepts = { it.kind == "pokemon" }
+        ))
 
         // ---- One-click ----
         content.addView(sectionHeader("One-click"))
@@ -274,11 +287,18 @@ class CheatMenuDialog(
     }
 
     /**
-     * "Give": Pick opens one searchable list with everything this game can
-     * give (items, weapons, armor and, in Pokemon games, Pokemon). The amount
-     * box is the quantity, or the level when a Pokemon is picked.
+     * One "Give" row. [accepts] decides what its Pick list shows, so the
+     * Item row lists everything except Pokémon (items, and in RPG Maker games
+     * also weapons and armor) and the Pokémon row lists only Pokémon.
+     * The amount box is the quantity, or the level for a Pokémon.
      */
-    private fun giveRow(): View {
+    private fun giveRow(
+        title: String,
+        pickTitle: String,
+        amountHint: String,
+        emptyMsg: String,
+        accepts: (CheatManager.Pickable) -> Boolean
+    ): View {
         var selKind = ""
         var selKey = ""
         val selected = TextView(activity).apply {
@@ -287,14 +307,14 @@ class CheatMenuDialog(
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             maxLines = 2
         }
-        val amount = numberInput("Qty / Lv", false)
+        val amount = numberInput(amountHint, false)
         val pick = pillButton("Pick") {
-            showItemPicker { p ->
+            showItemPicker(pickTitle, emptyMsg, accepts) { p ->
                 selKind = p.kind
                 selKey = p.key
-                selected.text = "${kindTitle(p.kind)}: ${p.name}"
+                selected.text = if (p.kind == "item" || p.kind == "pokemon") p.name
+                else "${kindTitle(p.kind)}: ${p.name}"
                 selected.setTextColor(textColor)
-                if (p.kind == "pokemon") toast("Type the level in the amount box, then Give.")
             }
         }
         val give = pillButton("Give") {
@@ -302,7 +322,7 @@ class CheatMenuDialog(
             else manager.give(selKind, selKey, amount.text.toString()) { msg -> toast(msg) }
         }
         val top = rowContainer().apply {
-            addView(label("Give item / Pokémon"), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(label(title), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(pick)
         }
         val bottom = rowContainer().apply {
@@ -327,19 +347,24 @@ class CheatMenuDialog(
     }
 
     /**
-     * Fetches the real item/weapon/armor names from the running game and
-     * shows them in a searchable list. Tapping one calls [onPick] with
-     * its (id, name) and closes the picker — [onPick] is where the
-     * caller fills the ID field, so the player never has to know it.
+     * Fetches the real names from the running game and shows the ones that
+     * pass [accepts] in a searchable list. Tapping one calls [onPick] and
+     * closes the picker, so the player never has to know the ID.
      */
-    private fun showItemPicker(onPick: (CheatManager.Pickable) -> Unit) {
+    private fun showItemPicker(
+        pickTitle: String,
+        emptyMsg: String,
+        accepts: (CheatManager.Pickable) -> Boolean,
+        onPick: (CheatManager.Pickable) -> Unit
+    ) {
         val loadingToast = Toast.makeText(activity, "Loading items…", Toast.LENGTH_SHORT)
         loadingToast.show()
 
-        manager.listPickables { items ->
+        manager.listPickables { all ->
             loadingToast.cancel()
+            val items = all.filter(accepts)
             if (items.isEmpty()) {
-                toast("This kind of item doesn't exist in this game.")
+                toast(emptyMsg)
                 return@listPickables
             }
 
@@ -347,7 +372,8 @@ class CheatMenuDialog(
             // two items share a name, and lets the player see the ID too.
             val entries = items.map {
                 val shown = if (it.key.toIntOrNull() != null) "#${it.key}  ${it.name}" else "${it.name}  (${it.key})"
-                "[${kindTitle(it.kind)}] $shown"
+                // "item" and "pokemon" need no tag here; weapon/armor keep theirs.
+                if (it.kind == "item" || it.kind == "pokemon") shown else "[${kindTitle(it.kind)}] $shown"
             }
             val adapter = object : ArrayAdapter<String>(activity, android.R.layout.simple_list_item_1, entries.toMutableList()) {
                 override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
@@ -396,7 +422,7 @@ class CheatMenuDialog(
                 setPadding(px(12), px(12), px(12), px(8))
                 addView(
                     TextView(activity).apply {
-                        text = "Select"
+                        text = pickTitle
                         setTextColor(textColor)
                         setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
                         typeface = Typeface.DEFAULT_BOLD
