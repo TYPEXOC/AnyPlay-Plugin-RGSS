@@ -22,9 +22,9 @@
     <string name="tyn_cheat_section_keys">Virtual controls</string>
     <string name="tyn_cheat_section_about">Runtime information</string>
     <string name="tyn_cheat_runtime_logs">Runtime logs</string>
-    <string name="tyn_cheat_keys_note">Adjust the virtual controls' position, size, and key mappings while in game.</string>
+    <string name="tyn_cheat_keys_note">Adjust the virtual controls\' position, size, and key mappings while in game.</string>
     <string name="tyn_cheat_about_note">The TYN RGSS runtime includes its own Ruby environment and cheat features.</string>
-    <string name="tyn_cheat_about_compat_note">The modifier reads and changes state through the game's RGSS interfaces. Custom battle systems or scripts can bypass standard APIs. Event speed, message skipping, and save changes may affect scenes or progress, so keep a save backup.</string>
+    <string name="tyn_cheat_about_compat_note">The modifier reads and changes state through the game\'s RGSS interfaces. Custom battle systems or scripts can bypass standard APIs. Event speed, message skipping, and save changes may affect scenes or progress, so keep a save backup.</string>
     <string name="tyn_cheat_edit_pad">Edit virtual controls</string>
     <string name="tyn_cheat_items_search">Search by name or ID</string>
     <string name="tyn_cheat_items_loading">Reading game items…</string>
@@ -87,7 +87,7 @@
     <string name="tyn_cheat_map_entry_format">Map #%1$d: %2$s</string>
     <string name="tyn_cheat_map_warp">Warp</string>
     <string name="tyn_cheat_map_warped">Transfer requested</string>
-    <string name="tyn_cheat_save_native_note">Uses the game's own save screens, preserving its save format and normal flow.</string>
+    <string name="tyn_cheat_save_native_note">Uses the game\'s own save screens, preserving its save format and normal flow.</string>
     <string name="tyn_cheat_open_save">Open game save screen</string>
     <string name="tyn_cheat_open_load">Open game load screen</string>
     <string name="tyn_cheat_load_confirm_title">Open the load screen?</string>
@@ -184,7 +184,7 @@
     <string name="tyn_cheat_battle_kill_enemies">Defeat all enemies</string>
     <string name="tyn_cheat_save_slots">Save slots</string>
     <string name="tyn_cheat_save_slots_loading">Reading save slots…</string>
-    <string name="tyn_cheat_save_slots_empty">This engine doesn't expose manageable save slots.</string>
+    <string name="tyn_cheat_save_slots_empty">This engine doesn\'t expose manageable save slots.</string>
     <string name="tyn_cheat_save_slot_current">Slot #%1$d (current)</string>
     <string name="tyn_cheat_save_slot_exists">Slot #%1$d · %2$s</string>
     <string name="tyn_cheat_save_slot_empty">Slot #%1$d (empty)</string>
@@ -194,7 +194,7 @@
     <string name="tyn_cheat_load_slot">Load</string>
     <string name="tyn_cheat_delete_slot">Delete</string>
     <string name="tyn_cheat_delete_slot_title">Delete save?</string>
-    <string name="tyn_cheat_delete_slot_message">Delete save slot #%1$d? This can't be undone.</string>
+    <string name="tyn_cheat_delete_slot_message">Delete save slot #%1$d? This can\'t be undone.</string>
     <string name="tyn_cheat_save_deleted">Save deleted</string>
     <string name="tyn_cheat_equipment">Equipment</string>
     <string name="tyn_cheat_equipment_empty">This character has no editable equipment slots.</string>
