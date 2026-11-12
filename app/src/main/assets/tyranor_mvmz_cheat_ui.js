@@ -174,7 +174,7 @@
       tab.classList.toggle("active", tab.dataset.section === context.actorSection);
     });
     if (context.actorSection === "stats") {
-      var stats = ["level","hp","mp","mhp","mmp","atk","def","mat","agi","luk"].map(function (key) {
+      var stats = ["level","hp","mp","mhp","mmp","atk","def","mat","mdf","agi","luk"].map(function (key) {
       return '<div class="tm-item"><span class="tm-name">' + key.toUpperCase() + '</span>' + textInput("tm-stat-" + key, actor[key], "number", 'style="width:94px"') + button("设置", "set-stat", "", 'data-key="' + key + '"') + '</div>';
       }).join("");
       section.innerHTML = card("属性", '<div class="tm-list">' + stats + '</div>');
