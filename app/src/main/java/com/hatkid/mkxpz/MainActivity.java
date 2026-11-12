@@ -429,6 +429,13 @@ public class MainActivity extends SDLActivity
             if (nativeCheatWindow != null) {
                 copyAssetToFile("tyranor_rgss_native_cheats.rb", nativeCheatWindow);
             }
+            try {
+                Os.setenv("TYRANOR_NATIVE_CHEAT_SCRIPT",
+                    nativeCheatWindow != null ? nativeCheatWindow.getAbsolutePath() : "", true);
+            } catch (Exception error) {
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Could not configure the internal native cheat script path", error);
+            }
             TynRuntimeDiagnostics.append(mSessionDir,
                 "Runtime setup: copied MKXP, Win32API, and input-update compatibility preloads");
 
@@ -566,6 +573,12 @@ public class MainActivity extends SDLActivity
             if (mCheatsEnabled) {
                 File nativeCheatWindow = new File(mSessionDir, "tyranor_rgss_native_cheats.rb");
                 copyAssetToFile("tyranor_rgss_native_cheats.rb", nativeCheatWindow);
+                try {
+                    Os.setenv("TYRANOR_NATIVE_CHEAT_SCRIPT", nativeCheatWindow.getAbsolutePath(), true);
+                } catch (Exception error) {
+                    TynRuntimeDiagnostics.append(mSessionDir,
+                        "Could not configure the standalone native cheat script path", error);
+                }
                 JSONArray postloadScripts = stringArray(config.opt("postloadScript"));
                 if (!containsString(postloadScripts, nativeCheatWindow.getAbsolutePath())) {
                     postloadScripts.put(nativeCheatWindow.getAbsolutePath());
@@ -573,6 +586,13 @@ public class MainActivity extends SDLActivity
                 config.put("postloadScript", postloadScripts);
                 TynRuntimeDiagnostics.append(mSessionDir,
                     "Standalone native cheat window registered as a postload script");
+            } else {
+                try {
+                    Os.setenv("TYRANOR_NATIVE_CHEAT_SCRIPT", "", true);
+                } catch (Exception error) {
+                    TynRuntimeDiagnostics.append(mSessionDir,
+                        "Could not clear the standalone native cheat script path", error);
+                }
             }
             writeAtomically(new File(mSessionDir, "mkxp.json"), config.toString());
             GAME_PATH = mSessionDir.getAbsolutePath();

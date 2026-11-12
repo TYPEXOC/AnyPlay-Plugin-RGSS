@@ -6064,9 +6064,26 @@ module TyranorCheats
     end
 
     # ---------------------------------------------------------- per frame
+    def load_native_window_layer
+      return true if respond_to?(:open_native_window)
+      return false if @native_window_layer_load_attempted
+      path = (ENV['TYRANOR_NATIVE_CHEAT_SCRIPT'] rescue '').to_s
+      return false if path.empty? || !File.file?(path)
+      @native_window_layer_load_attempted = true
+      load(path)
+      loaded = respond_to?(:open_native_window)
+      AnyPlayLog.write("RGSS native cheat window layer loaded lazily") if loaded
+      loaded
+    rescue Exception => e
+      @native_window_layer_load_attempted = true
+      AnyPlayLog.error("RGSS native cheat window lazy load failed: #{e.class}: #{e.message}") rescue nil
+      false
+    end
+
     def frame
       @tick += 1
       poll if (@tick % 6) == 0
+      load_native_window_layer
       install_native_window_hook if respond_to?(:install_native_window_hook)
       install_hooks
       apply unless @on.empty?
