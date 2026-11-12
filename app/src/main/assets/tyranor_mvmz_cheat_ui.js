@@ -78,9 +78,11 @@
       });
       return { id: group[0], label: group[0], entries: entries };
     }).filter(function (group) { return group.entries.length > 0 || group.id === "探索" && (!supported || supported.indexOf("speed") >= 0); });
-    var sections = groups.concat([{ id: "金币", label: "金币" }, { id: "队伍", label: "队伍" }]);
+    var sections = groups.concat([{ id: "队伍", label: "队伍" }]);
     if (!sections.some(function (section) { return section.id === context.quickSection; })) context.quickSection = sections[0].id;
     var selectedGroup = groups.filter(function (group) { return group.id === context.quickSection; })[0];
+    var cachedGold = context.gold == null ? "…" : context.gold;
+    var gold = row("当前金币", '<span class="tm-badge" id="tm-gold-current">' + cachedGold + '</span>') + '<div class="tm-row">' + textInput("tm-gold", cachedGold, "number", 'min="0"') + button("设置", "set-gold", "primary") + button("拉满", "max-gold") + '</div>';
     var sectionBody;
     if (selectedGroup) {
       var toggles = selectedGroup.entries.map(function (entry) {
@@ -89,11 +91,7 @@
       if (selectedGroup.id === "探索" && (!supported || supported.indexOf("speed") >= 0)) {
         toggles += row("移动速度", '<div class="tm-row"><input class="tm-input" id="tm-speed" type="number" min="0.25" max="8" step="0.25" value="' + escapeHtml(state.speedMultiplier || 2) + '">' + button("设置", "set-speed", "primary") + '</div>');
       }
-      sectionBody = card(selectedGroup.label, toggles);
-    } else if (context.quickSection === "金币") {
-      var cachedGold = context.gold == null ? "…" : context.gold;
-      var gold = row("当前金币", '<span class="tm-badge" id="tm-gold-current">' + cachedGold + '</span>') + '<div class="tm-row">' + textInput("tm-gold", cachedGold, "number", 'min="0"') + button("设置", "set-gold", "primary") + button("拉满", "max-gold") + '</div>';
-      sectionBody = card("金币", gold);
+      sectionBody = card(selectedGroup.label, toggles) + (selectedGroup.id === "角色与资源" ? card("金币", gold) : "");
     } else {
       sectionBody = card("队伍", '<div class="tm-row">' + button("全体恢复", "recover-party", "primary") + button("刷新页面", "render") + '</div>');
     }
@@ -223,8 +221,11 @@
     context.systemKind = inputValue("tm-system-kind") || context.systemKind;
     var result = context.systemKind === "switch" ? mod.listSwitches(inputValue("tm-system-query"), 0, 200) : mod.listVariables(inputValue("tm-system-query"), 0, 200);
     root.querySelector("#tm-system-list").innerHTML = result.values.map(function (item) {
-      var control = context.systemKind === "switch" ? '<input class="tm-switch" id="tm-system-' + item.id + '" type="checkbox" ' + (item.value ? "checked" : "") + '>' : textInput("tm-system-" + item.id, typeof item.value === "object" ? JSON.stringify(item.value) : item.value, "text");
-      return '<div class="tm-item"><span class="tm-name">#' + item.id + ' ' + escapeHtml(item.name) + '</span>' + control + button("设置", "set-system", "", 'data-id="' + item.id + '"') + '</div>';
+      var name = String(item.name || (context.systemKind === "switch" ? "开关 " : "变量 ") + item.id);
+      var control = context.systemKind === "switch" ?
+        '<label class="tm-system-switch"><span class="tm-system-switch-state">' + (item.value ? "设为开" : "设为关") + '</span><input class="tm-switch tm-system-switch-input" id="tm-system-' + item.id + '" type="checkbox" ' + (item.value ? "checked" : "") + '></label>' :
+        '<input class="tm-input tm-system-value" id="tm-system-' + item.id + '" type="text" value="' + escapeHtml(typeof item.value === "object" ? JSON.stringify(item.value) : item.value) + '" aria-label="' + escapeHtml(name) + '">';
+      return '<div class="tm-item"><span class="tm-name" title="#' + item.id + ' ' + escapeHtml(name) + '">#' + item.id + ' ' + escapeHtml(name) + '</span>' + control + button("设置", "set-system", "", 'data-id="' + item.id + '"') + '</div>';
     }).join("") || '<div class="tm-note">没有匹配项目</div>';
   }
   function renderMap(content) {
@@ -361,7 +362,7 @@
     var state = mod.getState();
     return '<div class="tm-row">' + button(state.noclip ? "穿墙:开" : "穿墙:关", "flag", state.noclip ? "primary" : "", 'data-flag="noclip"') + (Number(context.selectedMapId) === Number(context.currentMapId) ? button("迷你地图", "show-minimap", "", 'data-id="' + detail.id + '"') : '') + '</div>'
       + '<div class="tm-row"><small>Pos:</small><span class="tm-badge">' + detail.x + ',' + detail.y + '</span><small>名称:</small><span class="tm-name">' + escapeHtml(detail.name) + '</span></div>'
-      + '<div class="tm-row"><small>独立开关:</small>' + selfSwitches + button(allOn ? "全开" : "全关", "selfswitch-toggle", allOn ? "primary" : "danger", 'data-id="' + detail.id + '"') + '</div>';
+      + '<div class="tm-row"><small>独立开关:</small>' + selfSwitches + button(allOn ? "全关" : "全开", "selfswitch-toggle", allOn ? "danger" : "primary", 'data-id="' + detail.id + '"') + '</div>';
   }
   function renderEventPanel() {
     var panel = root.querySelector("#tm-event-panel");
@@ -434,12 +435,12 @@
     context.inBattle = !!snapshot.inBattle;
     var enemies = snapshot.enemies.map(function (enemy) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(enemy.name) + ' HP ' + enemy.hp + '/' + enemy.mhp + '</span>' + textInput("tm-enemy-" + enemy.index, enemy.hp, "number", 'style="width:86px"') + button("设置", "set-enemy", "", 'data-index="' + enemy.index + '"') + '</div>'; }).join("");
     var actors = snapshot.actors.map(function (actor) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(actor.name) + '</span><span class="tm-badge">HP ' + actor.hp + '/' + actor.mhp + '</span></div>'; }).join("");
-    var actions = '<div class="tm-row">' + button("消灭全部敌人", "kill-enemies", "danger") + button("强制胜利", "victory", "primary") + button("强制逃跑", "escape") + '</div>';
+    var actions = '<div class="tm-battle-actions">' + button("消灭全部敌人", "kill-enemies", "danger") + button("强制胜利", "victory", "primary") + button("强制战败", "defeat", "danger") + button("强制逃跑", "escape") + '</div>';
     if (!snapshot.inBattle) {
       enemies = '<div class="tm-note">当前不在战斗中</div>';
       actors = '<div class="tm-note">当前不在战斗中</div>';
     }
-    content.innerHTML = '<div class="tm-grid">' + card("战斗操作", actions) + card("敌方", '<div class="tm-list">' + enemies + '</div>') + card("我方", '<div class="tm-list">' + actors + '</div>') + '</div>';
+    content.innerHTML = '<div class="tm-grid tm-battle-grid">' + card("战斗操作", actions) + card("我方", '<div class="tm-list">' + actors + '</div>') + card("敌方", '<div class="tm-list">' + enemies + '</div>') + '</div>';
   }
   function renderSave(content) {
     content.innerHTML = card("存档管理", '<div id="tm-save-list" class="tm-list"><div class="tm-note">读取中…</div></div>');
@@ -523,6 +524,7 @@
     if (action === "set-enemy") { if (!context.inBattle) return; return run(function () { mod.setEnemyHp(node.dataset.index, inputValue("tm-enemy-" + node.dataset.index)); }, render); }
     if (action === "kill-enemies") { if (!context.inBattle) return; return run(mod.killAllEnemies, render); }
     if (action === "victory") { if (!context.inBattle) return; return run(mod.forceVictory, close); }
+    if (action === "defeat") { if (!context.inBattle) return; return run(mod.forceDefeat, close); }
     if (action === "escape") { if (!context.inBattle) return; return run(mod.forceEscape, close); }
     if (action === "save") return run(function () { return mod.saveGame(node.dataset.id); }, function () { toast("保存完成"); renderSave(root.querySelector(".tm-content")); });
     if (action === "load") return run(function () { return mod.loadGame(node.dataset.id); }, function () { toast("读取完成"); close(); });
@@ -573,7 +575,13 @@
       var tab = event.target.closest("[data-tab]"); if (tab) { activeTab = tab.dataset.tab; render(); return; }
       var action = event.target.closest("[data-action]"); if (action) handleAction(action.dataset.action, action);
     });
-    root.addEventListener("change", function (event) { var action = event.target.closest("[data-action]"); if (action) handleAction(action.dataset.action, action); event.stopPropagation(); });
+    root.addEventListener("change", function (event) {
+      if (event.target.classList && event.target.classList.contains("tm-system-switch-input")) {
+        var state = event.target.parentNode.querySelector(".tm-system-switch-state");
+        if (state) state.textContent = event.target.checked ? "设为开" : "设为关";
+      }
+      var action = event.target.closest("[data-action]"); if (action) handleAction(action.dataset.action, action); event.stopPropagation();
+    });
     root.addEventListener("input", function (event) {
       if (event.target.id === "tm-skill-query") { context.skillQuery = event.target.value; renderActorCollectionList("skills"); }
       else if (event.target.id === "tm-state-query") { context.stateQuery = event.target.value; renderActorCollectionList("states"); }

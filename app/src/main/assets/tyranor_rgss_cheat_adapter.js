@@ -94,6 +94,7 @@
     setEnemyHp: function (index, hp) { return invoke("setEnemyHp", [index, hp]); },
     killAllEnemies: function () { return invoke("killAllEnemies"); },
     forceVictory: function () { return invoke("forceVictory"); },
+    forceDefeat: function () { return invoke("forceDefeat"); },
     forceEscape: function () { return invoke("forceEscape"); },
     listSaveSlots: function () { return invoke("listSaveSlots") || []; },
     saveGame: function (id) { return invoke("saveGame", [id]); },

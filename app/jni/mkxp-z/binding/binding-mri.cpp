@@ -5515,6 +5515,7 @@ module TyranorCheats
       when 'recoverParty'  then recover_party
       when 'maxGold'       then max_gold
       when 'forceVictory'  then force_victory
+      when 'forceDefeat'   then force_defeat
       when 'forceEscape'   then force_escape
       when 'saveScreen'    then open_native_screen(:save)
       when 'loadScreen'    then open_native_screen(:load)
@@ -5893,6 +5894,34 @@ module TyranorCheats
       end
     rescue Exception => e
       "Couldn't finish battle: #{e.class}: #{e.message}"
+    end
+
+    def force_defeat
+      return NEED_BATTLE unless in_battle?
+      if ess? && @battle
+        @battle.instance_variable_set(:@decision, 2)
+        return "Defeat requested"
+      end
+      if defined?(BattleManager) && BattleManager.respond_to?(:process_defeat)
+        BattleManager.process_defeat
+        return "Defeat requested"
+      end
+      scene = if defined?(SceneManager) && SceneManager.respond_to?(:scene)
+                SceneManager.scene
+              elsif defined?($scene)
+                $scene
+              end
+      if scene && scene.respond_to?(:process_defeat, true)
+        scene.send(:process_defeat)
+        "Defeat requested"
+      elsif scene && scene.respond_to?(:battle_end, true)
+        scene.send(:battle_end, 2)
+        "Defeat requested"
+      else
+        "This game's battle scene doesn't expose an immediate defeat method."
+      end
+    rescue Exception => e
+      "Couldn't lose battle: #{e.class}: #{e.message}"
     end
 
     def force_escape

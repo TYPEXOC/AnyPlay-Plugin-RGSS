@@ -307,6 +307,7 @@ class TyranorMvmzCheatPanel(
                 }
                 "killAllEnemies" -> cheats.runAction("killEnemies") { completeMessage(it, done) }
                 "forceVictory" -> cheats.runAction("forceVictory") { completeMessage(it, done) }
+                "forceDefeat" -> cheats.runAction("forceDefeat") { completeMessage(it, done) }
                 "forceEscape" -> cheats.runAction("forceEscape") { completeMessage(it, done) }
                 "listSaveSlots" -> cheats.listSaveSlots { slots -> done(slots.map { slot ->
                     mapOf(
