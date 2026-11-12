@@ -296,10 +296,10 @@ class TyranorMvmzCheatPanel(
                     argInt(a, 0), argInt(a, 1), argInt(a, 2),
                 ) { completeMessage(it, done) }
                 "minimapData" -> miniMapData(done)
-                "listEvents" -> cheats.listEvents { events -> done(events.map { eventMap(it) }) }
-                "eventDetail" -> eventDetail(argInt(a, 0), done)
+                "listEvents" -> cheats.listEvents(argInt(a, 0)) { events -> done(events.map { eventMap(it) }) }
+                "eventDetail" -> eventDetail(argInt(a, 0), argInt(a, 1), done)
                 "setEventSelfSwitches" -> cheats.setEventSelfSwitches(
-                    argInt(a, 0), argBoolean(a, 1),
+                    argInt(a, 0), argBoolean(a, 1), argInt(a, 2),
                 ) { completeMessage(it, done) { done(argBoolean(a, 1)) } }
                 "battleSnapshot" -> battleSnapshot(done)
                 "setEnemyHp" -> cheats.setEnemyHp(argInt(a, 0), argInt(a, 1)) {
@@ -466,10 +466,10 @@ class TyranorMvmzCheatPanel(
             }
         }
 
-        private fun eventDetail(eventId: Int, done: (Any?) -> Unit) {
-            cheats.listEvents { entries ->
+        private fun eventDetail(eventId: Int, mapId: Int, done: (Any?) -> Unit) {
+            cheats.listEvents(mapId) { entries ->
                 val event = entries.firstOrNull { it.id == eventId }
-                done(event?.let(::eventMap) ?: JsFailure("当前地图找不到事件 #$eventId"))
+                done(event?.let(::eventMap) ?: JsFailure("地图 $mapId 找不到事件 #$eventId"))
             }
         }
 

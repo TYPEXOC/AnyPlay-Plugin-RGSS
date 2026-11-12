@@ -82,13 +82,13 @@
       return invoke("teleport", [mapId, x, y, direction, fade]);
     },
     minimapData: function () { return invoke("minimapData"); },
-    listEvents: function () {
-      var values = invoke("listEvents") || [];
+    listEvents: function (mapId) {
+      var values = invoke("listEvents", mapId == null ? [] : [mapId]) || [];
       return { total: values.length, values: values };
     },
-    eventDetail: function (eventId) { return invoke("eventDetail", [eventId]); },
-    setEventSelfSwitches: function (eventId, enabled) {
-      return invoke("setEventSelfSwitches", [eventId, !!enabled]);
+    eventDetail: function (eventId, mapId) { return invoke("eventDetail", [eventId, mapId]); },
+    setEventSelfSwitches: function (eventId, enabled, mapId) {
+      return invoke("setEventSelfSwitches", [eventId, !!enabled, mapId]);
     },
     battleSnapshot: function () { return invoke("battleSnapshot"); },
     setEnemyHp: function (index, hp) { return invoke("setEnemyHp", [index, hp]); },

@@ -9,7 +9,7 @@
   var userDragged = false; // 用户手动拖拽过，positionLauncher 不再覆盖
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
-  var context = { actorId: 0, actorEntries: null, itemKind: "item", systemKind: "switch", mapListExpanded: false, capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, itemKind: "item", systemKind: "switch", mapListExpanded: false, currentMapId: 0, selectedMapId: 0, capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -172,13 +172,10 @@
   function renderMap(content) {
     var pos = mod.currentPosition();
     context.mapListExpanded = false;
-    var currentMapLabel = "#" + ("0000" + (pos && pos.mapId || 0)).slice(-4);
-    try {
-      var currentMapId = Number(pos && pos.mapId);
-      var currentMaps = mod.listMaps(String(currentMapId), 0, 300).values || [];
-      var currentMap = currentMaps.filter(function (map) { return Number(map.id) === currentMapId; })[0];
-      if (currentMap && currentMap.name) currentMapLabel += ": " + currentMap.name;
-    } catch (_) {}
+    context.currentMapId = Number(pos && pos.mapId) || 0;
+    context.selectedMapId = context.currentMapId;
+    context.eventId = 0;
+    var currentMapLabel = mapLabel(context.selectedMapId);
     var mapPicker = '<button class="tm-btn tm-map-picker" data-action="toggle-map-list" title="' + escapeHtml(currentMapLabel) + '"><span class="tm-map-picker-label">' + escapeHtml(currentMapLabel) + '</span><span class="tm-map-picker-arrow" aria-hidden="true">▾</span></button>';
     var browseRow = '<div class="tm-map-picker-row">' + mapPicker + '</div><div class="tm-row">' + textInput("tm-browse-query", "", "search", 'placeholder="搜索"') + button("搜索", "render-browse", "primary") + '</div>';
     var teleportCard = card("传送", '<div class="tm-row">' + textInput("tm-map-id", pos && pos.mapId, "number", 'placeholder="地图 ID"') + textInput("tm-map-x", pos && pos.x, "number", 'placeholder="X"') + textInput("tm-map-y", pos && pos.y, "number", 'placeholder="Y"') + button("传送", "teleport", "primary") + '</div>');
@@ -186,9 +183,22 @@
     content.innerHTML = '<div class="tm-grid tm-map-grid">'
       + '<section class="tm-card tm-browse-card"><h3>浏览</h3>' + browseRow + '<div class="tm-list" id="tm-browse-list"></div><div class="tm-list tm-map-dropdown" id="tm-map-list" style="display:none"></div></section>'
       + teleportCard + eventCard + '</div>';
-    context.eventAll = [];
-    try { context.eventAll = mod.listEvents().values; } catch (_) { context.eventAll = []; }
+    loadEventsForMap(context.selectedMapId);
     loadBrowse();
+  }
+  function mapLabel(mapId) {
+    var label = "#" + ("0000" + (Number(mapId) || 0)).slice(-4);
+    if (!mapId) return label;
+    try {
+      var maps = mod.listMaps(String(mapId), 0, 300).values || [];
+      var map = maps.filter(function (entry) { return Number(entry.id) === Number(mapId); })[0];
+      if (map && map.name) label += ": " + map.name;
+    } catch (_) {}
+    return label;
+  }
+  function loadEventsForMap(mapId) {
+    context.eventAll = [];
+    try { context.eventAll = mod.listEvents(Number(mapId) || 0).values || []; } catch (_) {}
   }
   function fillTeleport(mapId, x, y) {
     var mi = root.querySelector("#tm-map-id"), xi = root.querySelector("#tm-map-x"), yi = root.querySelector("#tm-map-y");
@@ -201,6 +211,10 @@
     if (queryInput) queryInput.placeholder = context.mapListExpanded ? "搜索地图名称 / ID" : "搜索 ID / 名称";
     var mapPicker = root.querySelector(".tm-map-picker");
     if (mapPicker) {
+      var label = mapLabel(context.selectedMapId);
+      var labelNode = mapPicker.querySelector(".tm-map-picker-label");
+      if (labelNode) labelNode.textContent = label;
+      mapPicker.title = label;
       mapPicker.classList.toggle("primary", context.mapListExpanded);
       var arrow = mapPicker.querySelector(".tm-map-picker-arrow");
       if (arrow) arrow.textContent = context.mapListExpanded ? "▴" : "▾";
@@ -257,7 +271,7 @@
     }
     list.innerHTML = maps.map(function (m, index) {
       var here = pos && Number(pos.mapId) === Number(m.id);
-      var picked = Number(context.pickedMapId) === Number(m.id);
+      var picked = Number(context.selectedMapId) === Number(m.id);
       var paddedId = ("0000" + m.id).slice(-4);
       var name = '<span class="tm-map-tree-prefix">' + treePrefix(index) + '</span><span class="tm-map-tree-label">#' + paddedId + ": " + escapeHtml(m.name) + '</span>';
       return '<div class="tm-item' + (picked ? " tm-active" : "") + '"><span class="tm-name tm-map-name">' + name + '</span>' + (here ? '<span class="tm-badge tm-on">你在这里</span>' : '') + button("选择", "pick-map", "", 'data-id="' + m.id + '"') + '</div>';
@@ -271,7 +285,7 @@
     if (!list) return;
     list.innerHTML = filteredEvents().map(function (ev) {
       return '<div class="tm-item' + (String(context.eventId) === String(ev.id) ? " tm-active" : "") + '"><span class="tm-name">#' + ev.id + ' ' + escapeHtml(ev.name) + '</span><span class="tm-badge">' + ev.x + ',' + ev.y + '</span>' + button("选择", "pick-event", "", 'data-id="' + ev.id + '"') + '</div>';
-    }).join("") || '<div class="tm-note">当前地图没有事件（进入地图场景后打开）</div>';
+    }).join("") || '<div class="tm-note">所选地图没有事件</div>';
   }
   function filteredEvents() {
     var query = String(inputValue("tm-browse-query") || "").toLowerCase();
@@ -283,13 +297,13 @@
   function eventPanelHtml() {
     if (!context.eventId) return '<div class="tm-note">在左侧选择事件查看详情</div>';
     var detail;
-    try { detail = mod.eventDetail(context.eventId); } catch (e) { return '<div class="tm-note">' + escapeHtml(String(e && e.message || e)) + '</div>'; }
+    try { detail = mod.eventDetail(context.eventId, context.selectedMapId); } catch (e) { return '<div class="tm-note">' + escapeHtml(String(e && e.message || e)) + '</div>'; }
     var selfSwitches = ["A", "B", "C", "D"].map(function (k) {
       return '<span class="tm-badge' + (detail.selfSwitches[k] ? " tm-on" : "") + '">' + k + (detail.selfSwitches[k] ? ":开" : ":关") + '</span>';
     }).join(" ");
     var allOn = ["A", "B", "C", "D"].every(function (k) { return detail.selfSwitches[k]; });
     var state = mod.getState();
-    return '<div class="tm-row">' + button(state.noclip ? "穿墙:开" : "穿墙:关", "flag", state.noclip ? "primary" : "", 'data-flag="noclip"') + button("迷你地图", "show-minimap", "", 'data-id="' + detail.id + '"') + '</div>'
+    return '<div class="tm-row">' + button(state.noclip ? "穿墙:开" : "穿墙:关", "flag", state.noclip ? "primary" : "", 'data-flag="noclip"') + (Number(context.selectedMapId) === Number(context.currentMapId) ? button("迷你地图", "show-minimap", "", 'data-id="' + detail.id + '"') : '') + '</div>'
       + '<div class="tm-row"><small>Pos:</small><span class="tm-badge">' + detail.x + ',' + detail.y + '</span><small>名称:</small><span class="tm-name">' + escapeHtml(detail.name) + '</span></div>'
       + '<div class="tm-row"><small>独立开关:</small>' + selfSwitches + button(allOn ? "全开" : "全关", "selfswitch-toggle", allOn ? "primary" : "danger", 'data-id="' + detail.id + '"') + '</div>';
   }
@@ -418,7 +432,19 @@
       return loadBrowse();
     }
     if (action === "render-browse") return loadBrowse();
-    if (action === "pick-map") { fillTeleport(node.dataset.id, null, null); context.pickedMapId = Number(node.dataset.id); if (context.mapListExpanded) renderMapList(); return; }
+    if (action === "pick-map") {
+      var mapId = Number(node.dataset.id) || 0;
+      fillTeleport(mapId, null, null);
+      context.selectedMapId = mapId;
+      context.eventId = 0;
+      context.mapListExpanded = false;
+      var browseQuery = root.querySelector("#tm-browse-query");
+      if (browseQuery) browseQuery.value = "";
+      loadEventsForMap(mapId);
+      loadBrowse();
+      renderEventPanel();
+      return;
+    }
     if (action === "pick-event") {
       context.eventId = Number(node.dataset.id);
       var ev = (context.eventAll || []).filter(function (e2) { return String(e2.id) === node.dataset.id; })[0];
@@ -427,7 +453,7 @@
     }
     if (action === "selfswitch-toggle") {
       var sid = node.dataset.id;
-      return run(function () { var cur = mod.eventDetail(sid).selfSwitches; var on = !["A", "B", "C", "D"].every(function (k) { return cur[k]; }); mod.setEventSelfSwitches(sid, on); return on; }, function (on) { toast(on ? "独立开关 A–D 已全开" : "独立开关 A–D 已全关"); renderEventPanel(); });
+      return run(function () { var cur = mod.eventDetail(sid, context.selectedMapId).selfSwitches; var on = !["A", "B", "C", "D"].every(function (k) { return cur[k]; }); mod.setEventSelfSwitches(sid, on, context.selectedMapId); return on; }, function (on) { loadEventsForMap(context.selectedMapId); toast(on ? "独立开关 A–D 已全开" : "独立开关 A–D 已全关"); renderEventList(); renderEventPanel(); });
     }
     if (action === "show-minimap") return showMinimapDialog();
     if (action === "close-minimap") { var modal = root.querySelector(".tm-modal"); if (modal) modal.remove(); return; }
@@ -470,6 +496,18 @@
     document.documentElement.appendChild(root);
     root.addEventListener("click", function (event) {
       event.stopPropagation();
+      if (context.mapListExpanded) {
+        var target = event.target;
+        var insidePicker = target.closest(".tm-map-picker, #tm-map-list");
+        var insideMapSearch = target.closest("#tm-browse-query, [data-action='render-browse']");
+        var pickingMap = target.closest("[data-action='pick-map']");
+        if (!insidePicker && !insideMapSearch && !pickingMap) {
+          context.mapListExpanded = false;
+          var browseQuery = root.querySelector("#tm-browse-query");
+          if (browseQuery) browseQuery.value = "";
+          loadBrowse();
+        }
+      }
       var tab = event.target.closest("[data-tab]"); if (tab) { activeTab = tab.dataset.tab; render(); return; }
       var action = event.target.closest("[data-action]"); if (action) handleAction(action.dataset.action, action);
     });

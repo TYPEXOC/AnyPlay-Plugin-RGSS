@@ -4001,7 +4001,7 @@ module TyranorCheats
       return list_pokemon_statuses(arg) if kind == 'pokemon_statuses'
       return list_pokemon_stats(arg) if kind == 'pokemon_stats'
       return list_actors if kind == 'actors'
-      return list_events if kind == 'events'
+      return list_events(arg) if kind == 'events'
       return list_minimap if kind == 'minimap'
       return list_battle if kind == 'battle'
       return list_battle_actors if kind == 'battle_actors'
@@ -5112,14 +5112,41 @@ module TyranorCheats
       nil
     end
 
-    def list_events
-      return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:events)
-      map_id = $game_map.respond_to?(:map_id) ? $game_map.map_id.to_i : 0
+    def map_event_table(map_id)
+      current_map_id = ($game_map && $game_map.respond_to?(:map_id)) ? $game_map.map_id.to_i : 0
+      if map_id.to_i == current_map_id && $game_map && $game_map.respond_to?(:events)
+        return [$game_map.events, true]
+      end
+      info = map_info_table
+      exists = info.is_a?(Hash) ? (info[map_id.to_i] || info[map_id.to_s]) : (info.is_a?(Array) ? info[map_id.to_i] : nil)
+      return nil unless exists
+      ext = case engine
+            when :xp, :essentials then 'rxdata'
+            when :vx then 'rvdata'
+            when :ace then 'rvdata2'
+            else nil
+            end
+      return nil unless ext
+      map = (load_data("Data/Map%03d.%s" % [map_id.to_i, ext]) rescue nil)
+      return nil unless map && map.respond_to?(:events)
+      [map.events, false]
+    rescue Exception
+      nil
+    end
+
+    def list_events(map_id_text = "")
+      return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:map_id)
+      current_map_id = $game_map.map_id.to_i
+      map_id = map_id_text.to_s.to_i
+      map_id = current_map_id if map_id <= 0
+      source = map_event_table(map_id)
+      return "Couldn't load events for map ##{map_id}." unless source
+      events, live_map = source
       switches = event_switches
       out = ["M\t#{map_id}"]
-      $game_map.events.each do |id, live|
+      events.each do |id, live|
         next unless live
-        info = live.respond_to?(:event) ? live.event : nil
+        info = (live.respond_to?(:event) ? live.event : nil) || live
         name = info && info.respond_to?(:name) ? info.name : nil
         pages = info && info.respond_to?(:pages) ? info.pages : []
         first_page = pages && pages[0]
@@ -5133,8 +5160,8 @@ module TyranorCheats
           end
           values << (value ? 1 : 0)
         end
-        x = live.respond_to?(:x) ? live.x.to_i : 0
-        y = live.respond_to?(:y) ? live.y.to_i : 0
+        x = live_map && live.respond_to?(:x) ? live.x.to_i : (info.respond_to?(:x) ? info.x.to_i : 0)
+        y = live_map && live.respond_to?(:y) ? live.y.to_i : (info.respond_to?(:y) ? info.y.to_i : 0)
         out << "E\t#{id.to_i}\t#{wire_text(name)}\t#{x}\t#{y}\t#{values.join("\t")}\t#{pages ? pages.length : 0}\t#{commands ? commands.length : 0}"
       end
       out.join("\n")
@@ -5143,21 +5170,25 @@ module TyranorCheats
     end
 
     def set_event_switch(id_text, payload)
-      letter, enabled = payload.to_s.split("\t", 2)
+      letter, enabled, map_id_text = payload.to_s.split("\t", 3)
       return "This game doesn't expose self-switches." unless event_switches && event_switches.respond_to?(:[]=)
       return "Choose on or off." unless enabled == '1' || enabled == '0'
       return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:map_id)
       id = id_text.to_i
-      return "That event doesn't exist on this map." unless $game_map.respond_to?(:events) && $game_map.events[id]
+      current_map_id = $game_map.map_id.to_i
+      map_id = map_id_text.to_s.to_i
+      map_id = current_map_id if map_id <= 0
+      source = map_event_table(map_id)
+      return "That event doesn't exist on this map." unless source && source[0].is_a?(Hash) && source[0][id]
       switches = event_switches
       return "This game doesn't expose self-switches." unless switches && switches.respond_to?(:[]=)
       if letter == 'ALL'
-        %w[A B C D].each { |key| switches[[ $game_map.map_id.to_i, id, key ]] = (enabled == '1') }
+        %w[A B C D].each { |key| switches[[map_id, id, key]] = (enabled == '1') }
       else
         return "Use a self-switch from A to D." unless %w[A B C D].include?(letter)
-        switches[[ $game_map.map_id.to_i, id, letter ]] = (enabled == '1')
+        switches[[map_id, id, letter]] = (enabled == '1')
       end
-      refresh_game_map
+      refresh_game_map if map_id == current_map_id
       "ok"
     rescue Exception => e
       "Couldn't change self-switch: #{e.class}: #{e.message}"

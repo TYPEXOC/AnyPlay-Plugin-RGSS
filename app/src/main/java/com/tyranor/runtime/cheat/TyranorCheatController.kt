@@ -388,12 +388,12 @@ class TyranorCheatController(
         send("actor_equip\t$actorId\t$slot\t$kind\t$itemId", onResult)
     }
 
-    fun setEventSelfSwitch(eventId: Int, letter: String, enabled: Boolean, onResult: (String) -> Unit) {
-        send("event_switch\t$eventId\t$letter\t${if (enabled) "1" else "0"}", onResult)
+    fun setEventSelfSwitch(eventId: Int, letter: String, enabled: Boolean, mapId: Int = 0, onResult: (String) -> Unit) {
+        send("event_switch\t$eventId\t$letter\t${if (enabled) "1" else "0"}\t$mapId", onResult)
     }
 
-    fun setEventSelfSwitches(eventId: Int, enabled: Boolean, onResult: (String) -> Unit) {
-        send("event_switch\t$eventId\tALL\t${if (enabled) "1" else "0"}", onResult)
+    fun setEventSelfSwitches(eventId: Int, enabled: Boolean, mapId: Int = 0, onResult: (String) -> Unit) {
+        send("event_switch\t$eventId\tALL\t${if (enabled) "1" else "0"}\t$mapId", onResult)
     }
 
     fun setEnemyHp(index: Int, hp: Int, onResult: (String) -> Unit) {
@@ -588,8 +588,8 @@ class TyranorCheatController(
         }
     }
 
-    fun listEvents(onResult: (List<EventEntry>) -> Unit) {
-        send("list\tevents", 30_000L) { raw ->
+    fun listEvents(mapId: Int = 0, onResult: (List<EventEntry>) -> Unit) {
+        send("list\tevents\t$mapId", 30_000L) { raw ->
             val out = mutableListOf<EventEntry>()
             var mapId = 0
             raw.lineSequence().forEach { line ->
