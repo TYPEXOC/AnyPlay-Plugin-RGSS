@@ -3759,7 +3759,7 @@ module TyranorCheats
       if name == 'speed'
         s = v.to_f
         return "Enter a number above 0." unless s > 0
-        @speed = [[s, 0.25].max, 8.0].min
+        @speed = [[s, 0.25].max, 100.0].min
         @on['speed'] = true
         write_state
         return "Speed x#{@speed}"

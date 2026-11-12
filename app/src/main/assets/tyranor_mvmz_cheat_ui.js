@@ -89,9 +89,14 @@
         return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
       }).join("");
       if (selectedGroup.id === "探索" && (!supported || supported.indexOf("speed") >= 0)) {
-        toggles += row("移动速度", '<div class="tm-row"><input class="tm-input" id="tm-speed" type="number" min="0.25" max="8" step="0.25" value="' + escapeHtml(state.speedMultiplier || 2) + '">' + button("设置", "set-speed", "primary") + '</div>');
+        toggles += row("移动速度", '<div class="tm-row"><input class="tm-input" id="tm-speed" type="number" min="0.25" max="100" step="0.25" value="' + escapeHtml(state.speedMultiplier || 2) + '">' + button("设置", "set-speed", "primary") + '</div>');
       }
-      sectionBody = card(selectedGroup.label, toggles) + (selectedGroup.id === "角色与资源" ? card("金币", gold) : "");
+      sectionBody = card(selectedGroup.label, toggles);
+      if (selectedGroup.id === "战斗") {
+        var actions = '<div class="tm-battle-actions">' + button("消灭全部敌人", "kill-enemies", "danger") + button("强制胜利", "victory", "primary") + button("强制战败", "defeat", "danger") + button("强制逃跑", "escape") + '</div>';
+        sectionBody += card("战斗操作", actions);
+      }
+      if (selectedGroup.id === "角色与资源") sectionBody += card("金币", gold);
     } else {
       sectionBody = card("队伍", '<div class="tm-row">' + button("全体恢复", "recover-party", "primary") + button("刷新页面", "render") + '</div>');
     }
@@ -435,12 +440,11 @@
     context.inBattle = !!snapshot.inBattle;
     var enemies = snapshot.enemies.map(function (enemy) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(enemy.name) + ' HP ' + enemy.hp + '/' + enemy.mhp + '</span>' + textInput("tm-enemy-" + enemy.index, enemy.hp, "number", 'style="width:86px"') + button("设置", "set-enemy", "", 'data-index="' + enemy.index + '"') + '</div>'; }).join("");
     var actors = snapshot.actors.map(function (actor) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(actor.name) + '</span><span class="tm-badge">HP ' + actor.hp + '/' + actor.mhp + '</span></div>'; }).join("");
-    var actions = '<div class="tm-battle-actions">' + button("消灭全部敌人", "kill-enemies", "danger") + button("强制胜利", "victory", "primary") + button("强制战败", "defeat", "danger") + button("强制逃跑", "escape") + '</div>';
     if (!snapshot.inBattle) {
       enemies = '<div class="tm-note">当前不在战斗中</div>';
       actors = '<div class="tm-note">当前不在战斗中</div>';
     }
-    content.innerHTML = '<div class="tm-grid tm-battle-grid">' + card("战斗操作", actions) + card("我方", '<div class="tm-list">' + actors + '</div>') + card("敌方", '<div class="tm-list">' + enemies + '</div>') + '</div>';
+    content.innerHTML = '<div class="tm-grid tm-battle-grid">' + card("我方", '<div class="tm-list">' + actors + '</div>') + card("敌方", '<div class="tm-list">' + enemies + '</div>') + '</div>';
   }
   function renderSave(content) {
     content.innerHTML = card("存档管理", '<div id="tm-save-list" class="tm-list"><div class="tm-note">读取中…</div></div>');
@@ -455,6 +459,14 @@
   }
   function inputBridge() {
     return window.TyranorInputNative || null;
+  }
+  function isInBattleNow() {
+    try {
+      context.inBattle = !!mod.battleSnapshot().inBattle;
+    } catch (error) {
+      console.warn("RGSS battle state read failed", error);
+    }
+    return context.inBattle;
   }
   function renderKeys(content) {
     var bridge = inputBridge();
@@ -521,11 +533,11 @@
     if (action === "show-minimap") return showMinimapDialog();
     if (action === "close-minimap") { var modal = root.querySelector(".tm-modal"); if (modal) modal.remove(); return; }
     if (action === "teleport") return run(function () { return mod.teleport(inputValue("tm-map-id"), inputValue("tm-map-x"), inputValue("tm-map-y"), 2, 0); }, function () { toast("已预约传送"); close(); });
-    if (action === "set-enemy") { if (!context.inBattle) return; return run(function () { mod.setEnemyHp(node.dataset.index, inputValue("tm-enemy-" + node.dataset.index)); }, render); }
-    if (action === "kill-enemies") { if (!context.inBattle) return; return run(mod.killAllEnemies, render); }
-    if (action === "victory") { if (!context.inBattle) return; return run(mod.forceVictory, close); }
-    if (action === "defeat") { if (!context.inBattle) return; return run(mod.forceDefeat, close); }
-    if (action === "escape") { if (!context.inBattle) return; return run(mod.forceEscape, close); }
+    if (action === "set-enemy") { if (!isInBattleNow()) return; return run(function () { mod.setEnemyHp(node.dataset.index, inputValue("tm-enemy-" + node.dataset.index)); }, render); }
+    if (action === "kill-enemies") { if (!isInBattleNow()) return; return run(mod.killAllEnemies, render); }
+    if (action === "victory") { if (!isInBattleNow()) return; return run(mod.forceVictory, close); }
+    if (action === "defeat") { if (!isInBattleNow()) return; return run(mod.forceDefeat, close); }
+    if (action === "escape") { if (!isInBattleNow()) return; return run(mod.forceEscape, close); }
     if (action === "save") return run(function () { return mod.saveGame(node.dataset.id); }, function () { toast("保存完成"); renderSave(root.querySelector(".tm-content")); });
     if (action === "load") return run(function () { return mod.loadGame(node.dataset.id); }, function () { toast("读取完成"); close(); });
     if (action === "delete-save") return run(function () { return mod.deleteSave(node.dataset.id); }, function () { toast("存档已删除"); renderSave(root.querySelector(".tm-content")); });
