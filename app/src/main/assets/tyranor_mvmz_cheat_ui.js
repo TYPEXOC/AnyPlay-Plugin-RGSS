@@ -9,7 +9,7 @@
   var userDragged = false; // 用户手动拖拽过，positionLauncher 不再覆盖
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
-  var context = { actorId: 0, actorEntries: null, itemKind: "item", systemKind: "switch", capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, itemKind: "item", systemKind: "switch", mapListExpanded: false, capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -171,15 +171,21 @@
   }
   function renderMap(content) {
     var pos = mod.currentPosition();
-    context.mapMode = context.mapMode || "maps";
-    var modeSelect = '<select class="tm-select" id="tm-map-mode" data-action="map-mode" style="flex:0 0 108px"><option value="maps">地图</option><option value="events">事件</option></select>';
-    var browseRow = '<div class="tm-row">' + modeSelect + textInput("tm-browse-query", "", "search", 'placeholder="搜索"') + button("搜索", "render-browse", "primary") + '</div>';
+    context.mapListExpanded = false;
+    var currentMapLabel = "#" + ("0000" + (pos && pos.mapId || 0)).slice(-4);
+    try {
+      var currentMapId = Number(pos && pos.mapId);
+      var currentMaps = mod.listMaps(String(currentMapId), 0, 300).values || [];
+      var currentMap = currentMaps.filter(function (map) { return Number(map.id) === currentMapId; })[0];
+      if (currentMap && currentMap.name) currentMapLabel += ": " + currentMap.name;
+    } catch (_) {}
+    var mapPicker = '<button class="tm-btn tm-map-picker" data-action="toggle-map-list" title="' + escapeHtml(currentMapLabel) + '"><span class="tm-map-picker-label">' + escapeHtml(currentMapLabel) + '</span><span class="tm-map-picker-arrow" aria-hidden="true">▾</span></button>';
+    var browseRow = '<div class="tm-map-picker-row">' + mapPicker + '</div><div class="tm-row">' + textInput("tm-browse-query", "", "search", 'placeholder="搜索"') + button("搜索", "render-browse", "primary") + '</div>';
     var teleportCard = card("传送", '<div class="tm-row">' + textInput("tm-map-id", pos && pos.mapId, "number", 'placeholder="地图 ID"') + textInput("tm-map-x", pos && pos.x, "number", 'placeholder="X"') + textInput("tm-map-y", pos && pos.y, "number", 'placeholder="Y"') + button("传送", "teleport", "primary") + '</div>');
     var eventCard = card("事件操作", '<div class="tm-card-body" id="tm-event-panel">' + eventPanelHtml() + '</div>');
     content.innerHTML = '<div class="tm-grid tm-map-grid">'
-      + '<section class="tm-card tm-browse-card"><h3>浏览</h3>' + browseRow + '<div class="tm-list" id="tm-browse-list"></div></section>'
+      + '<section class="tm-card tm-browse-card"><h3>浏览</h3>' + browseRow + '<div class="tm-list" id="tm-browse-list"></div><div class="tm-list tm-map-dropdown" id="tm-map-list" style="display:none"></div></section>'
       + teleportCard + eventCard + '</div>';
-    root.querySelector("#tm-map-mode").value = context.mapMode;
     context.eventAll = [];
     try { context.eventAll = mod.listEvents().values; } catch (_) { context.eventAll = []; }
     loadBrowse();
@@ -191,13 +197,29 @@
     if (yi && y != null) yi.value = y;
   }
   function loadBrowse() {
-    context.mapMode = inputValue("tm-map-mode") || context.mapMode || "maps";
     var queryInput = root.querySelector("#tm-browse-query");
-    if (queryInput) queryInput.placeholder = context.mapMode === "maps" ? "搜索地图名称 / ID" : "搜索 ID / 名称";
-    if (context.mapMode === "maps") renderMapList(); else renderEventList();
+    if (queryInput) queryInput.placeholder = context.mapListExpanded ? "搜索地图名称 / ID" : "搜索 ID / 名称";
+    var mapPicker = root.querySelector(".tm-map-picker");
+    if (mapPicker) {
+      mapPicker.classList.toggle("primary", context.mapListExpanded);
+      var arrow = mapPicker.querySelector(".tm-map-picker-arrow");
+      if (arrow) arrow.textContent = context.mapListExpanded ? "▴" : "▾";
+    }
+    var mapList = root.querySelector("#tm-map-list");
+    if (context.mapListExpanded) {
+      renderMapList();
+      if (mapList) {
+        var eventList = root.querySelector("#tm-browse-list");
+        mapList.style.top = (eventList ? eventList.offsetTop : 124) + "px";
+        mapList.style.display = "flex";
+      }
+    } else {
+      if (mapList) mapList.style.display = "none";
+      renderEventList();
+    }
   }
   function renderMapList() {
-    var list = root.querySelector("#tm-browse-list");
+    var list = root.querySelector("#tm-map-list");
     if (!list) return;
     var pos = null;
     try { pos = mod.currentPosition(); } catch (_) { pos = null; }
@@ -205,13 +227,38 @@
     try { maps = mod.listMaps(inputValue("tm-browse-query"), 0, 300).values; } catch (e) {
       list.innerHTML = '<div class="tm-note">' + escapeHtml(String(e && e.message || e)) + '</div>'; return;
     }
-    list.innerHTML = maps.map(function (m) {
+    function mapDepth(map) { return Math.max(0, Number(map.depth) || 0); }
+    function hasLaterSibling(index, depth) {
+      for (var i = index + 1; i < maps.length; i++) {
+        var nextDepth = mapDepth(maps[i]);
+        if (nextDepth < depth) return false;
+        if (nextDepth === depth) return true;
+      }
+      return false;
+    }
+    function treePrefix(index) {
+      var depth = mapDepth(maps[index]);
+      if (!depth) return "";
+      var prefix = "";
+      for (var level = 0; level < depth; level++) {
+        var hasLaterAtLevel = false;
+        for (var i = index + 1; i < maps.length; i++) {
+          var nextDepth = mapDepth(maps[i]);
+          if (nextDepth <= level) {
+            hasLaterAtLevel = nextDepth === level;
+            break;
+          }
+        }
+        prefix += hasLaterAtLevel ? "│  " : "   ";
+      }
+      return prefix + (hasLaterSibling(index, depth) ? "├─ " : "└─ ");
+    }
+    list.innerHTML = maps.map(function (m, index) {
       var here = pos && Number(pos.mapId) === Number(m.id);
       var picked = Number(context.pickedMapId) === Number(m.id);
-      var indent = m.depth ? ' style="padding-left:' + (m.depth * 14) + 'px"' : "";
       var paddedId = ("0000" + m.id).slice(-4);
-      var name = (m.depth ? "└ " : "") + "#" + paddedId + ": " + escapeHtml(m.name);
-      return '<div class="tm-item' + (picked ? " tm-active" : "") + '"><span class="tm-name"' + indent + '>' + name + '</span>' + (here ? '<span class="tm-badge tm-on">你在这里</span>' : '') + button("选择", "pick-map", "", 'data-id="' + m.id + '"') + '</div>';
+      var name = '<span class="tm-map-tree-prefix">' + treePrefix(index) + '</span><span class="tm-map-tree-label">#' + paddedId + ": " + escapeHtml(m.name) + '</span>';
+      return '<div class="tm-item' + (picked ? " tm-active" : "") + '"><span class="tm-name tm-map-name">' + name + '</span>' + (here ? '<span class="tm-badge tm-on">你在这里</span>' : '') + button("选择", "pick-map", "", 'data-id="' + m.id + '"') + '</div>';
     }).join("") || '<div class="tm-note">没有匹配地图</div>';
     var target = list.querySelector(".tm-item .tm-badge.tm-on");
     var active = target ? target.closest(".tm-item") : list.querySelector(".tm-item.tm-active");
@@ -362,9 +409,14 @@
     if (action === "change-equip") return run(function () { mod.changeEquip(context.actorId, inputValue("tm-equip-slot"), inputValue("tm-equip-kind"), inputValue("tm-equip-id")); }, function () { toast("装备已更换"); renderActorBody(); });
     if (action === "system-kind" || action === "render-system") return loadSystem();
     if (action === "set-system") return run(function () { var id = node.dataset.id; if (context.systemKind === "switch") mod.setSwitch(id, checked("tm-system-" + id)); else { var raw = inputValue("tm-system-" + id); var value; try { value = JSON.parse(raw); } catch (_) { value = raw; } mod.setVariable(id, value); } }, function () { toast("系统值已修改"); loadSystem(); });
-    if (action === "map-mode") { context.mapMode = node.value; return loadBrowse(); }
+    if (action === "toggle-map-list") {
+      context.mapListExpanded = !context.mapListExpanded;
+      var browseQuery = root.querySelector("#tm-browse-query");
+      if (browseQuery) browseQuery.value = "";
+      return loadBrowse();
+    }
     if (action === "render-browse") return loadBrowse();
-    if (action === "pick-map") { fillTeleport(node.dataset.id, 0, 0); context.pickedMapId = Number(node.dataset.id); if (context.mapMode === "maps") renderMapList(); return; }
+    if (action === "pick-map") { fillTeleport(node.dataset.id, 0, 0); context.pickedMapId = Number(node.dataset.id); if (context.mapListExpanded) renderMapList(); return; }
     if (action === "pick-event") {
       context.eventId = Number(node.dataset.id);
       var ev = (context.eventAll || []).filter(function (e2) { return String(e2.id) === node.dataset.id; })[0];
