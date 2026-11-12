@@ -98,7 +98,7 @@
       }
       if (selectedGroup.id === "角色与资源") sectionBody += card("金币", gold);
     } else {
-      sectionBody = card("队伍", '<div class="tm-row">' + button("全体恢复", "recover-party", "primary") + button("刷新页面", "render") + '</div>');
+      sectionBody = card("队伍", '<div class="tm-row">' + button("全体恢复", "recover-party", "primary") + '</div>');
     }
     content.innerHTML = segmentedTabs(sections, context.quickSection, "quick-section") + '<div id="tm-quick-section">' + sectionBody + '</div>';
     // Render the panel before crossing the Ruby command-file bridge. One query
@@ -568,7 +568,7 @@
   function open() {
     if (root) return;
     root = document.createElement("div"); root.id = "tyranor-mod-root";
-    root.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker RGSS 修改器</strong><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs">' + tabs.map(function (tab) { return '<button class="tm-tab" data-tab="' + tab[0] + '">' + tab[1] + '</button>'; }).join("") + '</div><main class="tm-content"></main></div>';
+    root.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker RGSS 修改器</strong><button class="tm-refresh" data-action="render" title="刷新面板" aria-label="刷新面板">↻</button><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs">' + tabs.map(function (tab) { return '<button class="tm-tab" data-tab="' + tab[0] + '">' + tab[1] + '</button>'; }).join("") + '</div><main class="tm-content"></main></div>';
     document.documentElement.appendChild(root);
     root.addEventListener("click", function (event) {
       event.stopPropagation();
