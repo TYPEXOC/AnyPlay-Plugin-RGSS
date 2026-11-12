@@ -256,7 +256,8 @@ public class MainActivity extends SDLActivity
                 intent.getStringExtra(EXTRA_DIAGNOSTIC_RUBY_RUNTIME), GAME_FOLDER);
             mCustomGameDir = true;
             mPadEnabled = true;
-            mCheatsEnabled = false;
+            // Standalone launches have no TYN per-game setting to constrain the module.
+            mCheatsEnabled = true;
             mDebugEnabled = false;
             mCopyTextEnabled = false;
             mSpeedUp = 1;
@@ -539,7 +540,7 @@ public class MainActivity extends SDLActivity
                 rgssVersion,
                 false,
                 true,
-                "{\"launchMode\":\"standalone-diagnostic\"}",
+                "{\"launchMode\":\"standalone-diagnostic\",\"cheatsEnabled\":true}",
                 mLaunchRequestedAtMillis,
                 mLaunchRequestedAtElapsedRealtime
             );
@@ -552,7 +553,7 @@ public class MainActivity extends SDLActivity
                 Os.setenv("TYN_RGSS_VERBOSE_LOG", "1", true);
                 TynRuntimeDiagnostics.setVerboseInputDiagnostics(true);
                 TynRuntimeDiagnostics.append(mSessionDir,
-                    "Standalone diagnostic mode: verbose logging on; no TYN Ruby preloads or UI integrations");
+                    "Standalone diagnostic mode: verbose logging on; no TYN translation bridge or host settings; standalone cheat UI enabled");
             } catch (Exception error) {
                 TynRuntimeDiagnostics.append(mSessionDir, "Could not set standalone diagnostic environment flags", error);
             }
@@ -562,6 +563,17 @@ public class MainActivity extends SDLActivity
             config.put("rgssVersion", rgssVersion);
             if (title != null && !title.trim().isEmpty()) config.put("windowTitle", title);
             configureMidiSoundFont(config);
+            if (mCheatsEnabled) {
+                File nativeCheatWindow = new File(mSessionDir, "tyranor_rgss_native_cheats.rb");
+                copyAssetToFile("tyranor_rgss_native_cheats.rb", nativeCheatWindow);
+                JSONArray postloadScripts = stringArray(config.opt("postloadScript"));
+                if (!containsString(postloadScripts, nativeCheatWindow.getAbsolutePath())) {
+                    postloadScripts.put(nativeCheatWindow.getAbsolutePath());
+                }
+                config.put("postloadScript", postloadScripts);
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Standalone native cheat window registered as a postload script");
+            }
             writeAtomically(new File(mSessionDir, "mkxp.json"), config.toString());
             GAME_PATH = mSessionDir.getAbsolutePath();
             TynRuntimeDiagnostics.append(mSessionDir,
