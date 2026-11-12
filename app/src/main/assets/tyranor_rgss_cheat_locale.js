@@ -7,7 +7,7 @@
     en: {
       "Tyranor RGSS 修改器": "Tyranor RGSS Cheats",
       "RPG Maker 修改器": "RPG Maker Cheats",
-      "RPG Maker 修改器 · RGSS": "RPG Maker Cheats · RGSS",
+      "RPG Maker RGSS 修改器": "RPG Maker RGSS Cheats",
       "打开 RPG Maker 修改器": "Open RPG Maker Cheats",
       "关闭": "Close",
       "快捷": "Quick", "物品": "Items", "角色": "Characters", "系统": "System",
@@ -57,7 +57,7 @@
     ja: {
       "Tyranor RGSS 修改器": "Tyranor RGSS 改造パネル",
       "RPG Maker 修改器": "RPG Maker 改造パネル",
-      "RPG Maker 修改器 · RGSS": "RPG Maker 改造パネル · RGSS",
+      "RPG Maker RGSS 修改器": "RPG Maker RGSS 改造パネル",
       "打开 RPG Maker 修改器": "RPG Maker 改造パネルを開く",
       "关闭": "閉じる",
       "快捷": "クイック", "物品": "アイテム", "角色": "キャラクター", "系统": "システム",
