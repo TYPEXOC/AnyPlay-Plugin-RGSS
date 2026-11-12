@@ -3172,7 +3172,6 @@ module TyranorCheats
   CMD   = DIR + "/tyranor_cheat_cmd.txt"
   REPLY = DIR + "/tyranor_cheat_reply.txt"
   STATE = DIR + "/tyranor_cheat_state.txt"
-  WINDOW_STATE = DIR + "/tyranor_cheat_window_state.txt"
   NOPE  = "This cheat doesn't work in this type of game."
   NEED_BATTLE = "You are not in a battle right now."
 
@@ -5488,8 +5487,6 @@ module TyranorCheats
       when 'forceEscape'   then force_escape
       when 'saveScreen'    then open_native_screen(:save)
       when 'loadScreen'    then open_native_screen(:load)
-      when 'nativeMenu'    then open_native_window
-      when 'closeNativeMenu' then close_native_window
       else "Unknown action."
       end
     end
@@ -5615,6 +5612,10 @@ module TyranorCheats
 
     def save_slot_limit
       return essentials_save_slot_ids.max || 1 if ess?
+      # Match the MV/MZ panel's default slot count for XP/VX. The RGSS panel
+      # writes indexed filenames directly, so its extra slots remain usable
+      # even when the game's own save scene still shows a smaller limit.
+      return 20 if engine == :xp || engine == :vx
       if engine == :ace && defined?(DataManager) && DataManager.respond_to?(:savefile_max)
         count = (DataManager.savefile_max.to_i rescue 0)
         return [[count, 1].max, 100].min if count > 0
@@ -5773,7 +5774,10 @@ module TyranorCheats
       path = save_slot_path(id)
       return "This game doesn't expose that save slot." if path.to_s.empty?
       return "That save slot is empty." unless File.file?(path)
-      File.delete(path)
+      removed = File.delete(path)
+      still_exists = File.file?(path) rescue false
+      AnyPlayLog.write("Cheat save delete id=#{id} path=#{path} removed=#{removed} exists_after=#{still_exists}") rescue nil
+      return "Couldn't delete save slot: file still exists after deletion." if still_exists
       "Save slot #{id} deleted"
     rescue Exception => e
       "Couldn't delete save slot: #{e.class}: #{e.message}"
@@ -6064,27 +6068,9 @@ module TyranorCheats
     end
 
     # ---------------------------------------------------------- per frame
-    def load_native_window_layer
-      return true if respond_to?(:open_native_window)
-      return false if @native_window_layer_load_attempted
-      path = (ENV['TYRANOR_NATIVE_CHEAT_SCRIPT'] rescue '').to_s
-      return false if path.empty? || !File.file?(path)
-      @native_window_layer_load_attempted = true
-      load(path)
-      loaded = respond_to?(:open_native_window)
-      AnyPlayLog.write("RGSS native cheat window layer loaded lazily") if loaded
-      loaded
-    rescue Exception => e
-      @native_window_layer_load_attempted = true
-      AnyPlayLog.error("RGSS native cheat window lazy load failed: #{e.class}: #{e.message}") rescue nil
-      false
-    end
-
     def frame
       @tick += 1
       poll if (@tick % 6) == 0
-      load_native_window_layer
-      install_native_window_hook if respond_to?(:install_native_window_hook)
       install_hooks
       apply unless @on.empty?
     rescue Exception => e

@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tyn_cheat_title">RPG Maker 修改器</string>
-    <string name="tyn_runtime_cheat_panel_webview">当前面板（WebView）</string>
-    <string name="tyn_runtime_cheat_panel_native">RGSS 原生窗口</string>
     <string name="tyn_cheat_runtime_badge">RGSS</string>
     <string name="tyn_cheat_close">关闭修改器</string>
     <string name="tyn_cheat_tab_quick">快捷</string>

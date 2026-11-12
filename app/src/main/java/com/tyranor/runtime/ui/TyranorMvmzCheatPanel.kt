@@ -216,13 +216,32 @@ class TyranorMvmzCheatPanel(
                 "isReady" -> done(cheats.isReady())
                 "getState" -> done(mapOf(
                     "godMode" to cheats.isEnabled(TyranorCheatToggle.INVINCIBILITY),
+                    "hpmp" to cheats.isEnabled(TyranorCheatToggle.UNLIMITED_HPMP),
+                    "tp" to cheats.isEnabled(TyranorCheatToggle.UNLIMITED_TP),
+                    "points" to cheats.isEnabled(TyranorCheatToggle.CUSTOM_POINTS_LOCK),
+                    "gold" to cheats.isEnabled(TyranorCheatToggle.UNLIMITED_GOLD),
+                    "coins" to cheats.isEnabled(TyranorCheatToggle.UNLIMITED_COINS),
+                    "status" to cheats.isEnabled(TyranorCheatToggle.STATUS_IMMUNITY),
+                    "items" to cheats.isEnabled(TyranorCheatToggle.UNLIMITED_ITEMS),
                     "oneHit" to cheats.isEnabled(TyranorCheatToggle.ONE_HIT_KILL),
                     "alwaysCrit" to cheats.isEnabled(TyranorCheatToggle.ALWAYS_CRIT),
                     "noclip" to cheats.isEnabled(TyranorCheatToggle.WALK_THROUGH_WALLS),
+                    "noEncounter" to cheats.isEnabled(TyranorCheatToggle.NO_ENCOUNTERS),
+                    "speed" to cheats.isEnabled(TyranorCheatToggle.SPEED_BOOST),
+                    "speedMultiplier" to cheats.speedMultiplier(),
+                    "fastText" to cheats.isEnabled(TyranorCheatToggle.FAST_TEXT),
                     "eventSpeed" to cheats.isEnabled(TyranorCheatToggle.EVENT_SPEED),
                     "msgSkip" to cheats.isEnabled(TyranorCheatToggle.MESSAGE_SKIP),
+                    "escape" to cheats.isEnabled(TyranorCheatToggle.ESCAPE_ALWAYS),
+                    "freeSkill" to cheats.isEnabled(TyranorCheatToggle.FREE_SKILL_COST),
                 ))
+                "listCapabilities" -> cheats.loadCapabilities { capabilities ->
+                    done(mapOf("engine" to capabilities.engine, "toggles" to capabilities.toggles))
+                }
                 "setFlag" -> setFlag(argString(a, 0), argBoolean(a, 1), done)
+                "setSpeed" -> cheats.setValue("speed", argString(a, 0)) {
+                    completeMessage(it, done)
+                }
                 "getGold" -> cheats.getGold { done(it ?: 0) }
                 "setGold" -> cheats.setValue("gold", argString(a, 0)) { message ->
                     completeMessage(message, done) {
@@ -308,11 +327,23 @@ class TyranorMvmzCheatPanel(
         private fun setFlag(name: String, enabled: Boolean, done: (Any?) -> Unit) {
             val toggle = when (name) {
                 "godMode" -> TyranorCheatToggle.INVINCIBILITY
+                "hpmp" -> TyranorCheatToggle.UNLIMITED_HPMP
+                "tp" -> TyranorCheatToggle.UNLIMITED_TP
+                "points" -> TyranorCheatToggle.CUSTOM_POINTS_LOCK
+                "gold" -> TyranorCheatToggle.UNLIMITED_GOLD
+                "coins" -> TyranorCheatToggle.UNLIMITED_COINS
+                "status" -> TyranorCheatToggle.STATUS_IMMUNITY
+                "items" -> TyranorCheatToggle.UNLIMITED_ITEMS
                 "oneHit" -> TyranorCheatToggle.ONE_HIT_KILL
                 "alwaysCrit" -> TyranorCheatToggle.ALWAYS_CRIT
                 "noclip" -> TyranorCheatToggle.WALK_THROUGH_WALLS
+                "noEncounter" -> TyranorCheatToggle.NO_ENCOUNTERS
+                "speed" -> TyranorCheatToggle.SPEED_BOOST
+                "fastText" -> TyranorCheatToggle.FAST_TEXT
                 "eventSpeed" -> TyranorCheatToggle.EVENT_SPEED
                 "msgSkip" -> TyranorCheatToggle.MESSAGE_SKIP
+                "escape" -> TyranorCheatToggle.ESCAPE_ALWAYS
+                "freeSkill" -> TyranorCheatToggle.FREE_SKILL_COST
                 else -> {
                     done(JsFailure("未知作弊开关：$name"))
                     return

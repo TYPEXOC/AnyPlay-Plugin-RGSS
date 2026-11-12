@@ -195,7 +195,6 @@ class TyranorCheatController(
     private val tmpFile = File(dir, "tyranor_cheat_cmd.tmp")
     private val replyFile = File(dir, "tyranor_cheat_reply.txt")
     private val runtimeStateFile = File(dir, "tyranor_cheat_state.txt")
-    private val nativeWindowStateFile = File(dir, "tyranor_cheat_window_state.txt")
     private val handler = Handler(Looper.getMainLooper())
 
     private companion object {
@@ -256,7 +255,6 @@ class TyranorCheatController(
         tmpFile.delete()
         replyFile.delete()
         runtimeStateFile.delete()
-        nativeWindowStateFile.delete()
         // Gives the game the saved checkboxes as soon as it starts running.
         enqueue("restore\t${speedMultiplier()}\t${enabledNames().joinToString(",")}", 0L) { ready = true }
     }
@@ -283,17 +281,6 @@ class TyranorCheatController(
         syncRuntimeState()
         return prefs.getFloat(speedKey, 2f)
     }
-
-    fun openNativeWindow(onResult: (String) -> Unit = {}) {
-        send("run\tnativeMenu", onResult)
-    }
-
-    fun closeNativeWindow(onResult: (String) -> Unit = {}) {
-        send("run\tcloseNativeMenu", onResult)
-    }
-
-    fun isNativeWindowOpen(): Boolean =
-        runCatching { nativeWindowStateFile.readText().trim() == "1" }.getOrDefault(false)
 
     /**
      * Checkbox tapped. [onResult] gets "" when it worked, otherwise a message
@@ -774,6 +761,5 @@ class TyranorCheatController(
         polling = false
         queue.clear()
         runtimeStateFile.delete()
-        nativeWindowStateFile.delete()
     }
 }

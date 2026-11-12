@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tyn_cheat_title">RPG Maker 改造パネル</string>
-    <string name="tyn_runtime_cheat_panel_webview">現在のパネル（WebView）</string>
-    <string name="tyn_runtime_cheat_panel_native">RGSS ネイティブウィンドウ</string>
     <string name="tyn_cheat_runtime_badge">RGSS</string>
     <string name="tyn_cheat_close">改造パネルを閉じる</string>
     <string name="tyn_cheat_tab_quick">クイック</string>

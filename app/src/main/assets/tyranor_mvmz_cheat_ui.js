@@ -9,14 +9,24 @@
   var userDragged = false; // 用户手动拖拽过，positionLauncher 不再覆盖
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
-  var context = { actorId: 0, actorEntries: null, itemKind: "item", systemKind: "switch" };
+  var context = { actorId: 0, actorEntries: null, itemKind: "item", systemKind: "switch", capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
   ];
-  var flags = [
-    ["godMode", "无敌"], ["oneHit", "一击必杀"], ["alwaysCrit", "必定暴击"],
-    ["noclip", "穿墙"], ["eventSpeed", "事件加速"], ["msgSkip", "对话快进"]
+  var flagGroups = [
+    ["角色与资源", [
+      ["hpmp", "HP/MP不减"], ["tp", "TP不减"], ["points", "自定义点数不减"],
+      ["gold", "金币不减"], ["coins", "游戏币不减"], ["status", "异常状态免疫"], ["items", "物品不减"]
+    ]],
+    ["探索", [
+      ["noclip", "穿墙"], ["noEncounter", "无遇敌"], ["speed", "移动加速"],
+      ["fastText", "快速文字"], ["eventSpeed", "事件加速"], ["msgSkip", "对话快进"]
+    ]],
+    ["战斗", [
+      ["godMode", "无敌"], ["oneHit", "一击必杀"], ["alwaysCrit", "必定暴击"],
+      ["escape", "必定逃跑成功"], ["freeSkill", "技能不消耗"]
+    ]]
   ];
   function escapeHtml(value) { return String(value == null ? "" : value).replace(/[&<>'"]/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]; }); }
   function inputValue(id) { var node = root && root.querySelector("#" + id); return node ? node.value : ""; }
@@ -52,30 +62,56 @@
     else if (activeTab === "keys") renderKeys(content);
     else renderAbout(content);
   }
-  function renderQuick(content) {
+  function renderQuick(content, refreshGold) {
+    if (refreshGold === undefined) refreshGold = true;
     var state = mod.getState();
-    var toggles = flags.map(function (entry) {
-      return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
+    var supported = context.capabilities && context.capabilities.toggles;
+    var cards = flagGroups.map(function (group) {
+      var entries = group[1].filter(function (entry) {
+        var capability = entry[0] === "godMode" ? "invincible" : entry[0] === "alwaysCrit" ? "crit" : entry[0];
+        return !supported || supported.indexOf(capability) >= 0;
+      });
+      if (!entries.length) return "";
+      var toggles = entries.map(function (entry) {
+        return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
+      }).join("");
+      if (group[0] === "探索" && (!supported || supported.indexOf("speed") >= 0)) {
+        toggles += row("移动速度倍数", '<div class="tm-row"><input class="tm-input" id="tm-speed" type="number" min="0.25" max="8" step="0.25" value="' + escapeHtml(state.speedMultiplier || 2) + '">' + button("设置", "set-speed", "primary") + '</div>');
+      }
+      return card(group[0], toggles);
     }).join("");
     var cachedGold = context.gold == null ? "…" : context.gold;
     var gold = row("当前金币", '<span class="tm-badge" id="tm-gold-current">' + cachedGold + '</span>') + '<div class="tm-row">' + textInput("tm-gold", cachedGold, "number", 'min="0"') + button("设置", "set-gold", "primary") + button("拉满", "max-gold") + '</div>';
     var party = '<div class="tm-row">' + button("全体恢复", "recover-party", "primary") + button("刷新页面", "render") + '</div>';
-    content.innerHTML = '<div class="tm-grid">' + card("运行时开关", toggles) + card("金币", gold) + card("队伍", party) + '</div>';
+    content.innerHTML = '<div class="tm-grid">' + cards + card("金币", gold) + card("队伍", party) + '</div>';
     // Render the panel before crossing the Ruby command-file bridge. One query
     // used to block open() twice (the badge and input each called getGold).
-    setTimeout(function () {
-      if (!root || activeTab !== "quick") return;
-      try {
-        var value = mod.getGold();
-        context.gold = value;
-        var current = root.querySelector("#tm-gold-current");
-        var input = root.querySelector("#tm-gold");
-        if (current) current.textContent = String(value);
-        if (input && document.activeElement !== input) input.value = String(value);
-      } catch (error) {
-        console.warn("RGSS gold refresh failed", error);
-      }
-    }, 0);
+    if (refreshGold) setTimeout(function () {
+        if (!root || activeTab !== "quick") return;
+        try {
+          var value = mod.getGold();
+          context.gold = value;
+          var current = root.querySelector("#tm-gold-current");
+          var input = root.querySelector("#tm-gold");
+          if (current) current.textContent = String(value);
+          if (input && document.activeElement !== input) input.value = String(value);
+        } catch (error) {
+          console.warn("RGSS gold refresh failed", error);
+        }
+      }, 0);
+    if (!context.capabilities && !context.capabilitiesLoading) {
+      context.capabilitiesLoading = true;
+      setTimeout(function () {
+        try {
+          var loaded = mod.listCapabilities();
+          if (loaded && loaded.engine !== "unknown" && Array.isArray(loaded.toggles)) context.capabilities = loaded;
+        } catch (error) {
+          console.warn("RGSS cheat capability read failed", error);
+        }
+        context.capabilitiesLoading = false;
+        if (context.capabilities && root && activeTab === "quick") renderQuick(root.querySelector(".tm-content"), false);
+      }, 0);
+    }
   }
   function renderItems(content) {
     var kinds = '<select class="tm-select" id="tm-item-kind" data-action="item-kind"><option value="item">物品</option><option value="weapon">武器</option><option value="armor">护甲</option></select>';
@@ -307,7 +343,12 @@
   function handleAction(action, node) {
     if (action === "close") return close();
     if (action === "render") return render();
-    if (action === "flag") return run(function () { var on = node.type === "checkbox" ? node.checked : !mod.getState()[node.dataset.flag]; mod.setFlag(node.dataset.flag, on); }, function () { toast("设置已保存"); renderEventPanel(); });
+    if (action === "flag") {
+      var flagOn = node.type === "checkbox" ? node.checked : !mod.getState()[node.dataset.flag];
+      return run(function () { return mod.setFlag(node.dataset.flag, flagOn); }, function () { toast("设置已保存"); renderEventPanel(); })
+        .then(function (result) { if (result === undefined && node.type === "checkbox") node.checked = !flagOn; });
+    }
+    if (action === "set-speed") return run(function () { return mod.setSpeed(inputValue("tm-speed")); }, function () { toast("移动速度已设置"); renderQuick(root.querySelector(".tm-content"), false); });
     if (action === "set-gold") return run(function () { mod.setGold(inputValue("tm-gold")); }, function () { toast("金币已修改"); render(); });
     if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () { toast("金币已拉满"); render(); });
     if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); render(); });
@@ -372,7 +413,7 @@
   function open() {
     if (root) return;
     root = document.createElement("div"); root.id = "tyranor-mod-root";
-    root.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker 修改器</strong><span class="tm-badge">RGSS</span><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs">' + tabs.map(function (tab) { return '<button class="tm-tab" data-tab="' + tab[0] + '">' + tab[1] + '</button>'; }).join("") + '</div><main class="tm-content"></main></div>';
+    root.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker 修改器 · RGSS</strong><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs">' + tabs.map(function (tab) { return '<button class="tm-tab" data-tab="' + tab[0] + '">' + tab[1] + '</button>'; }).join("") + '</div><main class="tm-content"></main></div>';
     document.documentElement.appendChild(root);
     root.addEventListener("click", function (event) {
       event.stopPropagation();
