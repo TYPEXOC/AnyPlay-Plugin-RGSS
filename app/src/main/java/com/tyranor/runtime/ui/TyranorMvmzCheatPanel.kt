@@ -229,6 +229,7 @@ class TyranorMvmzCheatPanel(
                     "noEncounter" to cheats.isEnabled(TyranorCheatToggle.NO_ENCOUNTERS),
                     "speed" to cheats.isEnabled(TyranorCheatToggle.SPEED_BOOST),
                     "speedMultiplier" to cheats.speedMultiplier(),
+                    "gameSpeedMultiplier" to cheats.gameSpeedMultiplier(),
                     "fastText" to cheats.isEnabled(TyranorCheatToggle.FAST_TEXT),
                     "eventSpeed" to cheats.isEnabled(TyranorCheatToggle.EVENT_SPEED),
                     "msgSkip" to cheats.isEnabled(TyranorCheatToggle.MESSAGE_SKIP),
@@ -240,6 +241,9 @@ class TyranorMvmzCheatPanel(
                 }
                 "setFlag" -> setFlag(argString(a, 0), argBoolean(a, 1), done)
                 "setSpeed" -> cheats.setValue("speed", argString(a, 0)) {
+                    completeMessage(it, done)
+                }
+                "setGameSpeed" -> cheats.setGameSpeed(argString(a, 0)) {
                     completeMessage(it, done)
                 }
                 "getGold" -> cheats.getGold { done(it ?: 0) }

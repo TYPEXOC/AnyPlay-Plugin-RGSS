@@ -77,7 +77,7 @@
         return !supported || supported.indexOf(capability) >= 0;
       });
       return { id: group[0], label: group[0], entries: entries };
-    }).filter(function (group) { return group.entries.length > 0 || group.id === "探索" && (!supported || supported.indexOf("speed") >= 0); });
+    }).filter(function (group) { return group.entries.length > 0 || group.id === "探索"; });
     if (!groups.length) groups.push({ id: "队伍", label: "队伍", entries: [] });
     var sections = groups;
     if (!sections.some(function (section) { return section.id === context.quickSection; })) context.quickSection = sections[0].id;
@@ -89,8 +89,11 @@
       var toggles = selectedGroup.entries.map(function (entry) {
         return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
       }).join("");
-      if (selectedGroup.id === "探索" && (!supported || supported.indexOf("speed") >= 0)) {
-        toggles += row("移动速度", '<div class="tm-row"><input class="tm-input" id="tm-speed" type="number" min="0.25" max="100" step="0.25" value="' + escapeHtml(state.speedMultiplier || 2) + '">' + button("设置", "set-speed", "primary") + '</div>');
+      if (selectedGroup.id === "探索") {
+        if (!supported || supported.indexOf("speed") >= 0) {
+          toggles += row("移动速度", '<div class="tm-row"><input class="tm-input" id="tm-speed" type="number" min="0.25" max="8" step="0.25" value="' + escapeHtml(state.speedMultiplier || 2) + '">' + button("设置", "set-speed", "primary") + '</div>');
+        }
+        toggles += row("游戏倍速", '<div class="tm-row"><input class="tm-input" id="tm-game-speed" type="number" min="1" max="9" step="1" value="' + escapeHtml(state.gameSpeedMultiplier || 1) + '">' + button("设置", "set-game-speed", "primary") + '</div>');
       }
       if (selectedGroup.id === "角色与资源") toggles += '<div class="tm-row tm-quick-party-action">' + button("全体恢复", "recover-party", "primary") + '</div>';
       sectionBody = card(selectedGroup.label, toggles);
@@ -488,6 +491,7 @@
         .then(function (result) { if (result === undefined && node.type === "checkbox") node.checked = !flagOn; });
     }
     if (action === "set-speed") return run(function () { return mod.setSpeed(inputValue("tm-speed")); }, function () { toast("移动速度已设置"); renderQuick(root.querySelector(".tm-content"), false); });
+    if (action === "set-game-speed") return run(function () { return mod.setGameSpeed(inputValue("tm-game-speed")); }, function () { toast("游戏倍速已设置"); renderQuick(root.querySelector(".tm-content"), false); });
     if (action === "set-gold") return run(function () { mod.setGold(inputValue("tm-gold")); }, function () { toast("金币已修改"); render(); });
     if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () { toast("金币已拉满"); render(); });
     if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); render(); });

@@ -189,6 +189,7 @@ class TyranorCheatController(
     private val keyBase = "game_${gameKey.hashCode()}"
     private val togglesKey = "$keyBase.toggles"
     private val speedKey = "$keyBase.speed"
+    private val gameSpeedKey = "$keyBase.game_speed"
 
     private val dir = context.applicationContext.cacheDir
     private val cmdFile = File(dir, "tyranor_cheat_cmd.txt")
@@ -256,7 +257,7 @@ class TyranorCheatController(
         replyFile.delete()
         runtimeStateFile.delete()
         // Gives the game the saved checkboxes as soon as it starts running.
-        enqueue("restore\t${speedMultiplier()}\t${enabledNames().joinToString(",")}", 0L) { ready = true }
+        enqueue("restore\t${speedMultiplier()}\t${enabledNames().joinToString(",")}\t${gameSpeedMultiplier()}", 0L) { ready = true }
     }
 
     private fun syncRuntimeState() {
@@ -281,6 +282,8 @@ class TyranorCheatController(
         syncRuntimeState()
         return prefs.getFloat(speedKey, 2f)
     }
+
+    fun gameSpeedMultiplier(): Int = prefs.getInt(gameSpeedKey, 1).coerceIn(1, 9)
 
     /**
      * Checkbox tapped. [onResult] gets "" when it worked, otherwise a message
@@ -316,6 +319,17 @@ class TyranorCheatController(
                 }
             }
             onResult(msg)
+        }
+    }
+
+    fun setGameSpeed(value: String, onResult: (String) -> Unit) {
+        send("value\tgameSpeed\t${clean(value)}") { message ->
+            if (message.startsWith("Game speed x")) {
+                value.trim().toIntOrNull()?.takeIf { it in 1..9 }?.let {
+                    prefs.edit().putInt(gameSpeedKey, it).apply()
+                }
+            }
+            onResult(message)
         }
     }
 

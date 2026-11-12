@@ -3177,6 +3177,7 @@ module TyranorCheats
 
   @on = {}
   @speed = 2.0
+  @game_speed = 1
   @engine = nil
   @ess21 = false
   @tick = 0
@@ -3537,10 +3538,12 @@ module TyranorCheats
     end
 
     def restore(speed, names)
+      toggle_names, saved_game_speed = names.to_s.split("\t", 2)
       s = speed.to_f
-      @speed = s if s > 0
+      @speed = [[s, 0.25].max, 8.0].min if s > 0
       @on = {}
-      names.to_s.split(',').each { |n| @on[n] = true unless n.empty? }
+      toggle_names.to_s.split(',').each { |n| @on[n] = true unless n.empty? }
+      restore_game_speed(saved_game_speed)
       @item_snap = nil
       @points_snap = nil
       @coins_snap = nil
@@ -3759,10 +3762,20 @@ module TyranorCheats
       if name == 'speed'
         s = v.to_f
         return "Enter a number above 0." unless s > 0
-        @speed = [[s, 0.25].max, 100.0].min
+        @speed = [[s, 0.25].max, 8.0].min
         @on['speed'] = true
         write_state
         return "Speed x#{@speed}"
+      end
+      if name == 'gameSpeed'
+        value = v.to_s.strip
+        return "Enter a whole number from 1 to 9." unless value =~ /\A\d+\z/
+        speed = value.to_i
+        return "Enter a whole number from 1 to 9." unless speed >= 1 && speed <= 9
+        return "Global game speed is unavailable." unless defined?(Graphics) && Graphics.respond_to?(:set_fast_forward_speed)
+        Graphics.set_fast_forward_speed(speed)
+        @game_speed = speed
+        return "Game speed x#{@game_speed}"
       end
       n = v.to_s.strip
       return "Enter a number first." if n.empty?
@@ -3773,6 +3786,16 @@ module TyranorCheats
       when :xp, :vx, :ace then rpgm_value(name, n)
       else NOPE
       end
+    end
+
+    def restore_game_speed(value)
+      speed_text = value.to_s.strip
+      speed = (speed_text =~ /\A\d+\z/) ? speed_text.to_i : 1
+      speed = 1 if speed < 1 || speed > 9
+      @game_speed = speed
+      Graphics.set_fast_forward_speed(speed) if defined?(Graphics) && Graphics.respond_to?(:set_fast_forward_speed)
+    rescue Exception
+      @game_speed = 1
     end
 
     def ess_value(name, n)
