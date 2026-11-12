@@ -8,6 +8,7 @@ import android.content.ContentResolver;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.InputDevice;
@@ -122,6 +123,7 @@ public class MainActivity extends SDLActivity
     private boolean mRtpScanNeedsRefresh;
     private String mTynGameTitle;
     private String mTynUiLanguageTag;
+    private Context mTynUiLocalizedContext;
     private PendingIntent mTynSaveSessionEndedCallback;
     private boolean mTynSaveSessionEndedCallbackSent;
     private ScheduledExecutorService mTranslationSync;
@@ -341,15 +343,26 @@ public class MainActivity extends SDLActivity
         }
 
         mTynUiLanguageTag = locale.toLanguageTag();
-        Configuration override = new Configuration();
+        Configuration override = new Configuration(super.getResources().getConfiguration());
         override.setLocale(locale);
         override.setLayoutDirection(locale);
-        applyOverrideConfiguration(override);
+        // This launch Intent is only available after Activity.attach(), when Android may
+        // already have requested the Activity's Resources. applyOverrideConfiguration()
+        // is therefore too late here and crashes the module on TYN launches. Keep a
+        // locale-configured Context for subsequent Activity resource lookups instead.
+        mTynUiLocalizedContext = createConfigurationContext(override);
         try {
             Os.setenv("TYRANOR_UI_LANGUAGE_TAG", mTynUiLanguageTag, true);
         } catch (Exception error) {
             Log.w(TAG, "Could not expose TYN UI language to Ruby scripts", error);
         }
+    }
+
+    @Override
+    public Resources getResources()
+    {
+        Context localizedContext = mTynUiLocalizedContext;
+        return localizedContext == null ? super.getResources() : localizedContext.getResources();
     }
 
     @Override
