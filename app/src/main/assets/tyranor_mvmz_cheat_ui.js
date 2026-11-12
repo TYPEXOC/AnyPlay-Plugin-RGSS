@@ -416,12 +416,11 @@
       return loadBrowse();
     }
     if (action === "render-browse") return loadBrowse();
-    if (action === "pick-map") { fillTeleport(node.dataset.id, 0, 0); context.pickedMapId = Number(node.dataset.id); if (context.mapListExpanded) renderMapList(); return; }
+    if (action === "pick-map") { fillTeleport(node.dataset.id, null, null); context.pickedMapId = Number(node.dataset.id); if (context.mapListExpanded) renderMapList(); return; }
     if (action === "pick-event") {
       context.eventId = Number(node.dataset.id);
       var ev = (context.eventAll || []).filter(function (e2) { return String(e2.id) === node.dataset.id; })[0];
-      var pos2 = null; try { pos2 = mod.currentPosition(); } catch (_) {}
-      if (ev) fillTeleport(pos2 && pos2.mapId, ev.x, ev.y);
+      if (ev) fillTeleport(ev.mapId, ev.x, ev.y);
       renderEventList(); renderEventPanel(); return;
     }
     if (action === "selfswitch-toggle") {
