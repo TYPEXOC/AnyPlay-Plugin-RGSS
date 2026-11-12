@@ -98,6 +98,7 @@ class TyranorCheatController(
         val maxHp: Int,
         val mp: Int,
         val maxMp: Int,
+        val inParty: Boolean = true,
         val stats: Map<String, Int> = emptyMap()
     )
 
@@ -127,6 +128,41 @@ class TyranorCheatController(
         val selfSwitches: Map<String, Boolean>,
         val pageCount: Int,
         val firstPageCommandCount: Int
+    )
+
+    data class EventConditionEntry(
+        val type: String,
+        val id: String,
+        val target: String,
+        val current: String,
+        val met: Boolean,
+        val name: String
+    )
+
+    data class EventCommandEntry(
+        val index: Int,
+        val code: Int,
+        val indent: Int,
+        val preview: String,
+        val parameters: String
+    )
+
+    data class EventPageDetail(
+        val index: Int,
+        val validCount: Int,
+        val commandCount: Int,
+        val conditions: List<EventConditionEntry>
+    )
+
+    data class EventDetail(
+        val mapId: Int,
+        val id: Int,
+        val name: String,
+        val x: Int,
+        val y: Int,
+        val description: String,
+        val selfSwitches: Map<String, Boolean>,
+        val pages: List<EventPageDetail>
     )
 
     data class MiniMapEvent(
@@ -369,6 +405,10 @@ class TyranorCheatController(
         send("actor_recover\t$actorId", onResult)
     }
 
+    fun setActorParty(actorId: Int, inParty: Boolean, onResult: (String) -> Unit) {
+        send("actor_party\t$actorId\t${if (inParty) "1" else "0"}", onResult)
+    }
+
     fun setActorCollection(actorId: Int, collection: String, itemId: Int, enabled: Boolean, onResult: (String) -> Unit) {
         send("actor_collection\t$actorId\t$collection\t$itemId\t${if (enabled) "1" else "0"}", onResult)
     }
@@ -408,6 +448,10 @@ class TyranorCheatController(
 
     fun setEventSelfSwitches(eventId: Int, enabled: Boolean, mapId: Int = 0, onResult: (String) -> Unit) {
         send("event_switch\t$eventId\tALL\t${if (enabled) "1" else "0"}\t$mapId", onResult)
+    }
+
+    fun setMapEventSelfSwitches(mapId: Int, enabled: Boolean, onResult: (String) -> Unit) {
+        send("map_event_switches\t$mapId\t${if (enabled) "1" else "0"}", onResult)
     }
 
     fun setEnemyHp(index: Int, hp: Int, onResult: (String) -> Unit) {
@@ -456,15 +500,17 @@ class TyranorCheatController(
             val out = mutableListOf<ActorEntry>()
             raw.lineSequence().forEach { line ->
                 val p = line.split('\t')
-                if (p.size < 8 || p[0] != "A") return@forEach
+                if (p.size < 9 || p[0] != "A") return@forEach
                 val id = p[1].toIntOrNull() ?: return@forEach
-                val stats = p.drop(8).mapNotNull { field ->
+                val inParty = p.getOrNull(8) == "1"
+                val stats = p.drop(9).mapNotNull { field ->
                     val pair = field.split('=', limit = 2)
                     if (pair.size != 2) return@mapNotNull null
                     pair[1].toIntOrNull()?.let { pair[0] to it }
                 }.toMap()
                 out.add(ActorEntry(id, p[2], p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0,
-                    p[5].toIntOrNull() ?: 0, p[6].toIntOrNull() ?: 0, p[7].toIntOrNull() ?: 0, stats))
+                    p[5].toIntOrNull() ?: 0, p[6].toIntOrNull() ?: 0, p[7].toIntOrNull() ?: 0,
+                    inParty, stats))
             }
             onResult(out)
         }
@@ -620,6 +666,77 @@ class TyranorCheatController(
             }
             onResult(out)
         }
+    }
+
+    fun loadEventDetail(mapId: Int, eventId: Int, onResult: (EventDetail?) -> Unit) {
+        send("list\tevent_detail\t$mapId\t$eventId", 30_000L) { raw ->
+            var detailMapId = mapId
+            var detailId = eventId
+            var name = ""
+            var description = ""
+            var x = 0
+            var y = 0
+            val switches = mutableMapOf("A" to false, "B" to false, "C" to false, "D" to false)
+            val pages = linkedMapOf<Int, MutableEventPage>()
+            raw.lineSequence().forEach { line ->
+                when (line.firstOrNull()) {
+                    'D' -> {
+                        val p = line.split('\t', limit = 11)
+                        if (p.size == 11 && p[0] == "D") {
+                            detailMapId = p[1].toIntOrNull() ?: detailMapId
+                            detailId = p[2].toIntOrNull() ?: detailId
+                            name = p[3]
+                            x = p[4].toIntOrNull() ?: 0
+                            y = p[5].toIntOrNull() ?: 0
+                            listOf("A", "B", "C", "D").forEachIndexed { index, key -> switches[key] = p[index + 6] == "1" }
+                            description = p[10]
+                        }
+                    }
+                    'P' -> {
+                        val p = line.split('\t', limit = 4)
+                        if (p.size == 4 && p[0] == "P") {
+                            val index = p[1].toIntOrNull() ?: return@forEach
+                            pages[index] = MutableEventPage(index, p[2].toIntOrNull() ?: 0, p[3].toIntOrNull() ?: 0)
+                        }
+                    }
+                    'Q' -> {
+                        val p = line.split('\t', limit = 8)
+                        if (p.size == 8 && p[0] == "Q") {
+                            val index = p[1].toIntOrNull() ?: return@forEach
+                            pages.getOrPut(index) { MutableEventPage(index, 0, 0) }.conditions.add(
+                                EventConditionEntry(p[2], p[3], p[4], p[5], p[6] == "1", p[7])
+                            )
+                        }
+                    }
+                }
+            }
+            onResult(if (name.isBlank()) null else EventDetail(
+                detailMapId, detailId, name, x, y, description, switches,
+                pages.values.sortedBy { it.index }.map { it.freeze() }
+            ))
+        }
+    }
+
+    fun loadEventInterpreter(mapId: Int, eventId: Int, pageIndex: Int, onResult: (List<EventCommandEntry>?) -> Unit) {
+        send("list\tevent_interpreter\t$mapId\t$eventId\t$pageIndex", 30_000L) { raw ->
+            val commands = mutableListOf<EventCommandEntry>()
+            raw.lineSequence().forEach { line ->
+                val p = line.split('\t', limit = 7)
+                if (p.size != 7 || p[0] != "C") return@forEach
+                val index = p[2].toIntOrNull() ?: return@forEach
+                commands.add(EventCommandEntry(index, p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0, p[5], p[6]))
+            }
+            onResult(if (raw.isNotBlank() && commands.isEmpty()) null else commands)
+        }
+    }
+
+    private data class MutableEventPage(
+        val index: Int,
+        val validCount: Int,
+        val commandCount: Int,
+        val conditions: MutableList<EventConditionEntry> = mutableListOf()
+    ) {
+        fun freeze() = EventPageDetail(index, validCount, commandCount, conditions.toList())
     }
 
     fun loadMiniMap(onResult: (MiniMap?) -> Unit) {

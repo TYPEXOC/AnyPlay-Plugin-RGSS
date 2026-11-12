@@ -56,6 +56,7 @@
     listActors: function () { return invoke("listActors") || []; },
     setActorStat: function (id, key, value) { return invoke("setActorStat", [id, key, value]); },
     recoverActor: function (id) { return invoke("recoverActor", [id]); },
+    setActorParty: function (id, inParty) { return invoke("setActorParty", [id, !!inParty]); },
     recoverParty: function () { return invoke("recoverParty"); },
     actorSkills: function (id) { return invoke("actorSkills", [id]) || []; },
     learnSkill: function (id, skillId) { return invoke("learnSkill", [id, skillId]); },
@@ -88,8 +89,14 @@
       return { total: values.length, values: values };
     },
     eventDetail: function (eventId, mapId) { return invoke("eventDetail", [eventId, mapId]); },
+    eventInterpreter: function (eventId, mapId, pageIndex) {
+      return invoke("eventInterpreter", [eventId, mapId, pageIndex]) || [];
+    },
     setEventSelfSwitches: function (eventId, enabled, mapId) {
       return invoke("setEventSelfSwitches", [eventId, !!enabled, mapId]);
+    },
+    setMapEventSelfSwitches: function (mapId, enabled) {
+      return invoke("setMapEventSelfSwitches", [mapId, !!enabled]);
     },
     battleSnapshot: function () { return invoke("battleSnapshot"); },
     setEnemyHp: function (index, hp) { return invoke("setEnemyHp", [index, hp]); },

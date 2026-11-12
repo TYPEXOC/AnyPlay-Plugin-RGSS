@@ -21,17 +21,18 @@
       "移动速度": "Movement speed", "移动速度已设置": "Movement speed updated", "游戏倍速": "Game speed", "游戏倍速已设置": "Game speed updated",
       "穿墙": "Walk through walls", "事件加速": "Speed up events", "对话快进": "Skip message pauses",
       "操作失败": "Operation failed", "完成": "Done", "请先进入游戏存档或开始新游戏，修改器正在等待 RPG Maker 运行时就绪。": "Load a save or start a new game. Waiting for the RPG Maker runtime.",
-      "当前金币": "Current gold", "设置": "Set", "拉满": "Max", "全体恢复": "Recover party", "刷新面板": "Refresh panel",
+      "当前金币": "Current gold", "金币：": "Gold:", "设置": "Set", "拉满": "Max", "全体恢复": "Recover party", "刷新面板": "Refresh panel",
       "当前没有可用的快捷功能": "No quick actions are available",
       "运行时开关": "Runtime toggles", "金币": "Gold", "队伍": "Party", "物品数据库": "Item database",
       "加载中…": "Loading…", "搜索": "Search", "搜索名称": "Search names", "应用": "Apply",
-      "没有匹配项目": "No matching entries", "当前队伍没有角色": "The party has no characters",
+      "没有匹配项目": "No matching entries", "当前队伍没有角色": "The party has no characters", "当前游戏没有角色": "This game has no characters",
+      "队伍管理": "Party management", "在队伍中": "In party", "不在队伍中": "Not in party", "搜索角色名称或 ID": "Search characters by name or ID",
       "恢复": "Recover", "属性": "Stats", "技能": "Skills", "状态": "States", "装备": "Equipment",
       "技能 ID": "Skill ID", "学习": "Learn", "遗忘": "Forget", "状态 ID": "State ID", "附加": "Add", "移除": "Remove",
       "搜索技能名称或 ID": "Search skills by name or ID", "搜索状态名称或 ID": "Search states by name or ID",
       "槽位": "Slot", "武器": "Weapon", "护甲": "Armor", "装备 ID，0=卸下": "Equipment ID (0 to unequip)", "更换": "Change",
       "无": "None", "开关与变量": "Switches and variables", "开关": "Switch", "变量": "Variable", "设为开": "Set on", "设为关": "Set off", "名称或 ID": "Name or ID",
-      "地图": "Map", "事件": "Events", "地图 ID": "Map ID", "传送": "Warp", "事件操作": "Event actions", "浏览": "Browse",
+      "地图": "Map", "事件": "Events", "地图 ID": "Map ID", "传送": "Warp", "地图操作": "Map actions", "传送到事件": "Warp to event", "事件详情": "Event details", "独立开关": "Self switch", "独立开关全开": "Enable all self-switches", "独立开关全关": "Disable all self-switches", "事件操作": "Event actions", "浏览": "Browse",
       "搜索地图名称 / ID": "Search map name or ID", "搜索 ID / 名称": "Search ID or name", "你在这里": "Current location",
       "选择": "Select", "没有匹配地图": "No matching maps", "当前地图没有事件（进入地图场景后打开）": "No events on this map. Open the panel from a map scene.",
       "在左侧选择事件查看详情": "Select an event on the left to view its details", "独立开关:": "Self switches:",
@@ -39,7 +40,10 @@
       "名称:": "Name:", "无法通行": "Impassable", "可通行": "Passable", "事件": "Event", "你": "Player",
       "点击事件块选中该事件；点外部区域或 × 关闭": "Tap an event tile to select it. Tap outside or × to close.",
       "已选中事件 #": "Selected event #", "当前不在战斗中": "Not in battle", "消灭全部敌人": "Defeat all enemies",
-      "强制胜利": "Force victory", "强制战败": "Force defeat", "强制逃跑": "Force escape", "战斗操作": "Battle actions", "敌方": "Enemies", "我方": "Party",
+      "强制胜利": "Force victory", "强制战败": "Force defeat", "强制逃跑": "Force escape", "战斗操作": "Battle actions", "战斗开关": "Battle modifiers", "当前游戏没有可用的战斗开关": "No battle modifiers are available in this game", "敌方": "Enemies", "我方": "Party",
+      "所选地图全部事件独立开关:": "Self-switches for all events on selected map:", "全部开启": "Enable all", "全部关闭": "Disable all", "该事件独立开关:": "Selected event self-switches:", "所选地图事件独立开关已全开": "Enabled self-switches for all events on selected map", "所选地图事件独立开关已全关": "Disabled self-switches for all events on selected map",
+      "名称:": "Name:", "描述:": "Description:", "独立开关:": "Self-switches:", "事件解释器": "Event interpreter", "事件长度": "Commands", "无条件": "No conditions", "无法读取所选事件详情": "Unable to read the selected event", "事件没有可显示的页面": "This event has no pages to display", "此事件页没有指令": "This event page has no commands", "点击指令可展开查看参数": "Tap a command to expand its parameters", "开": "On", "关": "Off", "指令数": "Commands", "条件数": "Conditions",
+      "结束": "End", "显示文本": "Show Text", "显示选项": "Show Choices", "数值输入": "Input Number", "物品选择": "Select Item", "滚动文本": "Scroll Text", "注释": "Comment", "条件分支": "Conditional Branch", "循环": "Loop", "中断循环": "Break Loop", "事件处理结束": "Exit Event Processing", "调用公共事件": "Call Common Event", "标签": "Label", "跳转标签": "Jump to Label", "控制开关": "Control Switches", "控制变量": "Control Variables", "控制独立开关": "Control Self Switch", "传送玩家": "Transfer Player", "设置事件位置": "Set Event Location", "设置移动路线": "Set Move Route", "等待": "Wait", "播放 BGM": "Play BGM", "播放 BGS": "Play BGS", "播放 ME": "Play ME", "播放 SE": "Play SE", "战斗处理": "Battle Processing", "商店处理": "Shop Processing", "增减 HP": "Change HP", "增减 MP": "Change MP", "更改状态": "Change State", "全体恢复": "Recover All", "打开菜单": "Open Menu", "打开存档画面": "Open Save Screen", "游戏结束": "Game Over", "脚本": "Script", "文本内容": "Text", "选项分支": "Choice Branch", "取消分支": "Cancel Branch", "结束选项分支": "End Choice Branch", "结束条件分支": "End Branch", "重复循环": "Repeat Above", "胜利时": "When Victory", "逃跑时": "When Escape", "失败时": "When Defeat", "结束战斗分支": "End Battle Branch", "脚本行": "Script Line", "事件指令": "Event Command",
       "存档管理": "Save management", "读取中…": "Loading…", "存档 ": "Save ", "已有数据": "Existing data", "空": "Empty",
       "保存": "Save", "读取": "Load", "删除": "Delete", "Tyranor 修改器": "Tyranor Cheats", "版本 ": "Version ",
       "修改器只操作当前 RGSS 游戏的运行时对象。部分深度定制脚本可能覆盖标准引擎 API；遇到异常时可在单游戏设置中关闭修改器。": "Cheats only modify the current RGSS game's runtime objects. Custom scripts may override standard engine APIs. If errors occur, disable cheats in that game's settings.",
@@ -49,7 +53,7 @@
       "可复制、删除按键，或恢复默认": "Copy or delete controls, or restore defaults", "保存后立即生效": "Changes take effect after saving",
       "进入按键编辑": "Edit controls", "恢复默认": "Restore defaults", "当前未启用虚拟按键。可在应用的引擎设置中开启。": "Virtual controls are disabled. Enable them in the app's engine settings.",
       "设置已保存": "Setting saved", "金币已修改": "Gold updated", "金币已拉满": "Gold maxed", "队伍已恢复": "Party recovered",
-      "数量已修改": "Quantity updated", "角色已恢复": "Character recovered", "属性已修改": "Stats updated", "装备已更换": "Equipment changed",
+      "数量已修改": "Quantity updated", "角色已恢复": "Character recovered", "队伍成员已更新": "Party membership updated", "属性已修改": "Stats updated", "装备已更换": "Equipment changed",
       "系统值已修改": "System value updated", "独立开关 A–D 已全开": "Self switches A–D enabled", "独立开关 A–D 已全关": "Self switches A–D disabled",
       "已预约传送": "Warp queued", "保存完成": "Save complete", "读取完成": "Load complete", "存档已删除": "Save deleted", "已恢复默认": "Defaults restored",
       "当前未启用虚拟按键": "Virtual controls are disabled", "RGSS 修改器桥未连接": "RGSS cheat bridge is unavailable",
@@ -73,17 +77,18 @@
       "移动速度": "移動速度", "移动速度已设置": "移動速度を変更しました", "游戏倍速": "ゲーム速度", "游戏倍速已设置": "ゲーム速度を変更しました",
       "穿墙": "壁抜け", "事件加速": "イベント高速化", "对话快进": "メッセージ早送り",
       "操作失败": "操作に失敗しました", "完成": "完了", "请先进入游戏存档或开始新游戏，修改器正在等待 RPG Maker 运行时就绪。": "セーブデータを読み込むか、新しいゲームを開始してください。RPG Maker の起動を待っています。",
-      "当前金币": "現在の所持金", "设置": "設定", "拉满": "最大", "全体恢复": "パーティ全回復", "刷新面板": "パネルを更新",
+      "当前金币": "現在の所持金", "金币：": "所持金:", "设置": "設定", "拉满": "最大", "全体恢复": "パーティ全回復", "刷新面板": "パネルを更新",
       "当前没有可用的快捷功能": "利用可能なクイック操作はありません",
       "运行时开关": "実行中のチート", "金币": "所持金", "队伍": "パーティ", "物品数据库": "アイテム一覧",
       "加载中…": "読み込み中…", "搜索": "検索", "搜索名称": "名前を検索", "应用": "適用",
-      "没有匹配项目": "該当する項目はありません", "当前队伍没有角色": "パーティにキャラクターがいません",
+      "没有匹配项目": "該当する項目はありません", "当前队伍没有角色": "パーティにキャラクターがいません", "当前游戏没有角色": "このゲームにキャラクターがいません",
+      "队伍管理": "パーティ管理", "在队伍中": "パーティにいる", "不在队伍中": "パーティにいない", "搜索角色名称或 ID": "キャラクター名または ID を検索",
       "恢复": "回復", "属性": "能力値", "技能": "スキル", "状态": "状態", "装备": "装備",
       "技能 ID": "スキル ID", "学习": "習得", "遗忘": "忘れる", "状态 ID": "ステート ID", "附加": "追加", "移除": "解除",
       "搜索技能名称或 ID": "スキル名または ID を検索", "搜索状态名称或 ID": "ステート名または ID を検索",
       "槽位": "スロット", "武器": "武器", "护甲": "防具", "装备 ID，0=卸下": "装備 ID（0 で解除）", "更换": "変更",
       "无": "なし", "开关与变量": "スイッチと変数", "开关": "スイッチ", "变量": "変数", "设为开": "オンにする", "设为关": "オフにする", "名称或 ID": "名前または ID",
-      "事件": "イベント", "地图 ID": "マップ ID", "传送": "移動", "事件操作": "イベント操作", "浏览": "一覧",
+      "事件": "イベント", "地图 ID": "マップ ID", "传送": "移動", "地图操作": "マップ操作", "传送到事件": "イベントへ移動", "事件详情": "イベント詳細", "独立开关": "セルフスイッチ", "独立开关全开": "セルフスイッチをすべてオン", "独立开关全关": "セルフスイッチをすべてオフ", "事件操作": "イベント操作", "浏览": "一覧",
       "搜索地图名称 / ID": "マップ名 / ID を検索", "搜索 ID / 名称": "ID / 名前を検索", "你在这里": "現在地",
       "选择": "選択", "没有匹配地图": "該当するマップはありません", "当前地图没有事件（进入地图场景后打开）": "このマップにイベントはありません。マップ画面で開いてください。",
       "在左侧选择事件查看详情": "左側のイベントを選択すると詳細を表示します", "独立开关:": "セルフスイッチ:",
@@ -91,7 +96,10 @@
       "名称:": "名前:", "无法通行": "通行不可", "可通行": "通行可", "你": "プレイヤー",
       "点击事件块选中该事件；点外部区域或 × 关闭": "イベントをタップして選択します。外側または × をタップすると閉じます。",
       "已选中事件 #": "選択中のイベント #", "当前不在战斗中": "戦闘中ではありません", "消灭全部敌人": "敵をすべて倒す",
-      "强制胜利": "強制勝利", "强制战败": "強制敗北", "强制逃跑": "強制逃走", "战斗操作": "戦闘操作", "敌方": "敵", "我方": "味方",
+      "强制胜利": "強制勝利", "强制战败": "強制敗北", "强制逃跑": "強制逃走", "战斗操作": "戦闘操作", "战斗开关": "戦闘チート", "当前游戏没有可用的战斗开关": "このゲームで使える戦闘チートはありません", "敌方": "敵", "我方": "味方",
+      "所选地图全部事件独立开关:": "選択したマップの全イベントセルフスイッチ:", "全部开启": "すべてオン", "全部关闭": "すべてオフ", "该事件独立开关:": "選択中イベントのセルフスイッチ:", "所选地图事件独立开关已全开": "選択したマップの全イベントをオンにしました", "所选地图事件独立开关已全关": "選択したマップの全イベントをオフにしました",
+      "名称:": "名前:", "描述:": "説明:", "独立开关:": "セルフスイッチ:", "事件解释器": "イベントインタプリタ", "事件长度": "コマンド数", "无条件": "条件なし", "无法读取所选事件详情": "選択したイベントを読み込めません", "事件没有可显示的页面": "表示できるページがありません", "此事件页没有指令": "このイベントページにコマンドはありません", "点击指令可展开查看参数": "タップするとコマンドのパラメーターを表示します", "开": "オン", "关": "オフ", "指令数": "コマンド数", "条件数": "条件数",
+      "结束": "終了", "显示文本": "文章の表示", "显示选项": "選択肢の表示", "数值输入": "数値入力", "物品选择": "アイテム選択", "滚动文本": "スクロール文章", "注释": "注釈", "条件分支": "条件分岐", "循环": "ループ", "中断循环": "ループ中断", "事件处理结束": "イベント処理の終了", "调用公共事件": "コモンイベント", "标签": "ラベル", "跳转标签": "ラベルジャンプ", "控制开关": "スイッチの操作", "控制变量": "変数の操作", "控制独立开关": "セルフスイッチの操作", "传送玩家": "場所移動", "设置事件位置": "イベント位置設定", "设置移动路线": "移動ルートの設定", "等待": "ウェイト", "播放 BGM": "BGM の演奏", "播放 BGS": "BGS の演奏", "播放 ME": "ME の演奏", "播放 SE": "SE の演奏", "战斗处理": "戦闘の処理", "商店处理": "ショップの処理", "增减 HP": "HP の増減", "增减 MP": "MP の増減", "更改状态": "ステートの変更", "全体恢复": "全回復", "打开菜单": "メニュー画面", "打开存档画面": "セーブ画面", "游戏结束": "ゲーム終了", "脚本": "スクリプト", "文本内容": "文章", "选项分支": "選択肢分岐", "取消分支": "キャンセル分岐", "结束选项分支": "選択肢分岐終了", "结束条件分支": "条件分岐終了", "重复循环": "ループの再開", "胜利时": "勝利時", "逃跑时": "逃走時", "失败时": "敗北時", "结束战斗分支": "戦闘分岐終了", "脚本行": "スクリプト行", "事件指令": "イベントコマンド",
       "存档管理": "セーブ管理", "读取中…": "読み込み中…", "存档 ": "セーブ ", "已有数据": "データあり", "空": "空",
       "保存": "保存", "读取": "読み込み", "删除": "削除", "Tyranor 修改器": "Tyranor 改造パネル", "版本 ": "バージョン ",
       "修改器只操作当前 RGSS 游戏的运行时对象。部分深度定制脚本可能覆盖标准引擎 API；遇到异常时可在单游戏设置中关闭修改器。": "このパネルは現在の RGSS ゲームの実行中データを変更します。独自スクリプトが標準 API を上書きする場合があります。エラーが発生した場合は、そのゲームの設定で無効にしてください。",
@@ -101,7 +109,7 @@
       "可复制、删除按键，或恢复默认": "ボタンの複製・削除、初期化が可能", "保存后立即生效": "保存後すぐに反映",
       "进入按键编辑": "ボタンを編集", "恢复默认": "初期設定に戻す", "当前未启用虚拟按键。可在应用的引擎设置中开启。": "仮想ボタンは無効です。アプリのエンジン設定で有効にできます。",
       "设置已保存": "設定を保存しました", "金币已修改": "所持金を変更しました", "金币已拉满": "所持金を最大にしました", "队伍已恢复": "パーティを回復しました",
-      "数量已修改": "数量を変更しました", "角色已恢复": "キャラクターを回復しました", "属性已修改": "能力値を変更しました", "装备已更换": "装備を変更しました",
+      "数量已修改": "数量を変更しました", "角色已恢复": "キャラクターを回復しました", "队伍成员已更新": "パーティを更新しました", "属性已修改": "能力値を変更しました", "装备已更换": "装備を変更しました",
       "系统值已修改": "システム値を変更しました", "独立开关 A–D 已全开": "セルフスイッチ A–D をオンにしました", "独立开关 A–D 已全关": "セルフスイッチ A–D をオフにしました",
       "已预约传送": "移動を予約しました", "保存完成": "保存しました", "读取完成": "読み込みました", "存档已删除": "セーブを削除しました", "已恢复默认": "初期設定に戻しました",
       "当前未启用虚拟按键": "仮想ボタンは無効です", "RGSS 修改器桥未连接": "RGSS 改造ブリッジに接続できません",
@@ -114,6 +122,12 @@
   function translate(value) {
     var text = String(value == null ? "" : value);
     if (dictionary[text]) return dictionary[text];
+    var eventPage = text.match(/^事件页\s*(\d+)$/);
+    if (eventPage) return language === "ja" ? "イベントページ " + eventPage[1] : "Event page " + eventPage[1];
+    var eventCounts = text.match(/^指令数\s*(\d+)\s*·\s*条件数\s*(\d+)$/);
+    if (eventCounts) return language === "ja"
+      ? "コマンド " + eventCounts[1] + " · 条件 " + eventCounts[2]
+      : "Commands " + eventCounts[1] + " · Conditions " + eventCounts[2];
     var dynamic = text.match(/^(槽位\s*\d+：|存档\s+|迷你地图 #|已选中事件 #)/);
     if (dynamic) {
       var prefix = dynamic[0];

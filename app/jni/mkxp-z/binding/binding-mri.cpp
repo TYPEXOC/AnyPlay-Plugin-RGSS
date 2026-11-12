@@ -3346,6 +3346,27 @@ module TyranorCheats
       []
     end
 
+    def all_game_actors
+      party_actors = actors
+      data = defined?($data_actors) ? $data_actors : nil
+      return party_actors unless data && data.respond_to?(:length)
+      game_actors = defined?($game_actors) ? $game_actors : nil
+      out = []
+      (1...data.length).each do |id|
+        next unless data[id]
+        actor = nil
+        actor = game_actors[id] if game_actors && game_actors.respond_to?(:[])
+        actor ||= party_actors.find { |entry| actor_id_of(entry, 0) == id }
+        out << actor if actor
+      end
+      party_actors.each do |actor|
+        out << actor unless out.any? { |entry| actor_id_of(entry, 0) == actor_id_of(actor, 0) }
+      end
+      out
+    rescue Exception
+      party_actors || []
+    end
+
     # Essentials: the player object, the bag, and the party (v17 and v21 names)
     def trainer; $player || $Trainer; end
     def bag; $bag || $PokemonBag; end
@@ -3520,9 +3541,11 @@ module TyranorCheats
       when 'pokemon_item' then set_pokemon_item(a, b)
       when 'actor_value' then set_actor_value(a, b)
       when 'actor_recover' then recover_actor(a)
+      when 'actor_party' then set_actor_party(a, b)
       when 'actor_collection' then set_actor_collection(a, b)
       when 'actor_equip' then set_actor_equip(a, b)
       when 'event_switch' then set_event_switch(a, b)
+      when 'map_event_switches' then set_map_event_switches(a, b)
       when 'battle_enemy_hp' then set_enemy_hp(a, b)
       when 'save_slot' then select_save_slot(a)
       when 'delete_save' then delete_save_slot(a)
@@ -4025,6 +4048,8 @@ module TyranorCheats
       return list_pokemon_stats(arg) if kind == 'pokemon_stats'
       return list_actors if kind == 'actors'
       return list_events(arg) if kind == 'events'
+      return list_event_detail(arg) if kind == 'event_detail'
+      return list_event_interpreter(arg) if kind == 'event_interpreter'
       return list_minimap if kind == 'minimap'
       return list_battle if kind == 'battle'
       return list_battle_actors if kind == 'battle_actors'
@@ -4138,9 +4163,10 @@ module TyranorCheats
       if rpgm?
         out << "F\tactors"
         actor_value_fields.each { |name| out << "AS\t#{name}" }
-        out << "F\tactorSkills" if actors.any? { |actor| actor.respond_to?(:learn_skill) && actor.respond_to?(:forget_skill) }
-        out << "F\tactorStates" if actors.any? { |actor| actor.respond_to?(:add_state) && actor.respond_to?(:remove_state) }
-        out << "F\tactorEquips" if actors.any? { |actor| actor_equip_supported?(actor) }
+        available_actors = all_game_actors
+        out << "F\tactorSkills" if available_actors.any? { |actor| actor.respond_to?(:learn_skill) && actor.respond_to?(:forget_skill) }
+        out << "F\tactorStates" if available_actors.any? { |actor| actor.respond_to?(:add_state) && actor.respond_to?(:remove_state) }
+        out << "F\tactorEquips" if available_actors.any? { |actor| actor_equip_supported?(actor) }
       end
       out.join("\n")
     end
@@ -4519,7 +4545,7 @@ module TyranorCheats
 
     def actor_by_id(id_text)
       id = id_text.to_i
-      actors.each_with_index do |actor, index|
+      all_game_actors.each_with_index do |actor, index|
         return actor if actor_id_of(actor, index) == id
       end
       nil
@@ -4528,9 +4554,10 @@ module TyranorCheats
     def list_actors
       return NOPE unless rpgm?
       out = []
-      actors.each_with_index do |actor, index|
+      party_ids = actors.each_with_index.map { |actor, index| actor_id_of(actor, index) }
+      all_game_actors.each_with_index do |actor, index|
         id = actor_id_of(actor, index)
-        name = wire_text(actor.respond_to?(:name) ? actor.name : "Actor #{id}")
+        name = wire_text(actor.respond_to?(:name) && !actor.name.to_s.empty? ? actor.name : "Actor #{id}")
         level = actor.respond_to?(:level) ? actor.level.to_i : 0
         hp = actor.respond_to?(:hp) ? actor.hp.to_i : 0
         mhp = actor.respond_to?(:mhp) ? actor.mhp.to_i : (actor.respond_to?(:maxhp) ? actor.maxhp.to_i : 0)
@@ -4540,7 +4567,7 @@ module TyranorCheats
           value = actor_stat_value(actor, field)
           "#{field}=#{value.to_i}" unless value.nil?
         end.compact
-        out << (["A", id, name, level, hp, mhp, mp, mmp] + stats).join("\t")
+        out << (["A", id, name, level, hp, mhp, mp, mmp, party_ids.include?(id) ? 1 : 0] + stats).join("\t")
       end
       out.join("\n")
     rescue Exception => e
@@ -4566,7 +4593,7 @@ module TyranorCheats
       return "Choose a character value first." if field.to_s.empty?
       return "Enter a whole number." unless raw.to_s =~ /\A[-+]?\d+\z/
       actor = actor_by_id(id)
-      return "That character is not in the current party." unless actor
+      return "That character isn't available in this game." unless actor
       return NOPE unless actor_value_fields.include?(field)
       value = raw.to_i
       case field
@@ -4670,7 +4697,7 @@ module TyranorCheats
 
     def recover_actor(id_text)
       actor = actor_by_id(id_text)
-      return "That character is not in the current party." unless actor
+      return "That character isn't available in this game." unless actor
       if actor.respond_to?(:recover_all)
         actor.recover_all
       else
@@ -4687,9 +4714,30 @@ module TyranorCheats
       "Couldn't recover character: #{e.class}: #{e.message}"
     end
 
+    def set_actor_party(id_text, raw_enabled)
+      id = id_text.to_i
+      data = defined?($data_actors) ? $data_actors : nil
+      return NOPE unless data && data.respond_to?(:[]) && data[id]
+      party = defined?($game_party) ? $game_party : nil
+      return NOPE unless party
+      enabled = raw_enabled.to_s == '1'
+      included = actors.any? { |actor| actor_id_of(actor, 0) == id }
+      return "Party membership unchanged" if included == enabled
+      method = enabled ? :add_actor : :remove_actor
+      return NOPE unless party.respond_to?(method)
+      party.send(method, id)
+      actual = actors.any? { |actor| actor_id_of(actor, 0) == id }
+      return "Couldn't update party membership." unless actual == enabled
+      actor = actor_by_id(id)
+      name = actor && actor.respond_to?(:name) ? actor.name : "Actor #{id}"
+      "#{wire_text(name)} #{enabled ? 'joined the party' : 'left the party'}"
+    rescue Exception => e
+      "Couldn't update party membership: #{e.class}: #{e.message}"
+    end
+
     def list_actor_collection(actor_id, collection)
       actor = actor_by_id(actor_id)
-      return "That character is not in the current party." unless actor
+      return "That character isn't available in this game." unless actor
       if collection == 'skills'
         data = defined?($data_skills) ? $data_skills : nil
         current = actor.respond_to?(:skills) ? actor.skills : []
@@ -4726,7 +4774,7 @@ module TyranorCheats
       item_id = parts[1].to_i
       enabled = parts[2] == '1'
       actor = actor_by_id(actor_id)
-      return "That character is not in the current party." unless actor
+      return "That character isn't available in this game." unless actor
       if collection == 'skills'
         return NOPE unless actor.respond_to?(:learn_skill) && actor.respond_to?(:forget_skill)
         enabled ? actor.learn_skill(item_id) : actor.forget_skill(item_id)
@@ -4782,7 +4830,7 @@ module TyranorCheats
 
     def list_actor_equips(actor_id)
       actor = actor_by_id(actor_id)
-      return "That character is not in the current party." unless actor
+      return "That character isn't available in this game." unless actor
       return NOPE unless actor_equip_supported?(actor)
       if engine == :xp
         return actor_equip_ids(actor).each_with_index.map do |item_id, index|
@@ -4811,7 +4859,7 @@ module TyranorCheats
     def list_equip_candidates(payload)
       actor_id, slot_text = payload.to_s.split("\t", 2)
       actor = actor_by_id(actor_id)
-      return "That character is not in the current party." unless actor
+      return "That character isn't available in this game." unless actor
       return NOPE unless actor_equip_supported?(actor)
       slot = slot_text.to_i
       slots = actor_equip_ids(actor)
@@ -4849,7 +4897,7 @@ module TyranorCheats
       kind = parts[1].to_s
       item_id = parts[2].to_i
       actor = actor_by_id(actor_id)
-      return "That character is not in the current party." unless actor
+      return "That character isn't available in this game." unless actor
       return NOPE unless actor_equip_supported?(actor)
       slots = actor_equip_ids(actor)
       return "That equipment slot doesn't exist." unless slot >= 0 && slot < slots.length
@@ -5192,6 +5240,165 @@ module TyranorCheats
       "Couldn't read map events: #{e.class}: #{e.message}"
     end
 
+    def list_event_detail(payload = "")
+      map_id_text, event_id_text = payload.to_s.split("\t", 2)
+      return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:map_id)
+      current_map_id = $game_map.map_id.to_i
+      map_id = map_id_text.to_i
+      map_id = current_map_id if map_id <= 0
+      event_id = event_id_text.to_i
+      source = map_event_table(map_id)
+      return "Couldn't load events for map ##{map_id}." unless source && source[0].is_a?(Hash)
+      live = source[0][event_id] || source[0][event_id.to_s]
+      return "That event doesn't exist on this map." unless live
+      info = (live.respond_to?(:event) ? live.event : nil) || live
+      pages = info && info.respond_to?(:pages) ? info.pages : []
+      pages ||= []
+      name = info && info.respond_to?(:name) ? info.name : ""
+      name = "Event #{event_id}" if name.to_s.empty?
+      x = source[1] && live.respond_to?(:x) ? live.x.to_i : (info.respond_to?(:x) ? info.x.to_i : 0)
+      y = source[1] && live.respond_to?(:y) ? live.y.to_i : (info.respond_to?(:y) ? info.y.to_i : 0)
+      switches = event_switches
+      self_switches = %w[A B C D].map do |letter|
+        value = switches && switches.respond_to?(:[]) ? (switches[[map_id, event_id, letter]] rescue false) : false
+        value ? 1 : 0
+      end
+      description = []
+      pages.each do |page|
+        next unless page && page.respond_to?(:list) && page.list
+        page.list.each do |command|
+          next unless command && command.respond_to?(:code) && [108, 408].include?(command.code.to_i)
+          params = command.respond_to?(:parameters) ? command.parameters : []
+          description << params[0].to_s unless params.empty? || params[0].to_s.empty?
+        end
+      end
+      out = ["D\t#{map_id}\t#{event_id}\t#{wire_text(name)}\t#{x}\t#{y}\t#{self_switches.join("\t")}\t#{wire_text(description.join(" / "))}"]
+      pages.each_with_index do |page, page_index|
+        next unless page
+        commands = page.respond_to?(:list) ? page.list : []
+        commands ||= []
+        condition = page.respond_to?(:condition) ? page.condition : nil
+        conditions = event_page_conditions(condition, map_id, event_id)
+        out << "P\t#{page_index}\t#{conditions.length}\t#{commands.length}"
+        conditions.each do |entry|
+          out << "Q\t#{page_index}\t#{entry[0]}\t#{wire_text(entry[1])}\t#{wire_text(entry[2])}\t#{wire_text(entry[3])}\t#{entry[4] ? 1 : 0}\t#{wire_text(entry[5])}"
+        end
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read event details: #{e.class}: #{e.message}"
+    end
+
+    def list_event_interpreter(payload = "")
+      map_id_text, event_id_text, page_index_text = payload.to_s.split("\t", 3)
+      map_id = map_id_text.to_i
+      event_id = event_id_text.to_i
+      page_index = page_index_text.to_i
+      source = map_event_table(map_id)
+      return "Couldn't load events for map ##{map_id}." unless source && source[0].is_a?(Hash)
+      live = source[0][event_id] || source[0][event_id.to_s]
+      return "That event doesn't exist on this map." unless live
+      info = (live.respond_to?(:event) ? live.event : nil) || live
+      pages = info && info.respond_to?(:pages) ? info.pages : []
+      page = pages && pages[page_index]
+      return "That event page doesn't exist." unless page
+      commands = page.respond_to?(:list) ? page.list : []
+      commands ||= []
+      commands.each_with_index.map do |command, command_index|
+        next unless command
+        code = command.respond_to?(:code) ? command.code.to_i : 0
+        indent = command.respond_to?(:indent) ? command.indent.to_i : 0
+        params = command.respond_to?(:parameters) ? command.parameters : []
+        parameters = params.inspect
+        preview = case code
+                  when 101, 401, 108, 408, 355, 655
+                    params[0].to_s
+                  when 102
+                    choices = params[0]
+                    choices.respond_to?(:join) ? choices.join(" / ") : choices.to_s
+                  else
+                    ""
+                  end
+        "C\t#{page_index}\t#{command_index}\t#{code}\t#{indent}\t#{wire_text(preview)[0, 500]}\t#{wire_text(parameters)[0, 1200]}"
+      end.compact.join("\n")
+    rescue Exception => e
+      "Couldn't read event interpreter: #{e.class}: #{e.message}"
+    end
+
+    def event_page_conditions(condition, map_id, event_id)
+      return [] unless condition
+      out = []
+      switches = defined?($game_switches) ? $game_switches : nil
+      variables = defined?($game_variables) ? $game_variables : nil
+      self_switches = event_switches
+      database = system_database
+      switch_names = system_names(database, :switches)
+      variable_names = system_names(database, :variables)
+      if condition.respond_to?(:switch1_valid) && condition.switch1_valid
+        id = condition.respond_to?(:switch1_id) ? condition.switch1_id.to_i : 0
+        current = switches && switches.respond_to?(:[]) ? (switches[id] rescue false) : false
+        name = switch_names && switch_names[id] ? switch_names[id] : "Switch #{id}"
+        out << ["switch", id, "true", current ? "true" : "false", current == true, name]
+      end
+      if condition.respond_to?(:switch2_valid) && condition.switch2_valid
+        id = condition.respond_to?(:switch2_id) ? condition.switch2_id.to_i : 0
+        current = switches && switches.respond_to?(:[]) ? (switches[id] rescue false) : false
+        name = switch_names && switch_names[id] ? switch_names[id] : "Switch #{id}"
+        out << ["switch", id, "true", current ? "true" : "false", current == true, name]
+      end
+      if condition.respond_to?(:variable_valid) && condition.variable_valid
+        id = condition.respond_to?(:variable_id) ? condition.variable_id.to_i : 0
+        target = condition.respond_to?(:variable_value) ? condition.variable_value.to_i : 0
+        current = variables && variables.respond_to?(:[]) ? (variables[id] rescue nil) : nil
+        name = variable_names && variable_names[id] ? variable_names[id] : "Variable #{id}"
+        value = current.nil? ? "?" : current.to_s
+        met = current.respond_to?(:to_f) && current.to_f >= target.to_f
+        out << ["variable", id, ">= #{target}", value, met, name]
+      end
+      if condition.respond_to?(:self_switch_valid) && condition.self_switch_valid
+        letter = condition.respond_to?(:self_switch_ch) ? condition.self_switch_ch.to_s : "A"
+        current = self_switches && self_switches.respond_to?(:[]) ? (self_switches[[map_id, event_id, letter]] rescue false) : false
+        target = true
+        out << ["self_switch", letter, "true", current ? "true" : "false", current == target, "Self switch #{letter}"]
+      end
+      if condition.respond_to?(:item_valid) && condition.item_valid
+        id = condition.respond_to?(:item_id) ? condition.item_id.to_i : 0
+        item = defined?($data_items) && $data_items ? ($data_items[id] rescue nil) : nil
+        party = defined?($game_party) ? $game_party : nil
+        count = nil
+        if party && item && party.respond_to?(:has_item?)
+          count = (party.has_item?(item) rescue false) ? 1 : 0
+        elsif party && party.respond_to?(:item_number)
+          count = if engine == :xp || engine == :essentials
+                    party.item_number(id).to_i rescue 0
+                  else
+                    party.item_number(item || id).to_i rescue 0
+                  end
+        end
+        count = 0 if count.nil?
+        name = item && item.respond_to?(:name) ? item.name : "Item #{id}"
+        out << ["item", id, "> 0", count.to_s, count > 0, name]
+      end
+      if condition.respond_to?(:actor_valid) && condition.actor_valid
+        id = condition.respond_to?(:actor_id) ? condition.actor_id.to_i : 0
+        actor = defined?($data_actors) && $data_actors ? ($data_actors[id] rescue nil) : nil
+        party = defined?($game_party) ? $game_party : nil
+        members = if party && party.respond_to?(:actors)
+                    party.actors rescue []
+                  elsif party && party.respond_to?(:members)
+                    party.members rescue []
+                  else
+                    []
+                  end
+        present = members && members.any? { |member| member && member.respond_to?(:id) && member.id.to_i == id }
+        name = actor && actor.respond_to?(:name) ? actor.name : "Actor #{id}"
+        out << ["actor", id, "in party", present ? "true" : "false", !!present, name]
+      end
+      out
+    rescue Exception
+      []
+    end
+
     def set_event_switch(id_text, payload)
       letter, enabled, map_id_text = payload.to_s.split("\t", 3)
       return "This game doesn't expose self-switches." unless event_switches && event_switches.respond_to?(:[]=)
@@ -5215,6 +5422,30 @@ module TyranorCheats
       "ok"
     rescue Exception => e
       "Couldn't change self-switch: #{e.class}: #{e.message}"
+    end
+
+    def set_map_event_switches(map_id_text, enabled_text)
+      return "This game doesn't expose self-switches." unless event_switches && event_switches.respond_to?(:[]=)
+      return "Choose on or off." unless enabled_text == '1' || enabled_text == '0'
+      return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:map_id)
+      current_map_id = $game_map.map_id.to_i
+      map_id = map_id_text.to_i
+      map_id = current_map_id if map_id <= 0
+      source = map_event_table(map_id)
+      return "Couldn't load events for map ##{map_id}." unless source && source[0].is_a?(Hash)
+      switches = event_switches
+      return "This game doesn't expose self-switches." unless switches && switches.respond_to?(:[]=)
+      enabled = enabled_text == '1'
+      count = 0
+      source[0].each do |event_id, event|
+        next unless event
+        %w[A B C D].each { |letter| switches[[map_id, event_id.to_i, letter]] = enabled }
+        count += 1
+      end
+      refresh_game_map if map_id == current_map_id
+      "ok"
+    rescue Exception => e
+      "Couldn't change map event self-switches: #{e.class}: #{e.message}"
     end
 
     def list_minimap

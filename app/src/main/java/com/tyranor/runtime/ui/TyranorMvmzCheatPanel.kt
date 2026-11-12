@@ -266,12 +266,16 @@ class TyranorMvmzCheatPanel(
                         "mhp" to actor.maxHp,
                         "mp" to actor.mp,
                         "mmp" to actor.maxMp,
+                        "inParty" to actor.inParty,
                     ).apply { putAll(actor.stats) }
                 }) }
                 "setActorStat" -> cheats.setActorValue(
                     argInt(a, 0), argString(a, 1), argString(a, 2),
                 ) { completeMessage(it, done) }
                 "recoverActor" -> cheats.recoverActor(argInt(a, 0)) { completeMessage(it, done) }
+                "setActorParty" -> cheats.setActorParty(argInt(a, 0), argBoolean(a, 1)) {
+                    completeMessage(it, done) { done(argBoolean(a, 1)) }
+                }
                 "recoverParty" -> cheats.runAction("recoverParty") { message ->
                     completeMessage(message, done) { cheats.listActors { actors ->
                         done(actors.map { actor -> actorMap(actor) })
@@ -302,8 +306,12 @@ class TyranorMvmzCheatPanel(
                 "minimapData" -> miniMapData(done)
                 "listEvents" -> cheats.listEvents(argInt(a, 0)) { events -> done(events.map { eventMap(it) }) }
                 "eventDetail" -> eventDetail(argInt(a, 0), argInt(a, 1), done)
+                "eventInterpreter" -> eventInterpreter(argInt(a, 0), argInt(a, 1), argInt(a, 2), done)
                 "setEventSelfSwitches" -> cheats.setEventSelfSwitches(
                     argInt(a, 0), argBoolean(a, 1), argInt(a, 2),
+                ) { completeMessage(it, done) { done(argBoolean(a, 1)) } }
+                "setMapEventSelfSwitches" -> cheats.setMapEventSelfSwitches(
+                    argInt(a, 0), argBoolean(a, 1),
                 ) { completeMessage(it, done) { done(argBoolean(a, 1)) } }
                 "battleSnapshot" -> battleSnapshot(done)
                 "setEnemyHp" -> cheats.setEnemyHp(argInt(a, 0), argInt(a, 1)) {
@@ -394,6 +402,7 @@ class TyranorMvmzCheatPanel(
                 "mhp" to actor.maxHp,
                 "mp" to actor.mp,
                 "mmp" to actor.maxMp,
+                "inParty" to actor.inParty,
             ).apply { putAll(actor.stats) }
 
         private fun actorCollection(actorId: Int, collection: String, done: (Any?) -> Unit) {
@@ -437,7 +446,14 @@ class TyranorMvmzCheatPanel(
                     query.isBlank() || it.name.contains(query, true) || it.id.toString().contains(query)
                 }
                 done(mapOf("total" to filtered.size, "values" to filtered.drop(offset).take(limit).map { mapEntry ->
-                    mapOf("id" to mapEntry.id, "name" to mapEntry.name, "depth" to mapEntry.depth, "current" to mapEntry.isCurrent)
+                    mapOf(
+                        "id" to mapEntry.id,
+                        "name" to mapEntry.name,
+                        "depth" to mapEntry.depth,
+                        "current" to mapEntry.isCurrent,
+                        "currentX" to mapEntry.currentX,
+                        "currentY" to mapEntry.currentY,
+                    )
                 }))
             }
         }
@@ -472,9 +488,53 @@ class TyranorMvmzCheatPanel(
         }
 
         private fun eventDetail(eventId: Int, mapId: Int, done: (Any?) -> Unit) {
-            cheats.listEvents(mapId) { entries ->
-                val event = entries.firstOrNull { it.id == eventId }
-                done(event?.let(::eventMap) ?: JsFailure("地图 $mapId 找不到事件 #$eventId"))
+            cheats.loadEventDetail(mapId, eventId) { event ->
+                done(event?.let { detail ->
+                    mapOf(
+                        "id" to detail.id,
+                        "mapId" to detail.mapId,
+                        "name" to detail.name,
+                        "x" to detail.x,
+                        "y" to detail.y,
+                        "description" to detail.description,
+                        "selfSwitches" to detail.selfSwitches,
+                        "pages" to detail.pages.map { page ->
+                            mapOf(
+                                "index" to page.index,
+                                "validCount" to page.validCount,
+                                "commandCount" to page.commandCount,
+                                "conditions" to page.conditions.map { condition ->
+                                    mapOf(
+                                        "type" to condition.type,
+                                        "id" to condition.id,
+                                        "target" to condition.target,
+                                        "current" to condition.current,
+                                        "met" to condition.met,
+                                        "name" to condition.name,
+                                    )
+                                },
+                            )
+                        },
+                    )
+                } ?: JsFailure("地图 $mapId 找不到事件 #$eventId"))
+            }
+        }
+
+        private fun eventInterpreter(eventId: Int, mapId: Int, pageIndex: Int, done: (Any?) -> Unit) {
+            cheats.loadEventInterpreter(mapId, eventId, pageIndex) { commands ->
+                if (commands == null) {
+                    done(JsFailure("无法读取所选事件页的解释器"))
+                } else {
+                    done(commands.map { command ->
+                        mapOf(
+                            "index" to command.index,
+                            "code" to command.code,
+                            "indent" to command.indent,
+                            "preview" to command.preview,
+                            "parameters" to command.parameters,
+                        )
+                    })
+                }
             }
         }
 
