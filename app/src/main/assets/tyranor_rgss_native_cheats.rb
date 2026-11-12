@@ -90,10 +90,9 @@ begin
       end
 
       def self.open_native_window
-        return "The RGSS window isn't available in this game scene." unless defined?(Scene_Map) && defined?(Window_Base)
-        scene = (defined?(SceneManager) && SceneManager.respond_to?(:scene) ? SceneManager.scene : nil)
-        scene = $scene if !scene && defined?($scene)
-        return "Open the RGSS window from the map scene." unless scene && scene.is_a?(Scene_Map)
+        return "The RGSS window isn't available in this game scene." unless defined?(Window_Base)
+        scene = native_window_current_scene
+        return "Start a game scene before opening the RGSS window." unless scene && scene.respond_to?(:update)
         @native_window_requested = true
         @native_window_close_requested = false
         @native_window_message = ""
@@ -112,20 +111,33 @@ begin
         "Couldn't close the RGSS window: #{error.class}: #{error.message}"
       end
 
+      def self.native_window_current_scene
+        scene = (defined?(SceneManager) && SceneManager.respond_to?(:scene) ? SceneManager.scene : nil)
+        scene = $scene if !scene && defined?($scene)
+        scene
+      rescue Exception
+        nil
+      end
+
       def self.install_native_window_hook
-        return if @native_window_hooked
-        return unless defined?(Scene_Map) && class_method?(Scene_Map, :update)
-        Scene_Map.class_eval do
-          alias_method :__tyranor_native_cheat_update, :update
-          def update(*args)
-            if TyranorCheats.native_window_update(self)
-              return
-            end
-            __tyranor_native_cheat_update(*args)
+        scene = native_window_current_scene
+        return unless scene && scene.respond_to?(:update)
+        scene_class = scene.class
+        @native_window_hooked_classes ||= {}
+        return if @native_window_hooked_classes[scene_class]
+
+        original_method = "__tyranor_native_cheat_update_#{scene_class.object_id}".to_sym
+        wrapper = Proc.new do |*args|
+          unless TyranorCheats.native_window_update(self)
+            send(original_method, *args)
           end
         end
-        @native_window_hooked = true
-        AnyPlayLog.write("RGSS native cheat window hook installed") rescue nil
+        scene_class.class_eval do
+          alias_method original_method, :update
+          define_method(:update, &wrapper)
+        end
+        @native_window_hooked_classes[scene_class] = true
+        AnyPlayLog.write("RGSS native cheat window hook installed for #{scene_class}") rescue nil
       rescue Exception => error
         AnyPlayLog.error("RGSS native cheat window hook failed: #{error.class}: #{error.message}") rescue nil
       end
