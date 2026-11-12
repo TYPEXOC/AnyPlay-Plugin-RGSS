@@ -5054,7 +5054,7 @@ module TyranorCheats
       seen = {}
       info = table.is_a?(Hash) ? table[id] : (table.is_a?(Array) ? table[id] : nil)
       parent = map_info_parent(info)
-      while parent > 0 && depth < 32 && !seen[parent]
+      while parent > 0 && !seen[parent]
         seen[parent] = true
         ancestor = table.is_a?(Hash) ? table[parent] : (table.is_a?(Array) ? table[parent] : nil)
         break unless ancestor

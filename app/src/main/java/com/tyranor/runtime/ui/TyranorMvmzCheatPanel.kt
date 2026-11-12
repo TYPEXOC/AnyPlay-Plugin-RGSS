@@ -393,7 +393,7 @@ class TyranorMvmzCheatPanel(
 
         private fun actorCollection(actorId: Int, collection: String, done: (Any?) -> Unit) {
             cheats.listActorCollection(actorId, collection) { entries ->
-                done(entries.filter { it.enabled }.map { mapOf("id" to it.id, "name" to it.name) })
+                done(entries.map { mapOf("id" to it.id, "name" to it.name, "enabled" to it.enabled) })
             }
         }
 
