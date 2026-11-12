@@ -78,7 +78,8 @@
       });
       return { id: group[0], label: group[0], entries: entries };
     }).filter(function (group) { return group.entries.length > 0 || group.id === "探索" && (!supported || supported.indexOf("speed") >= 0); });
-    var sections = groups.concat([{ id: "队伍", label: "队伍" }]);
+    if (!groups.length) groups.push({ id: "队伍", label: "队伍", entries: [] });
+    var sections = groups;
     if (!sections.some(function (section) { return section.id === context.quickSection; })) context.quickSection = sections[0].id;
     var selectedGroup = groups.filter(function (group) { return group.id === context.quickSection; })[0];
     var cachedGold = context.gold == null ? "…" : context.gold;
@@ -91,6 +92,7 @@
       if (selectedGroup.id === "探索" && (!supported || supported.indexOf("speed") >= 0)) {
         toggles += row("移动速度", '<div class="tm-row"><input class="tm-input" id="tm-speed" type="number" min="0.25" max="100" step="0.25" value="' + escapeHtml(state.speedMultiplier || 2) + '">' + button("设置", "set-speed", "primary") + '</div>');
       }
+      if (selectedGroup.id === "角色与资源") toggles += '<div class="tm-row tm-quick-party-action">' + button("全体恢复", "recover-party", "primary") + '</div>';
       sectionBody = card(selectedGroup.label, toggles);
       if (selectedGroup.id === "战斗") {
         var actions = '<div class="tm-battle-actions">' + button("消灭全部敌人", "kill-enemies", "danger") + button("强制胜利", "victory", "primary") + button("强制战败", "defeat", "danger") + button("强制逃跑", "escape") + '</div>';
@@ -98,7 +100,7 @@
       }
       if (selectedGroup.id === "角色与资源") sectionBody += card("金币", gold);
     } else {
-      sectionBody = card("队伍", '<div class="tm-row">' + button("全体恢复", "recover-party", "primary") + '</div>');
+      sectionBody = card(selectedGroup.label, '<div class="tm-note">当前没有可用的快捷功能</div>');
     }
     content.innerHTML = segmentedTabs(sections, context.quickSection, "quick-section") + '<div id="tm-quick-section">' + sectionBody + '</div>';
     // Render the panel before crossing the Ruby command-file bridge. One query

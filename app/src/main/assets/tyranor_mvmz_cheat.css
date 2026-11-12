@@ -67,3 +67,5 @@
 .tm-map-grid .tm-list{padding-bottom:12px;scroll-padding-bottom:12px}
 @media(max-width:620px){.tm-battle-grid{grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(2,minmax(0,1fr))}}
 @media(prefers-color-scheme:dark){.tm-system-switch-state{color:#aab4ae}}
+.tm-quick-party-action{margin-top:12px;padding-top:10px;border-top:1px solid #dce2de}
+@media(prefers-color-scheme:dark){.tm-quick-party-action{border-color:#343c37}}
