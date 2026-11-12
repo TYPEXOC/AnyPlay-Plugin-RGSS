@@ -22,12 +22,13 @@
 .tm-map-grid .tm-item.tm-active{outline:2px solid var(--tm-primary,#237765);outline-offset:-2px}
 .tm-map-grid .tm-map-name{display:flex}
 .tm-map-grid .tm-map-tree-prefix{flex:0 0 auto;white-space:pre;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#748079}
-.tm-map-grid .tm-map-tree-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tm-map-grid .tm-map-tree-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tm-map-picker-row{display:flex;margin:7px 0}
 .tm-map-picker{display:flex;align-items:center;justify-content:space-between;gap:6px;flex:1 1 auto;min-width:0}
 .tm-map-picker-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tm-map-picker-arrow{flex:0 0 auto}
 .tm-map-dropdown{position:absolute;left:12px;right:12px;bottom:12px;z-index:10;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#f7f8f7;border-radius:10px;padding:0}
+@media(prefers-color-scheme:dark){.tm-map-dropdown{background:#202522}}
 .tm-badge.tm-on{background:var(--tm-primary,#237765);color:#fff}
 .tm-map-grid .tm-sep{height:1px;background:#e0e5e2;margin:10px 0;flex:0 0 auto}
 .tm-minimap{width:100%;image-rendering:pixelated;border:1px solid #e0e5e2;border-radius:10px;touch-action:manipulation}

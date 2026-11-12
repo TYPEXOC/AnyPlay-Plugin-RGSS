@@ -239,8 +239,9 @@
     function treePrefix(index) {
       var depth = mapDepth(maps[index]);
       if (!depth) return "";
+      var visibleDepth = Math.min(depth, 10);
       var prefix = "";
-      for (var level = 0; level < depth; level++) {
+      for (var level = 0; level < visibleDepth; level++) {
         var hasLaterAtLevel = false;
         for (var i = index + 1; i < maps.length; i++) {
           var nextDepth = mapDepth(maps[i]);
@@ -249,8 +250,9 @@
             break;
           }
         }
-        prefix += hasLaterAtLevel ? "│  " : "   ";
+        prefix += hasLaterAtLevel ? "│" : " ";
       }
+      if (depth > visibleDepth) prefix += "…";
       return prefix + (hasLaterSibling(index, depth) ? "├─ " : "└─ ");
     }
     list.innerHTML = maps.map(function (m, index) {
