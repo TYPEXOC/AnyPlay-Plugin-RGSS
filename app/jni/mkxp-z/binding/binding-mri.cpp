@@ -3186,6 +3186,8 @@ module TyranorCheats
   @errors = 0
   @hooked = false
   @item_snap = nil
+  @item_locks = {}
+  @system_locks = { 'switch' => {}, 'variable' => {} }
   @points_snap = nil
   @coins_snap = nil
   @old_textspeed = nil
@@ -3552,6 +3554,8 @@ module TyranorCheats
       when 'value'   then set_value(a, b)
       when 'system_switch' then set_system_switch(a, b)
       when 'system_variable' then set_system_variable(a, b)
+      when 'item_lock' then set_item_lock(a, b)
+      when 'system_lock' then set_system_lock(a, b)
       when 'quantity' then set_quantity(a, b)
       when 'pokemon_value' then set_pokemon_value(a, b)
       when 'pokemon_recover' then recover_pokemon(a)
@@ -3593,6 +3597,8 @@ module TyranorCheats
       @item_snap = nil
       @points_snap = nil
       @coins_snap = nil
+      @item_locks = {}
+      @system_locks = { 'switch' => {}, 'variable' => {} }
       write_state
       ""
     end
@@ -4879,7 +4885,13 @@ module TyranorCheats
         return actor_equip_ids(actor).each_with_index.map do |item_id, index|
           kind = index == 0 ? 'weapon' : 'armor'
           item = item_id.to_i > 0 ? (table_for(kind)[item_id.to_i] rescue nil) : nil
-          slot_name = index == 0 ? 'Weapon' : "Armor #{index}"
+          system = defined?($data_system) ? $data_system : nil
+          slot_name = if system
+                        index == 0 ? (system.weapon_name.to_s rescue '') : (system.send("armor#{index}_name").to_s rescue '')
+                      else
+                        ''
+                      end
+          slot_name = index == 0 ? 'Weapon' : "Armor #{index}" if slot_name.to_s.empty?
           "Q\t#{index}\t#{item_id.to_i}\t#{kind}\t#{slot_name}\t#{wire_text(item && item.respond_to?(:name) ? item.name : 'None')}"
         end.join("\n")
       end
@@ -4890,7 +4902,11 @@ module TyranorCheats
         slot_type = equip_slots[index].to_i rescue 0
         slot_name = (etypes[slot_type].to_s rescue "")
         slot_name = "Slot #{index + 1}" if slot_name.empty?
-        kind = item && defined?($data_weapons) && $data_weapons && $data_weapons[item.id] ? "weapon" : "armor"
+        kind = if equip_slots && !equip_slots.empty?
+                 slot_type == 1 ? "weapon" : "armor"
+               else
+                 index == 0 ? "weapon" : "armor"
+               end
         item_id = item && item.respond_to?(:id) ? item.id.to_i : 0
         item_name = item && item.respond_to?(:name) ? item.name.to_s : "None"
         "Q\t#{index}\t#{item_id}\t#{kind}\t#{wire_text(slot_name)}\t#{wire_text(item_name)}"
@@ -4915,6 +4931,11 @@ module TyranorCheats
           item = table[id]
           next unless item
           next if engine == :xp && !xp_actor_can_equip?(actor, kind, slot, id, item)
+          if engine != :xp && actor.respond_to?(:equip_slots)
+            expected_type = actor.equip_slots[slot].to_i rescue 0
+            item_type = kind == 'weapon' ? 1 : (item.respond_to?(:etype_id) ? item.etype_id.to_i : 0)
+            next unless expected_type > 0 && item_type == expected_type
+          end
           count = if engine == :xp && $game_party.respond_to?("#{kind}_number")
                     ($game_party.send("#{kind}_number", id) rescue 0)
                   elsif $game_party.respond_to?(:item_number)
@@ -4965,6 +4986,11 @@ module TyranorCheats
       end
       return "That item doesn't exist." if item_id > 0 && !item
       return "This character can't equip that item." if item && actor.respond_to?(:equippable?) && !(actor.equippable?(item) rescue false)
+      if item && actor.respond_to?(:equip_slots)
+        expected_type = actor.equip_slots[slot].to_i rescue 0
+        item_type = kind == 'weapon' ? 1 : (item.respond_to?(:etype_id) ? item.etype_id.to_i : 0)
+        return "That item doesn't fit this equipment slot." unless expected_type > 0 && item_type == expected_type
+      end
       actor.change_equip(slot, item)
       actor.refresh if actor.respond_to?(:refresh)
       "ok"
@@ -5013,9 +5039,44 @@ module TyranorCheats
                else
                  $game_party.item_number(table_for(kind)[id]).to_i
                end
+      lock_key = [kind.to_s, key.to_s]
+      @item_locks[lock_key] = actual if @item_locks && @item_locks.has_key?(lock_key)
       actual == count ? "Quantity set to #{actual}" : "Game inventory limit set the quantity to #{actual}"
     rescue Exception => e
       "Couldn't set quantity: #{e.class}: #{e.message}"
+    end
+
+    def item_locked?(kind, id)
+      @item_locks ||= {}
+      @item_locks.has_key?([kind.to_s, id.to_s])
+    rescue Exception
+      false
+    end
+
+    def set_item_lock(kind, payload)
+      id_text, enabled_text = payload.to_s.split("\t", 2)
+      return "Choose an item first." if id_text.to_s.empty?
+      return "Lock must be on or off." unless enabled_text == '0' || enabled_text == '1'
+      if ess?
+        return NOPE unless kind == 'item' && bag
+      elsif rpgm?
+        return NOPE unless %w[item weapon armor].include?(kind)
+        id = id_text.to_i
+        table = table_for(kind)
+        return "That item ID doesn't exist." unless id > 0 && table && table[id]
+      else
+        return NOPE
+      end
+      @item_locks ||= {}
+      key = [kind.to_s, id_text.to_s]
+      if enabled_text == '1'
+        @item_locks[key] = quantity_of(kind, id_text).to_i
+      else
+        @item_locks.delete(key)
+      end
+      ""
+    rescue Exception => e
+      "Couldn't lock item: #{e.class}: #{e.message}"
     end
 
     # The game's System database contains the labels used by its own debug
@@ -5035,7 +5096,8 @@ module TyranorCheats
           name = (group == 0 ? "Switch #{id}" : "Variable #{id}") if name.empty?
           if group == 0
             value = ($game_switches[id] ? "1" : "0")
-            out << "S\t#{id}\t#{value}\t#{name}"
+            locked = @system_locks && @system_locks['switch'].has_key?(id)
+            out << "S\t#{id}\t#{value}\t#{name}\t#{locked ? 1 : 0}"
           else
             value = $game_variables[id]
             if value.is_a?(Numeric)
@@ -5069,7 +5131,8 @@ module TyranorCheats
               type = 'complex'
               text = "<#{value.class}>"
             end
-            out << "V\t#{id}\t#{type}\t#{text}\t#{name}"
+            locked = @system_locks && @system_locks['variable'].has_key?(id)
+            out << "V\t#{id}\t#{type}\t#{text}\t#{name}\t#{locked ? 1 : 0}"
           end
         end
       end
@@ -5086,6 +5149,81 @@ module TyranorCheats
       nil
     end
 
+    def system_locked?(kind, id)
+      locks = @system_locks && @system_locks[kind.to_s]
+      locks && locks.has_key?(id.to_i) ? true : false
+    rescue Exception
+      false
+    end
+
+    def copy_system_value(value)
+      return value if value.nil? || value == true || value == false || value.is_a?(Numeric) || value.is_a?(Symbol)
+      Marshal.load(Marshal.dump(value))
+    rescue Exception
+      value.dup rescue value
+    end
+
+    def system_lock_value(kind, id)
+      locks = @system_locks && @system_locks[kind.to_s]
+      locks && locks.has_key?(id.to_i) ? copy_system_value(locks[id.to_i]) : nil
+    rescue Exception
+      nil
+    end
+
+    def set_system_lock(kind, payload)
+      id_text, enabled_text = payload.to_s.split("\t", 2)
+      return "Choose a switch or variable first." if id_text.to_s.empty?
+      return "Lock must be on or off." unless enabled_text == '0' || enabled_text == '1'
+      return "Start or load a game first." unless $game_switches && $game_variables
+      id = id_text.to_i
+      database = system_database
+      name_type = kind == 'switch' ? :switches : (kind == 'variable' ? :variables : nil)
+      return NOPE unless name_type
+      names = system_names(database, name_type)
+      return "That ID is not in this game's System database." unless id > 0 && names && id < names.length
+      @system_locks ||= { 'switch' => {}, 'variable' => {} }
+      @system_locks[kind] ||= {}
+      if enabled_text == '1'
+        value = kind == 'switch' ? !!$game_switches[id] : $game_variables[id]
+        @system_locks[kind][id] = copy_system_value(value)
+      else
+        @system_locks[kind].delete(id)
+      end
+      ""
+    rescue Exception => e
+      "Couldn't lock system value: #{e.class}: #{e.message}"
+    end
+
+    def apply_runtime_locks
+      if @item_locks && !@item_locks.empty?
+        @item_locks.each do |key, count|
+          kind, id = key
+          set_quantity(kind, "#{id}\t#{count}") rescue nil
+        end
+      end
+      if @system_locks && @system_locks['switch'] && $game_switches
+        @system_locks['switch'].each do |id, value|
+          $game_switches[id] = !!value if $game_switches[id] != !!value
+        end
+      end
+      if @system_locks && @system_locks['variable'] && $game_variables
+        @system_locks['variable'].each do |id, value|
+          current = $game_variables[id]
+          $game_variables[id] = copy_system_value(value) unless current == value
+        end
+      end
+    rescue Exception => e
+      AnyPlayLog.error("cheat lock apply failed: #{e.class}: #{e.message}") rescue nil
+    end
+
+    def has_runtime_locks?
+      (@item_locks && !@item_locks.empty?) ||
+        (@system_locks && ((@system_locks['switch'] && !@system_locks['switch'].empty?) ||
+                           (@system_locks['variable'] && !@system_locks['variable'].empty?)))
+    rescue Exception
+      false
+    end
+
     def set_system_switch(id_text, value)
       return "Start or load a game first." unless $game_switches
       id = id_text.to_i
@@ -5093,6 +5231,7 @@ module TyranorCheats
       names = system_names(database, :switches)
       return "That switch ID is not in this game's System database." unless id > 0 && names && id < names.length
       return "Switch value must be 0 or 1." unless value == '0' || value == '1'
+      @system_locks['switch'][id] = (value == '1') if system_locked?('switch', id)
       $game_switches[id] = (value == '1')
       refresh_game_map
       ""
@@ -5114,6 +5253,7 @@ module TyranorCheats
       rescue Exception
         replacement = value.to_s
       end
+      @system_locks['variable'][id] = copy_system_value(replacement) if system_locked?('variable', id)
       $game_variables[id] = replacement
       refresh_game_map
       ""
@@ -5732,7 +5872,7 @@ module TyranorCheats
           GameData::Item.each do |i|
             n = i.name.to_s
             description = i.respond_to?(:description) ? wire_text(i.description) : ""
-            out << "item\t#{i.id}\t#{quantity_of('item', i.id)}\t#{wire_text(n)}\t#{description}" unless n.empty?
+            out << "item\t#{i.id}\t#{quantity_of('item', i.id)}\t#{wire_text(n)}\t#{description}\t#{item_locked?('item', i.id) ? 1 : 0}" unless n.empty?
           end
           GameData::Species.each do |s|
             next if s.form != 0
@@ -5742,7 +5882,7 @@ module TyranorCheats
         else
           (1..(PBItems.maxValue rescue 0)).each do |i|
             n = (PBItems.getName(i) rescue "").to_s
-            out << "item\t#{i}\t#{quantity_of('item', i)}\t#{wire_text(n)}\t" unless n.empty?
+            out << "item\t#{i}\t#{quantity_of('item', i)}\t#{wire_text(n)}\t\t#{item_locked?('item', i) ? 1 : 0}" unless n.empty?
           end
           (1..(PBSpecies.maxValue rescue 0)).each do |i|
             n = (PBSpecies.getName(i) rescue "").to_s
@@ -5758,7 +5898,7 @@ module TyranorCheats
             next unless o
             n = o.name.to_s
             description = o.respond_to?(:description) ? wire_text(o.description) : ""
-            out << "#{kind}\t#{i}\t#{quantity_of(kind, i)}\t#{wire_text(n)}\t#{description}" unless n.empty?
+            out << "#{kind}\t#{i}\t#{quantity_of(kind, i)}\t#{wire_text(n)}\t#{description}\t#{item_locked?(kind, i) ? 1 : 0}" unless n.empty?
           end
         end
       end
@@ -6429,7 +6569,7 @@ module TyranorCheats
       @tick += 1
       poll if (@tick % 6) == 0
       install_hooks
-      apply unless @on.empty?
+      apply if !@on.empty? || has_runtime_locks?
     rescue Exception => e
       @errors += 1
       # A broken optional cheat must not stop command polling; otherwise the
@@ -6458,10 +6598,13 @@ module TyranorCheats
     end
 
     def apply
-      case engine
-      when :essentials then apply_ess
-      when :xp, :vx, :ace then apply_rpgm
+      unless @on.empty?
+        case engine
+        when :essentials then apply_ess
+        when :xp, :vx, :ace then apply_rpgm
+        end
       end
+      apply_runtime_locks
     end
 
     def apply_ess
@@ -6570,21 +6713,24 @@ module TyranorCheats
           pk.each { |it| have[it[0]] = it[1] if it && it[0] }
         end
         @item_snap.each do |id, q|
+          next if item_locked?('item', id)
           cur = have[id].to_i
           next if cur >= q
           (bag_add(id, q - cur) rescue nil)
         end
-        have.each { |id, q| @item_snap[id] = q if q > (@item_snap[id] || 0) }
+        have.each { |id, q| @item_snap[id] = q if !item_locked?('item', id) && q > (@item_snap[id] || 0) }
       else
         %w[items weapons armors].each do |kind|
           inventory = $game_party.instance_variable_get("@#{kind}")
           next unless inventory.is_a?(Hash)
           snapshot = (@item_snap[kind] ||= {})
           snapshot.each do |id, quantity|
+            next if item_locked?(kind.sub(/s\z/, ''), id)
             current = inventory[id].to_i
             inventory[id] = quantity if current < quantity
           end
           inventory.each do |id, quantity|
+            next if item_locked?(kind.sub(/s\z/, ''), id)
             quantity = quantity.to_i
             snapshot[id] = quantity if quantity > (snapshot[id] || 0)
           end
@@ -6597,6 +6743,31 @@ module TyranorCheats
       return if @hooked
       return if engine == :unknown
       @hooked = true
+
+      if defined?(Game_Switches) && Game_Switches.method_defined?(:[]=) &&
+          !Game_Switches.method_defined?(:__ap_cheat_locked_set)
+        Game_Switches.class_eval do
+          alias_method :__ap_cheat_locked_set, :[]=
+          def []=(id, value)
+            if TyranorCheats.system_locked?('switch', id)
+              value = TyranorCheats.system_lock_value('switch', id)
+            end
+            __ap_cheat_locked_set(id, value)
+          end
+        end
+      end
+      if defined?(Game_Variables) && Game_Variables.method_defined?(:[]=) &&
+          !Game_Variables.method_defined?(:__ap_cheat_locked_set)
+        Game_Variables.class_eval do
+          alias_method :__ap_cheat_locked_set, :[]=
+          def []=(id, value)
+            if TyranorCheats.system_locked?('variable', id)
+              value = TyranorCheats.system_lock_value('variable', id)
+            end
+            __ap_cheat_locked_set(id, value)
+          end
+        end
+      end
 
       # Standard RGSS1/2/3 battle rewards flow through these Game_Troop
       # methods. Keep the hooks here so custom games retain their own enemy

@@ -54,6 +54,7 @@
     },
     itemCount: function (kind, id) { return invoke("itemCount", [kind, id]); },
     setItemCount: function (kind, id, value) { return invoke("setItemCount", [kind, id, value]); },
+    setItemLock: function (kind, id, locked) { return invoke("setItemLock", [kind, id, !!locked]); },
     listActors: function () { return invoke("listActors") || []; },
     setActorStat: function (id, key, value) { return invoke("setActorStat", [id, key, value]); },
     recoverActor: function (id) { return invoke("recoverActor", [id]); },
@@ -66,12 +67,14 @@
     addState: function (id, stateId) { return invoke("addState", [id, stateId]); },
     removeState: function (id, stateId) { return invoke("removeState", [id, stateId]); },
     actorEquips: function (id) { return invoke("actorEquips", [id]) || []; },
+    equipCandidates: function (id, slot) { return invoke("equipCandidates", [id, slot]) || []; },
     changeEquip: function (id, slot, kind, itemId) { return invoke("changeEquip", [id, slot, kind, itemId]); },
     listSwitches: function (query, offset, limit) {
       return page(invoke("listSystem", ["switch"]) || [], query, offset, limit,
         function (entry) { return entry.name; }, function (entry) { return entry.id; });
     },
     setSwitch: function (id, value) { return invoke("setSwitch", [id, !!value]); },
+    setSystemLock: function (kind, id, locked) { return invoke("setSystemLock", [kind, id, !!locked]); },
     listVariables: function (query, offset, limit) {
       return page(invoke("listSystem", ["variable"]) || [], query, offset, limit,
         function (entry) { return entry.name; }, function (entry) { return entry.id; });
@@ -92,6 +95,9 @@
     eventDetail: function (eventId, mapId) { return invoke("eventDetail", [eventId, mapId]); },
     eventInterpreter: function (eventId, mapId, pageIndex) {
       return invoke("eventInterpreter", [eventId, mapId, pageIndex]) || [];
+    },
+    setEventSelfSwitch: function (eventId, letter, enabled, mapId) {
+      return invoke("setEventSelfSwitch", [eventId, letter, !!enabled, mapId]);
     },
     setEventSelfSwitches: function (eventId, enabled, mapId) {
       return invoke("setEventSelfSwitches", [eventId, !!enabled, mapId]);

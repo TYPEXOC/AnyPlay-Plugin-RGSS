@@ -262,6 +262,9 @@ class TyranorMvmzCheatPanel(
                 "setItemCount" -> cheats.setItemQuantity(
                     argString(a, 0), argString(a, 1), argInt(a, 2),
                 ) { completeMessage(it, done) { done(argInt(a, 2)) } }
+                "setItemLock" -> cheats.setItemLock(
+                    argString(a, 0), argString(a, 1), argBoolean(a, 2),
+                ) { completeMessage(it, done) { done(argBoolean(a, 2)) } }
                 "listActors" -> cheats.listActors { actors -> done(actors.map { actor ->
                     linkedMapOf<String, Any?>(
                         "id" to actor.id,
@@ -293,12 +296,18 @@ class TyranorMvmzCheatPanel(
                 "actorEquips" -> cheats.listActorEquips(argInt(a, 0)) { entries -> done(entries.map {
                     mapOf("slot" to it.index, "id" to it.itemId, "name" to it.itemName, "type" to it.kind)
                 }) }
+                "equipCandidates" -> cheats.listEquipCandidates(argInt(a, 0), argInt(a, 1)) { entries -> done(entries.map {
+                    mapOf("kind" to it.kind, "id" to it.itemId, "name" to it.name)
+                }) }
                 "changeEquip" -> cheats.setActorEquip(
                     argInt(a, 0), argInt(a, 1), argString(a, 2), argInt(a, 3),
                 ) { completeMessage(it, done) }
                 "listSystem" -> listSystem(argString(a, 0), done)
                 "setSwitch" -> cheats.setSystemSwitch(argInt(a, 0), argBoolean(a, 1)) {
                     completeMessage(it, done) { done(argBoolean(a, 1)) }
+                }
+                "setSystemLock" -> cheats.setSystemLock(argString(a, 0), argInt(a, 1), argBoolean(a, 2)) {
+                    completeMessage(it, done) { done(argBoolean(a, 2)) }
                 }
                 "setVariable" -> cheats.setSystemVariable(argInt(a, 0), rubyValue(a.opt(1))) {
                     completeMessage(it, done) { done(a.opt(1)) }
@@ -312,6 +321,9 @@ class TyranorMvmzCheatPanel(
                 "listEvents" -> cheats.listEvents(argInt(a, 0)) { events -> done(events.map { eventMap(it) }) }
                 "eventDetail" -> eventDetail(argInt(a, 0), argInt(a, 1), done)
                 "eventInterpreter" -> eventInterpreter(argInt(a, 0), argInt(a, 1), argInt(a, 2), done)
+                "setEventSelfSwitch" -> cheats.setEventSelfSwitch(
+                    argInt(a, 0), argString(a, 1), argBoolean(a, 2), argInt(a, 3),
+                ) { completeMessage(it, done) { done(argBoolean(a, 2)) } }
                 "setEventSelfSwitches" -> cheats.setEventSelfSwitches(
                     argInt(a, 0), argBoolean(a, 1), argInt(a, 2),
                 ) { completeMessage(it, done) { done(argBoolean(a, 1)) } }
@@ -386,7 +398,7 @@ class TyranorMvmzCheatPanel(
                 done(mapOf(
                     "total" to filtered.size,
                     "values" to filtered.drop(offset).take(limit).map {
-                        mapOf("id" to it.key, "name" to it.name, "description" to it.description, "count" to it.quantity)
+                        mapOf("id" to it.key, "name" to it.name, "description" to it.description, "count" to it.quantity, "locked" to it.locked)
                     },
                 ))
             }
@@ -437,6 +449,7 @@ class TyranorMvmzCheatPanel(
                         "id" to entry.id,
                         "name" to entry.name.ifBlank { if (kind == "switch") "开关 ${entry.id}" else "变量 ${entry.id}" },
                         "value" to if (kind == "switch") entry.value == "true" else parseSystemValue(entry.valueType, entry.value),
+                        "locked" to entry.locked,
                     )
                 })
             }

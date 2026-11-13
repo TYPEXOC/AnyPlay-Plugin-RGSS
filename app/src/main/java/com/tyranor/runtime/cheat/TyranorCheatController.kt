@@ -77,7 +77,8 @@ class TyranorCheatController(
         val id: Int,
         val name: String,
         val valueType: String,
-        val value: String
+        val value: String,
+        val locked: Boolean = false
     )
 
     data class MapEntry(
@@ -427,6 +428,10 @@ class TyranorCheatController(
         send("quantity\t$kind\t${clean(key)}\t$quantity", onResult)
     }
 
+    fun setItemLock(kind: String, key: String, locked: Boolean, onResult: (String) -> Unit) {
+        send("item_lock\t$kind\t${clean(key)}\t${if (locked) "1" else "0"}", onResult)
+    }
+
     fun setActorValue(actorId: Int, field: String, value: String, onResult: (String) -> Unit) {
         send("actor_value\t$actorId\t$field\t${clean(value)}", onResult)
     }
@@ -490,6 +495,10 @@ class TyranorCheatController(
 
     fun setSystemSwitch(id: Int, enabled: Boolean, onResult: (String) -> Unit) {
         send("system_switch\t$id\t${if (enabled) "1" else "0"}", onResult)
+    }
+
+    fun setSystemLock(kind: String, id: Int, locked: Boolean, onResult: (String) -> Unit) {
+        send("system_lock\t$kind\t$id\t${if (locked) "1" else "0"}", onResult)
     }
 
     fun setSystemVariable(id: Int, value: String, onResult: (String) -> Unit) {
@@ -648,15 +657,15 @@ class TyranorCheatController(
         send("list\tsystem", 30_000L) { raw ->
             val out = mutableListOf<SystemEntry>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 5)
+                val p = line.split('\t', limit = 6)
                 when {
-                    p.size == 4 && p[0] == "S" -> {
+                    p.size >= 4 && p[0] == "S" -> {
                         val id = p[1].toIntOrNull() ?: return@forEach
-                        out.add(SystemEntry("switch", id, p[3], "boolean", (p[2] == "1").toString()))
+                        out.add(SystemEntry("switch", id, p[3], "boolean", (p[2] == "1").toString(), p.getOrNull(4) == "1"))
                     }
-                    p.size == 5 && p[0] == "V" -> {
+                    p.size >= 5 && p[0] == "V" -> {
                         val id = p[1].toIntOrNull() ?: return@forEach
-                        out.add(SystemEntry("variable", id, p[4], p[2], p[3]))
+                        out.add(SystemEntry("variable", id, p[4], p[2], p[3], p.getOrNull(5) == "1"))
                     }
                 }
             }
@@ -848,7 +857,14 @@ class TyranorCheatController(
     }
 
     /** One thing the player can pick in the Give list. */
-    data class Pickable(val kind: String, val key: String, val quantity: Int, val name: String, val description: String)
+    data class Pickable(
+        val kind: String,
+        val key: String,
+        val quantity: Int,
+        val name: String,
+        val description: String,
+        val locked: Boolean = false
+    )
 
     /**
      * Fetches everything this game can give (items, weapons, armor, and for
@@ -859,9 +875,9 @@ class TyranorCheatController(
         send("list\t") { raw ->
             val out = mutableListOf<Pickable>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 5)
+                val p = line.split('\t', limit = 6)
                 if (p.size >= 4 && p[0].isNotBlank() && p[1].isNotBlank()) {
-                    out.add(Pickable(p[0], p[1], p[2].toIntOrNull() ?: 0, p[3], p.getOrNull(4).orEmpty()))
+                    out.add(Pickable(p[0], p[1], p[2].toIntOrNull() ?: 0, p[3], p.getOrNull(4).orEmpty(), p.getOrNull(5) == "1"))
                 }
             }
             onResult(out)
