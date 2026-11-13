@@ -4817,23 +4817,107 @@ module TyranorCheats
       "Couldn't read character data: #{e.class}: #{e.message}"
     end
 
+    def actor_state_ids(actor)
+      current = actor.respond_to?(:states) ? actor.states : []
+      current.map { |state| state.respond_to?(:id) ? state.id.to_i : state.to_i }
+    rescue Exception
+      []
+    end
+
+    def actor_skill_ids(actor)
+      current = actor.respond_to?(:skills) ? actor.skills : []
+      current.map { |skill| skill.respond_to?(:id) ? skill.id.to_i : skill.to_i }
+    rescue Exception
+      []
+    end
+
+    def force_actor_skill_membership(actor, skill_id, enabled)
+      skills = actor.instance_variable_get(:@skills) rescue nil
+      return false unless skills.is_a?(Array) && skills.all? { |entry| entry.is_a?(Numeric) }
+      if enabled
+        skills << skill_id unless skills.include?(skill_id)
+        skills.uniq!
+        skills.sort!
+      else
+        skills.delete(skill_id)
+      end
+      actor_skill_ids(actor).include?(skill_id) == enabled
+    rescue Exception
+      false
+    end
+
+    def change_actor_state(actor, method_name, state_id)
+      method = actor.method(method_name)
+      arity = method.arity
+      # RGSS1 add_state/remove_state accept force=false. Force adding bypasses
+      # minus-state conflicts; force removing clears states pinned with -1 turns.
+      accepts_force = arity == -2 || arity == -1 || arity == 2
+      force = engine == :xp && accepts_force
+      force ? method.call(state_id, true) : method.call(state_id)
+      force
+    end
+
+    def clear_actor_state_conflicts(actor, state_id)
+      return unless engine == :xp && defined?($data_states) && $data_states
+      state = $data_states[state_id.to_i] rescue nil
+      return unless state && state.respond_to?(:minus_state_set)
+      method = actor.method(:remove_state) rescue nil
+      return unless method
+      arity = method.arity
+      return unless arity == -2 || arity == -1 || arity == 2
+      active_ids = actor_state_ids(actor)
+      minus_ids = (state.minus_state_set || []).map { |id| id.to_i }
+      active_ids.each do |id|
+        existing = $data_states[id] rescue nil
+        blocks_new = existing && existing.respond_to?(:minus_state_set) &&
+          (existing.minus_state_set || []).map { |entry| entry.to_i }.include?(state_id.to_i) &&
+          !minus_ids.include?(id)
+        method.call(id, true) if minus_ids.include?(id) || blocks_new
+      end
+    rescue Exception
+      nil
+    end
+
     def set_actor_collection(actor_id, payload)
       parts = payload.to_s.split("\t", 3)
       collection = parts[0].to_s
       item_id = parts[1].to_i
       enabled = parts[2] == '1'
+      AnyPlayLog.write("actor collection request engine=#{engine} actor=#{actor_id.to_i} collection=#{collection} item=#{item_id} enabled=#{enabled ? 1 : 0}") rescue nil
       actor = actor_by_id(actor_id)
       return "That character isn't available in this game." unless actor
       if collection == 'skills'
         return NOPE unless actor.respond_to?(:learn_skill) && actor.respond_to?(:forget_skill)
+        before = actor_skill_ids(actor)
         enabled ? actor.learn_skill(item_id) : actor.forget_skill(item_id)
+        actor.refresh if actor.respond_to?(:refresh)
+        after = actor_skill_ids(actor)
+        applied = after.include?(item_id)
+        forced = false
+        unless applied == enabled
+          forced = force_actor_skill_membership(actor, item_id, enabled)
+          actor.refresh if forced && actor.respond_to?(:refresh)
+          after = actor_skill_ids(actor)
+          applied = after.include?(item_id)
+        end
+        AnyPlayLog.write("actor skill change engine=#{engine} actor=#{actor_id.to_i} skill=#{item_id} action=#{enabled ? 'learn' : 'forget'} forced=#{forced ? 1 : 0} before=#{before.join(',')} after=#{after.join(',')} applied=#{applied ? 1 : 0}") rescue nil
+        return "Couldn't learn skill #{item_id}; the game did not keep it." if enabled && !applied
+        return "Couldn't forget skill #{item_id}; the game may be restoring it automatically." if !enabled && applied
       elsif collection == 'states'
         return NOPE unless actor.respond_to?(:add_state) && actor.respond_to?(:remove_state)
-        enabled ? actor.add_state(item_id) : actor.remove_state(item_id)
+        before = actor_state_ids(actor)
+        method_name = enabled ? :add_state : :remove_state
+        force = change_actor_state(actor, method_name, item_id)
+        clear_actor_state_conflicts(actor, item_id) if enabled && actor_state_ids(actor).include?(item_id)
+        actor.refresh if actor.respond_to?(:refresh)
+        after = actor_state_ids(actor)
+        applied = after.include?(item_id)
+        AnyPlayLog.write("actor state change engine=#{engine} actor=#{actor_id.to_i} state=#{item_id} action=#{enabled ? 'add' : 'remove'} force=#{force ? 1 : 0} before=#{before.join(',')} after=#{after.join(',')} applied=#{applied ? 1 : 0}") rescue nil
+        return "Couldn't add state #{item_id}; the game did not keep it." if enabled && !applied
+        return "Couldn't remove state #{item_id}; the game may be applying it automatically." if !enabled && applied
       else
         return NOPE
       end
-      actor.refresh if actor.respond_to?(:refresh)
       "ok"
     rescue Exception => e
       "Couldn't change character data: #{e.class}: #{e.message}"
