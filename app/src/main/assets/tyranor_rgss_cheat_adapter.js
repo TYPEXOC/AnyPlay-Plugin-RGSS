@@ -57,6 +57,8 @@
     setItemLock: function (kind, id, locked) { return invoke("setItemLock", [kind, id, !!locked]); },
     listActors: function () { return invoke("listActors") || []; },
     setActorStat: function (id, key, value) { return invoke("setActorStat", [id, key, value]); },
+    actorClasses: function (id) { return invoke("actorClasses", [id]) || { currentId: 0, classes: [] }; },
+    setActorClass: function (id, classId) { return invoke("setActorClass", [id, classId]); },
     recoverActor: function (id) { return invoke("recoverActor", [id]); },
     setActorParty: function (id, inParty) { return invoke("setActorParty", [id, !!inParty]); },
     recoverParty: function () { return invoke("recoverParty"); },

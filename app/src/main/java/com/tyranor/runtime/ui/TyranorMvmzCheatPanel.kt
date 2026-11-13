@@ -280,6 +280,15 @@ class TyranorMvmzCheatPanel(
                 "setActorStat" -> cheats.setActorValue(
                     argInt(a, 0), argString(a, 1), argString(a, 2),
                 ) { completeMessage(it, done) }
+                "actorClasses" -> cheats.listActorClasses(argInt(a, 0)) { data ->
+                    done(mapOf(
+                        "currentId" to data.currentId,
+                        "classes" to data.classes.map { mapOf("id" to it.id, "name" to it.name) },
+                    ))
+                }
+                "setActorClass" -> cheats.setActorClass(
+                    argInt(a, 0), argInt(a, 1),
+                ) { completeMessage(it, done) }
                 "recoverActor" -> cheats.recoverActor(argInt(a, 0)) { completeMessage(it, done) }
                 "setActorParty" -> cheats.setActorParty(argInt(a, 0), argBoolean(a, 1)) {
                     completeMessage(it, done) { done(argBoolean(a, 1)) }

@@ -3563,6 +3563,7 @@ module TyranorCheats
       when 'pokemon_status' then set_pokemon_status(a, b)
       when 'pokemon_item' then set_pokemon_item(a, b)
       when 'actor_value' then set_actor_value(a, b)
+      when 'actor_class' then set_actor_class(a, b)
       when 'actor_recover' then recover_actor(a)
       when 'actor_party' then set_actor_party(a, b)
       when 'actor_collection' then set_actor_collection(a, b)
@@ -4101,6 +4102,7 @@ module TyranorCheats
       return list_save_slots if kind == 'saves'
       return list_actor_collection(arg, 'skills') if kind == 'actor_skills'
       return list_actor_collection(arg, 'states') if kind == 'actor_states'
+      return list_actor_classes(arg) if kind == 'actor_classes'
       return list_actor_equips(arg) if kind == 'actor_equips'
       return list_equip_candidates(arg) if kind == 'equip_candidates'
       return list_capabilities if kind == 'capabilities'
@@ -4621,6 +4623,60 @@ module TyranorCheats
       out.join("\n")
     rescue Exception => e
       "Couldn't read actors: #{e.class}: #{e.message}"
+    end
+
+    def actor_class_id(actor)
+      value = actor.respond_to?(:class_id) ? actor.class_id : (actor.instance_variable_get(:@class_id) rescue nil)
+      value.to_i
+    rescue Exception
+      0
+    end
+
+    def list_actor_classes(actor_id)
+      return NOPE unless rpgm?
+      actor = actor_by_id(actor_id)
+      return "That character isn't available in this game." unless actor
+      classes = defined?($data_classes) ? $data_classes : nil
+      return NOPE unless classes && classes.respond_to?(:length)
+      out = ["H\t#{actor_class_id(actor)}"]
+      (1...classes.length).each do |id|
+        klass = classes[id]
+        next unless klass
+        name = klass.respond_to?(:name) ? klass.name.to_s : ""
+        name = "Class #{id}" if name.empty?
+        out << "K\t#{id}\t#{wire_text(name)}"
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read classes: #{e.class}: #{e.message}"
+    end
+
+    def set_actor_class(actor_id, class_id_text)
+      return NOPE unless rpgm?
+      return "Enter a valid class ID." unless class_id_text.to_s =~ /\A\d+\z/
+      actor = actor_by_id(actor_id)
+      return "That character isn't available in this game." unless actor
+      class_id = class_id_text.to_i
+      classes = defined?($data_classes) ? $data_classes : nil
+      klass = classes && classes.respond_to?(:[]) ? (classes[class_id] rescue nil) : nil
+      return "That class doesn't exist in this game." unless class_id > 0 && klass
+      return "That character already has this class." if actor_class_id(actor) == class_id
+
+      if actor.respond_to?(:change_class)
+        arity = actor.method(:change_class).arity rescue -1
+        arity == 1 ? actor.change_class(class_id) : actor.change_class(class_id, true)
+      elsif actor.respond_to?(:class_id=)
+        actor.class_id = class_id
+      elsif actor.respond_to?(:class_id) || actor.instance_variable_defined?(:@class_id)
+        actor.instance_variable_set(:@class_id, class_id)
+      else
+        return NOPE
+      end
+      actor.refresh if actor.respond_to?(:refresh)
+      return "Couldn't change character class." unless actor_class_id(actor) == class_id
+      "#{wire_text(actor.respond_to?(:name) ? actor.name : "Actor #{actor_id}")} class changed to #{wire_text(klass.name)}"
+    rescue Exception => e
+      "Couldn't change character class: #{e.class}: #{e.message}"
     end
 
     def actor_stat_value(actor, name)

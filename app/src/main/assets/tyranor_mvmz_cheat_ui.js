@@ -288,10 +288,20 @@
       tab.classList.toggle("active", tab.dataset.section === context.actorSection);
     });
     if (context.actorSection === "stats") {
+      var classData = mod.actorClasses(actor.id) || { currentId: 0, classes: [] };
+      var classOptions = classData.classes || [];
+      var currentClassExists = classOptions.some(function (entry) { return Number(entry.id) === Number(classData.currentId); });
+      var classSelect = classOptions.map(function (entry) {
+        return '<option value="' + Number(entry.id) + '" ' + (Number(entry.id) === Number(classData.currentId) ? 'selected' : '') + '>' + escapeHtml(entry.name) + '</option>';
+      }).join("");
+      if (!currentClassExists) classSelect = '<option value="" selected>' + escapeHtml(translated("选择职业")) + '</option>' + classSelect;
+      var classRow = classOptions.length
+        ? '<div class="tm-item tm-actor-class-row"><span class="tm-name">' + escapeHtml(translated("职业")) + '</span><select id="tm-actor-class" class="tm-select" aria-label="' + escapeHtml(translated("职业")) + '">' + classSelect + '</select>' + button(translated("更换职业"), "set-actor-class", "primary") + '</div>'
+        : '<div class="tm-note">' + escapeHtml(translated("当前游戏没有职业列表")) + '</div>';
       var stats = ["level","hp","mp","mhp","mmp","atk","def","mat","mdf","agi","luk"].map(function (key) {
       return '<div class="tm-item"><span class="tm-name">' + key.toUpperCase() + '</span>' + textInput("tm-stat-" + key, actor[key], "number", 'style="width:94px"') + button("设置", "set-stat", "", 'data-key="' + key + '"') + '</div>';
       }).join("");
-      section.innerHTML = card("属性", '<div class="tm-list">' + stats + '</div>');
+      section.innerHTML = card(translated("属性"), classRow + '<div class="tm-list">' + stats + '</div>');
     } else if (context.actorSection === "skills") {
       context.actorSkillEntries = mod.actorSkills(actor.id) || [];
       var skillControls = textInput("tm-skill-query", context.skillQuery, "search", 'placeholder="' + escapeHtml(translated("搜索技能名称或 ID")) + '"') +
@@ -865,6 +875,11 @@
       return renderActorSection();
     }
     if (action === "recover-actor") return run(function () { mod.recoverActor(context.actorId); }, function () { toast("角色已恢复"); renderActorBody(); });
+    if (action === "set-actor-class") return run(function () {
+      var classId = Number(inputValue("tm-actor-class"));
+      if (!(classId > 0)) throw new Error(translated("请先选择职业"));
+      return mod.setActorClass(context.actorId, classId);
+    }, function () { toast(translated("职业已更换")); renderActorBody(); });
     if (action === "set-stat") return run(function () { mod.setActorStat(context.actorId, node.dataset.key, inputValue("tm-stat-" + node.dataset.key)); }, function () { toast("属性已修改"); renderActorBody(); });
     if (action === "learn-skill" || action === "forget-skill") return run(function () { var skillId = Number(node.dataset.id); return action === "learn-skill" ? mod.learnSkill(context.actorId, skillId) : mod.forgetSkill(context.actorId, skillId); }, function (entries) { refreshActorCollection("skills", entries); });
     if (action === "add-state" || action === "remove-state") return run(function () { var stateId = Number(node.dataset.id); return action === "add-state" ? mod.addState(context.actorId, stateId) : mod.removeState(context.actorId, stateId); }, function (entries) { refreshActorCollection("states", entries); });

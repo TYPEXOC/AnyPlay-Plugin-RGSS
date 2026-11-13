@@ -104,6 +104,10 @@ class TyranorCheatController(
         val stats: Map<String, Int> = emptyMap()
     )
 
+    data class ActorClassOption(val id: Int, val name: String)
+
+    data class ActorClassData(val currentId: Int, val classes: List<ActorClassOption>)
+
     data class PokemonEntry(
         val index: Int,
         val name: String,
@@ -435,6 +439,28 @@ class TyranorCheatController(
 
     fun setActorValue(actorId: Int, field: String, value: String, onResult: (String) -> Unit) {
         send("actor_value\t$actorId\t$field\t${clean(value)}", onResult)
+    }
+
+    fun listActorClasses(actorId: Int, onResult: (ActorClassData) -> Unit) {
+        send("list\tactor_classes\t$actorId", 30_000L) { raw ->
+            var currentId = 0
+            val classes = mutableListOf<ActorClassOption>()
+            raw.lineSequence().forEach { line ->
+                val fields = line.split('\t', limit = 3)
+                when {
+                    fields.size == 2 && fields[0] == "H" -> currentId = fields[1].toIntOrNull() ?: 0
+                    fields.size == 3 && fields[0] == "K" -> {
+                        val id = fields[1].toIntOrNull() ?: return@forEach
+                        classes.add(ActorClassOption(id, fields[2]))
+                    }
+                }
+            }
+            onResult(ActorClassData(currentId, classes))
+        }
+    }
+
+    fun setActorClass(actorId: Int, classId: Int, onResult: (String) -> Unit) {
+        send("actor_class\t$actorId\t$classId", onResult)
     }
 
     fun recoverActor(actorId: Int, onResult: (String) -> Unit) {
