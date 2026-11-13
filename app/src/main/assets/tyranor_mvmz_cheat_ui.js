@@ -12,6 +12,7 @@
   var userDragged = false; // 用户手动拖拽过，positionLauncher 不再覆盖
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
+  var goldCommitPending = null;
   var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", equipItemId: null, quickSection: "角色与资源", inBattle: false, itemKind: "item", systemKind: "switch", mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
@@ -79,6 +80,30 @@
     var desiredWidth = Math.max(baseWidth, Math.ceil(textWidth + horizontalSpace));
     input.style.width = Math.min(desiredWidth, maxWidth) + "px";
   }
+  function applyGoldInput(input) {
+    if (!input) return;
+    var rawValue = String(input.value || "").trim();
+    var value = Number(rawValue);
+    if (!rawValue || !isFinite(value) || value < 0) {
+      toast("请输入有效的金币数量", true);
+      return;
+    }
+    value = Math.floor(value);
+    if ((context.gold != null && Number(context.gold) === value) || goldCommitPending === value) return;
+    goldCommitPending = value;
+    return run(function () { return mod.setGold(value); }, function () {
+      context.gold = value;
+      var current = root && root.querySelector("#tm-gold-current");
+      if (current) current.textContent = String(value);
+      if (input.isConnected) {
+        input.value = String(value);
+        fitGoldInput(input);
+      }
+      toast("金币已修改");
+    }).then(function () {
+      if (goldCommitPending === value) goldCommitPending = null;
+    });
+  }
   function segmentedTabs(items, selected, action) {
     return '<div class="tm-segmented-tabs">' + items.map(function (item) {
       return '<button class="tm-segmented-tab' + (item.id === selected ? ' active' : '') + '" data-action="' + action + '" data-section="' + escapeHtml(item.id) + '">' + escapeHtml(item.label) + '</button>';
@@ -117,7 +142,7 @@
     var cachedGold = context.gold == null ? "…" : context.gold;
     var gold = '<div class="tm-row tm-gold-row"><label>金币：<span id="tm-gold-current">' + cachedGold + '</span></label>' +
       textInput("tm-gold", cachedGold, "number", 'min="0"') +
-      button("设置", "set-gold", "primary") + button("拉满", "max-gold") + '</div>';
+      button("拉满", "max-gold") + '</div>';
     var sectionBody;
     if (selectedGroup) {
       var toggles = selectedGroup.entries.map(function (entry) {
@@ -776,7 +801,6 @@
     if (action === "set-game-speed") return run(function () { return mod.setGameSpeed(inputValue("tm-game-speed")); }, function () { toast("游戏倍速已设置"); renderQuick(root.querySelector(".tm-content"), false); });
     if (action === "set-exp-multiplier") return run(function () { return mod.setRewardMultiplier("expMultiplier", inputValue("tm-exp-multiplier")); }, function () { toast("经验倍率已设置"); renderBattle(root.querySelector(".tm-content")); });
     if (action === "set-drop-multiplier") return run(function () { return mod.setRewardMultiplier("dropMultiplier", inputValue("tm-drop-multiplier")); }, function () { toast("掉落倍率已设置"); renderBattle(root.querySelector(".tm-content")); });
-    if (action === "set-gold") return run(function () { mod.setGold(inputValue("tm-gold")); }, function () { toast("金币已修改"); render(); });
     if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () { toast("金币已拉满"); render(); });
     if (action === "lock-item") {
       var itemLocked = node.checked;
@@ -986,10 +1010,18 @@
         var state = event.target.parentNode.querySelector(".tm-system-switch-state");
         if (state) state.textContent = event.target.checked ? "设为开" : "设为关";
       }
-      if (event.target.id === "tm-equip-slot") handleAction("equip-slot", event.target);
+      if (event.target.id === "tm-gold") applyGoldInput(event.target);
+      else if (event.target.id === "tm-equip-slot") handleAction("equip-slot", event.target);
       else if (event.target.id === "tm-equip-kind") handleAction("equip-kind", event.target);
       else { var action = event.target.closest("[data-action]"); if (action) handleAction(action.dataset.action, action); }
       event.stopPropagation();
+    });
+    root.addEventListener("keydown", function (event) {
+      if (event.target && event.target.id === "tm-gold" && event.key === "Enter") {
+        event.preventDefault();
+        applyGoldInput(event.target);
+        event.target.blur();
+      }
     });
     root.addEventListener("input", function (event) {
       if (event.target.id === "tm-gold") fitGoldInput(event.target);
