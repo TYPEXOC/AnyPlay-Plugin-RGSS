@@ -5483,7 +5483,7 @@ module TyranorCheats
       events, live_map = source
       switches = event_switches
       out = ["M\t#{map_id}"]
-      events.each do |id, live|
+      events.to_a.sort_by { |entry| entry[0].to_i }.each do |id, live|
         next unless live
         info = (live.respond_to?(:event) ? live.event : nil) || live
         name = info && info.respond_to?(:name) ? info.name : nil

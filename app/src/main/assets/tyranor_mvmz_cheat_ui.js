@@ -524,7 +524,7 @@
   function eventPanelHtml() {
     if (!context.eventId) {
       context.selectedEventDetail = null;
-      return '<div class="tm-note tm-event-empty">' + escapeHtml(mapLabel(context.selectedMapId)) + '<br>在左侧选择事件查看详情</div>';
+      return '<div class="tm-note tm-event-empty">在左侧选择事件查看详情</div>';
     }
     var detail;
     try { detail = mod.eventDetail(context.eventId, context.selectedMapId); } catch (e) { context.selectedEventDetail = null; return '<div class="tm-note tm-event-empty">' + escapeHtml(String(e && e.message || e)) + '</div>'; }
@@ -538,8 +538,7 @@
     }).join("") || '<div class="tm-note">事件没有可显示的页面</div>';
     var description = String(detail.description || "").trim();
     return '<div class="tm-event-summary">'
-      + '<div class="tm-event-map-row"><span class="tm-badge tm-event-map" title="' + escapeHtml(mapLabel(detail.mapId)) + '">' + escapeHtml(mapLabel(detail.mapId)) + '</span></div>'
-      + '<div class="tm-event-overview"><strong title="' + escapeHtml(detail.name) + '">' + escapeHtml(detail.name) + '</strong><span class="tm-event-pos">Pos: ' + detail.x + ', ' + detail.y + '</span></div>'
+      + '<div class="tm-event-overview"><span class="tm-event-name-label">' + escapeHtml(translated("名称:")) + '</span><strong title="' + escapeHtml(detail.name) + '">' + escapeHtml(detail.name) + '</strong><span class="tm-event-pos">Pos: ' + detail.x + ', ' + detail.y + '</span></div>'
       + '<div class="tm-event-description"><small>描述:</small><span title="' + escapeHtml(description || "—") + '">' + escapeHtml(description || "—") + '</span></div>'
       + '</div><div class="tm-event-pages">' + pages + '</div>';
   }
