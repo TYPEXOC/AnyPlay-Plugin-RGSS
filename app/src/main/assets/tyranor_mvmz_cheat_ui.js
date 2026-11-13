@@ -14,9 +14,9 @@
   var activeTab = "quick";
   var goldCommitPending = null;
   var pendingEquipScroll = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, pokemonMoveCandidates: [], pokemonIndex: 0, pokemonMoveSlot: 0, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
   var tabs = [
-    ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
+    ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["pokemon", "宝可梦"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
   ];
   var flagGroups = [
@@ -135,14 +135,28 @@
       return '<button class="tm-segmented-tab' + (item.id === selected ? ' active' : '') + '" data-action="' + action + '" data-section="' + escapeHtml(item.id) + '">' + escapeHtml(item.label) + '</button>';
     }).join("") + '</div>';
   }
+  function visibleTabs() {
+    return tabs.filter(function (tab) {
+      return tab[0] !== "pokemon" || !!(context.capabilities && context.capabilities.features && context.capabilities.features.indexOf("pokemonParty") >= 0);
+    });
+  }
+  function renderTabs() {
+    var tabBar = root && root.querySelector(".tm-tabs");
+    if (!tabBar) return;
+    tabBar.innerHTML = visibleTabs().map(function (tab) {
+      return '<button class="tm-tab' + (tab[0] === activeTab ? ' active' : '') + '" data-tab="' + tab[0] + '">' + escapeHtml(translated(tab[1])) + '</button>';
+    }).join("");
+  }
   function render() {
     if (!root) return;
+    renderTabs();
     var content = root.querySelector(".tm-content");
     root.querySelectorAll(".tm-tab").forEach(function (node) { node.classList.toggle("active", node.dataset.tab === activeTab); });
     if (!mod.isReady()) { content.innerHTML = '<div class="tm-note">请先进入游戏存档或开始新游戏，修改器正在等待 RPG Maker 运行时就绪。</div>'; return; }
     if (activeTab === "quick") renderQuick(content);
     else if (activeTab === "items") renderItems(content);
     else if (activeTab === "actors") renderActors(content);
+    else if (activeTab === "pokemon") renderPokemon(content);
     else if (activeTab === "system") renderSystem(content);
     else if (activeTab === "map") renderMap(content);
     else if (activeTab === "battle") renderBattle(content);
@@ -213,14 +227,17 @@
     setTimeout(function () {
       try {
         var loaded = mod.listCapabilities();
-        if (loaded && loaded.engine !== "unknown" && Array.isArray(loaded.toggles)) context.capabilities = loaded;
+        if (loaded && loaded.engine !== "unknown" && Array.isArray(loaded.toggles)) {
+          context.capabilities = loaded;
+          if (!Array.isArray(context.capabilities.features)) context.capabilities.features = [];
+          if (!Array.isArray(context.capabilities.actorValues)) context.capabilities.actorValues = [];
+        }
       } catch (error) {
         console.warn("RGSS cheat capability read failed", error);
       }
       context.capabilitiesLoading = false;
       if (!context.capabilities || !root) return;
-      if (activeTab === "quick") renderQuick(root.querySelector(".tm-content"), false);
-      else if (activeTab === "battle") renderBattle(root.querySelector(".tm-content"));
+      render();
     }, 0);
   }
   function itemKindOptionsMarkup() {
@@ -284,6 +301,155 @@
       '</div>';
     renderActorRoster();
     renderActorBody(actors);
+  }
+  function hasPokemonFeature(name) {
+    var features = context.capabilities && context.capabilities.features;
+    return Array.isArray(features) && features.indexOf(name) >= 0;
+  }
+  function pokemonStatusLabel(key) {
+    switch (String(key || "").toUpperCase()) {
+      case "SLEEP": return "睡眠";
+      case "POISON": return "中毒";
+      case "BURN": return "灼伤";
+      case "PARALYSIS": return "麻痹";
+      case "FROZEN": return "冰冻";
+      default: return key || "其他状态";
+    }
+  }
+  function pokemonValueRow(pokemon, field, label, value) {
+    var index = Number(pokemon.index);
+    return '<div class="tm-pokemon-value-row"><label for="tm-pokemon-' + index + '-' + field + '">' + escapeHtml(translated(label)) + '</label>' +
+      textInput("tm-pokemon-" + index + "-" + field, value, "number", 'min="0" step="1" inputmode="numeric"') +
+      button(translated("设置"), "pokemon-set-value", "", 'data-index="' + index + '" data-field="' + field + '"') + '</div>';
+  }
+  function renderPokemon(content) {
+    if (!hasPokemonFeature("pokemonParty")) {
+      content.innerHTML = '<div class="tm-note">' + escapeHtml(translated("当前游戏不支持宝可梦队伍修改")) + '</div>';
+      return;
+    }
+    var pokemon = mod.listPokemon() || [];
+    if (!pokemon.length) {
+      content.innerHTML = '<div class="tm-note">' + escapeHtml(translated("当前队伍里没有宝可梦")) + '</div>';
+      return;
+    }
+    var supportsMoves = hasPokemonFeature("pokemonMoves");
+    var supportsStatus = hasPokemonFeature("pokemonStatus");
+    var supportsItem = hasPokemonFeature("pokemonItem");
+    var supportsStats = hasPokemonFeature("pokemonStats");
+    content.innerHTML = '<div class="tm-grid tm-pokemon-grid">' + pokemon.map(function (entry) {
+      var index = Number(entry.index);
+      var details = [];
+      if (entry.status) details.push(translated("状态：") + translated(pokemonStatusLabel(entry.status)));
+      if (entry.heldItem) details.push(translated("持有物：") + entry.heldItem);
+      var summary = '<div class="tm-pokemon-summary"><span>' + escapeHtml(translated("等级")) + ' ' + escapeHtml(entry.level) + '</span><span>HP ' + escapeHtml(entry.hp) + '/' + escapeHtml(entry.mhp) + '</span><span>EXP ' + escapeHtml(entry.exp) + '</span></div>';
+      var actions = '';
+      if (supportsMoves) actions += button(translated("招式"), "pokemon-edit-moves", "", 'data-index="' + index + '"');
+      if (supportsStatus) actions += button(translated("状态"), "pokemon-edit-status", "", 'data-index="' + index + '"');
+      if (supportsItem) actions += button(translated("携带物品"), "pokemon-edit-item", "", 'data-index="' + index + '"');
+      if (supportsStats) actions += button(translated("IV / EV"), "pokemon-edit-stats", "", 'data-index="' + index + '"');
+      var body = '<div class="tm-pokemon-card-heading"><h3>#' + escapeHtml(index + 1) + ' ' + escapeHtml(entry.name) + '</h3>' +
+        (entry.isEgg ? '<span class="tm-badge">' + escapeHtml(translated("蛋")) + '</span>' : '') + '</div>' + summary +
+        (details.length ? '<div class="tm-pokemon-details">' + details.map(escapeHtml).join(' · ') + '</div>' : '');
+      if (entry.isEgg) {
+        body += '<div class="tm-note">' + escapeHtml(translated("蛋不能在这里编辑或恢复")) + '</div>';
+      } else {
+        body += '<div class="tm-pokemon-values">' +
+          pokemonValueRow(entry, "level", "等级", entry.level) +
+          pokemonValueRow(entry, "hp", "当前 HP", entry.hp) +
+          pokemonValueRow(entry, "exp", "经验", entry.exp) + '</div>' +
+          '<div class="tm-pokemon-actions">' + button(translated("恢复"), "pokemon-recover", "primary", 'data-index="' + index + '"') + actions + '</div>';
+      }
+      return '<section class="tm-card tm-pokemon-card">' + body + '</section>';
+    }).join("") + '</div>';
+  }
+  function showPokemonDialog(title, body) {
+    if (!root) return;
+    var old = root.querySelector(".tm-pokemon-modal");
+    if (old) old.remove();
+    var modal = document.createElement("div");
+    modal.className = "tm-modal tm-pokemon-modal";
+    modal.innerHTML = '<div class="tm-modal-box"><div class="tm-modal-head"><strong>' + escapeHtml(translated(title)) + '</strong>' +
+      button("×", "close-pokemon-modal", "") + '</div><div class="tm-modal-body">' + body + '</div></div>';
+    modal.addEventListener("click", function (event) { if (event.target === modal) modal.remove(); });
+    root.appendChild(modal);
+  }
+  function showPokemonMoves(index) {
+    var moves = mod.listPokemonMoves(index) || [];
+    if (!moves.length) { toast(translated("没有可用的招式位")); return; }
+    context.pokemonIndex = Number(index);
+    var body = '<div class="tm-pokemon-choice-list">' + moves.map(function (move) {
+      var name = move.name || translated("空");
+      return '<div class="tm-pokemon-move-row"><span>' + escapeHtml(translated("招式位") + ' ' + (Number(move.slot) + 1) + ' · ' + name) + '</span>' +
+        button(translated("替换"), "pokemon-pick-move", "", 'data-slot="' + Number(move.slot) + '" data-index="' + Number(index) + '"') +
+        button(translated("清空"), "pokemon-clear-move", "", 'data-slot="' + Number(move.slot) + '" data-index="' + Number(index) + '"') + '</div>';
+    }).join("") + '</div>';
+    showPokemonDialog("编辑招式", body);
+  }
+  function renderPokemonMoveCandidates() {
+    var list = root && root.querySelector("#tm-pokemon-move-candidates");
+    if (!list) return;
+    var query = String(inputValue("tm-pokemon-move-query") || "").trim().toLowerCase();
+    var entries = (context.pokemonMoveCandidates || []).filter(function (entry) {
+      return !query || String(entry.name || "").toLowerCase().indexOf(query) >= 0 || String(entry.key || "").toLowerCase().indexOf(query) >= 0;
+    });
+    var shown = entries.slice(0, 250);
+    list.innerHTML = shown.map(function (entry) {
+      return '<button type="button" class="tm-item tm-pokemon-choice" data-action="pokemon-select-move" data-key="' + escapeHtml(entry.key) + '">' +
+        '<span>' + escapeHtml(entry.name || entry.key) + '</span><small>' + escapeHtml(entry.key) + '</small></button>';
+    }).join("") || '<div class="tm-note">' + escapeHtml(translated("没有匹配项目")) + '</div>';
+  }
+  function showPokemonMoveCandidates(index, slot) {
+    context.pokemonIndex = Number(index);
+    context.pokemonMoveSlot = Number(slot);
+    context.pokemonMoveCandidates = mod.listPokemonMoveCandidates() || [];
+    showPokemonDialog("选择替换招式", '<input class="tm-input" id="tm-pokemon-move-query" type="search" placeholder="' + escapeHtml(translated("搜索名称或编号")) + '"><div id="tm-pokemon-move-candidates" class="tm-list tm-pokemon-choice-list"></div>');
+    renderPokemonMoveCandidates();
+  }
+  function showPokemonStatuses(index) {
+    context.pokemonIndex = Number(index);
+    var statuses = mod.listPokemonStatuses(index) || [];
+    var body = '<div class="tm-pokemon-choice-list">' + button(translated("清除状态"), "pokemon-set-status", "", 'data-key="" data-index="' + Number(index) + '"') +
+      statuses.map(function (status) {
+        var label = translated(pokemonStatusLabel(status.key));
+        return button((status.active ? "✓ " : "") + label, "pokemon-set-status", status.active ? "primary" : "", 'data-key="' + escapeHtml(status.key) + '" data-index="' + Number(index) + '"');
+      }).join("") + '</div>';
+    showPokemonDialog("编辑状态", body);
+  }
+  function showPokemonItems(index) {
+    context.pokemonIndex = Number(index);
+    context.pokemonItemQuery = "";
+    showPokemonDialog("设置携带物品", '<div class="tm-row"><input class="tm-input" id="tm-pokemon-item-query" type="search" placeholder="' + escapeHtml(translated("搜索名称或编号")) + '">' +
+      button(translated("搜索"), "pokemon-search-items", "primary") + '</div><div class="tm-pokemon-choice-list"><button type="button" class="tm-item tm-pokemon-choice" data-action="pokemon-set-item" data-key="">' +
+      escapeHtml(translated("不持有物品")) + '</button><div id="tm-pokemon-item-choices" class="tm-list"></div></div>');
+    loadPokemonItemChoices("");
+  }
+  function loadPokemonItemChoices(query) {
+    context.pokemonItemQuery = String(query || "");
+    var target = root && root.querySelector("#tm-pokemon-item-choices");
+    if (!target) return;
+    var result = mod.listDatabase("item", context.pokemonItemQuery, 0, 100) || { total: 0, values: [] };
+    target.innerHTML = (result.values || []).map(function (item) {
+      return '<button type="button" class="tm-item tm-pokemon-choice" data-action="pokemon-set-item" data-key="' + escapeHtml(item.id) + '">' +
+        '<span>' + escapeHtml(item.name || item.id) + '</span><small>#' + escapeHtml(item.id) + '</small></button>';
+    }).join("") || '<div class="tm-note">' + escapeHtml(translated("没有匹配项目")) + '</div>';
+    if (Number(result.total) > 100) target.insertAdjacentHTML("beforeend", '<div class="tm-note">' + escapeHtml(translated("结果过多，请输入更具体的搜索词")) + '</div>');
+  }
+  function showPokemonStats(index) {
+    context.pokemonIndex = Number(index);
+    var stats = mod.listPokemonStats(index) || { ivs: [], evs: [] };
+    var labels = ["HP", "攻击", "防御", "特攻", "特防", "速度"];
+    var rows = labels.map(function (label, statIndex) {
+      var fields = ["iv", "ev"];
+      var cells = fields.map(function (field) {
+        var value = field === "iv" ? (stats.ivs || [])[statIndex] : (stats.evs || [])[statIndex];
+        var key = field + "_" + statIndex;
+        return '<div class="tm-pokemon-stat-value"><label for="tm-pokemon-stat-' + index + '-' + key + '">' + escapeHtml(translated(field.toUpperCase())) + '</label>' +
+          textInput("tm-pokemon-stat-" + index + "-" + key, value == null ? 0 : value, "number", 'min="0" step="1" inputmode="numeric"') +
+          button(translated("设置"), "pokemon-set-value", "", 'data-index="' + Number(index) + '" data-field="' + key + '" data-input="tm-pokemon-stat-' + Number(index) + '-' + key + '"');
+      }).join("");
+      return '<div class="tm-pokemon-stat-row"><strong>' + escapeHtml(translated(label)) + '</strong>' + cells + '</div>';
+    }).join("");
+    showPokemonDialog("编辑 IV / EV", '<div class="tm-pokemon-stats">' + rows + '</div>');
   }
   function renderActorRoster() {
     var list = root && root.querySelector("#tm-actor-list");
@@ -931,6 +1097,57 @@
       return renderItemDetail();
     }
     if (action === "set-item") return run(function () { return mod.setItemCount(context.itemKind, node.dataset.id, inputValue("tm-detail-count")); }, function () { toast("数量已修改"); loadItems(); });
+    if (action === "close-pokemon-modal") { var pokemonModal = root.querySelector(".tm-pokemon-modal"); if (pokemonModal) pokemonModal.remove(); return; }
+    if (action === "pokemon-set-value") {
+      var pokemonIndex = Number(node.dataset.index);
+      var pokemonField = node.dataset.field || "";
+      var pokemonInputId = node.dataset.input || ("tm-pokemon-" + pokemonIndex + "-" + pokemonField);
+      var pokemonValue = String(inputValue(pokemonInputId) || "").trim();
+      if (!/^\d+$/.test(pokemonValue)) { toast(translated("请输入有效的非负整数"), true); return; }
+      return run(function () { return mod.setPokemonValue(pokemonIndex, pokemonField, pokemonValue); }, function () {
+        toast(translated("数值已修改"));
+        if (node.dataset.input) showPokemonStats(pokemonIndex);
+        else renderPokemon(root.querySelector(".tm-content"));
+      });
+    }
+    if (action === "pokemon-recover") return run(function () { return mod.recoverPokemon(Number(node.dataset.index)); }, function () {
+      toast(translated("宝可梦已恢复"));
+      renderPokemon(root.querySelector(".tm-content"));
+    });
+    if (action === "pokemon-edit-moves") return showPokemonMoves(Number(node.dataset.index));
+    if (action === "pokemon-pick-move") return showPokemonMoveCandidates(Number(node.dataset.index), Number(node.dataset.slot));
+    if (action === "pokemon-clear-move") return run(function () {
+      return mod.setPokemonMove(Number(node.dataset.index), Number(node.dataset.slot), "");
+    }, function () {
+      var modal = root.querySelector(".tm-pokemon-modal"); if (modal) modal.remove();
+      toast(translated("招式已更新"));
+      renderPokemon(root.querySelector(".tm-content"));
+    });
+    if (action === "pokemon-select-move") return run(function () {
+      return mod.setPokemonMove(context.pokemonIndex, context.pokemonMoveSlot, node.dataset.key || "");
+    }, function () {
+      var modal = root.querySelector(".tm-pokemon-modal"); if (modal) modal.remove();
+      toast(translated("招式已更新"));
+      renderPokemon(root.querySelector(".tm-content"));
+    });
+    if (action === "pokemon-edit-status") return showPokemonStatuses(Number(node.dataset.index));
+    if (action === "pokemon-set-status") return run(function () {
+      return mod.setPokemonStatus(Number(node.dataset.index), node.dataset.key || "");
+    }, function () {
+      var modal = root.querySelector(".tm-pokemon-modal"); if (modal) modal.remove();
+      toast(translated("状态已更新"));
+      renderPokemon(root.querySelector(".tm-content"));
+    });
+    if (action === "pokemon-edit-item") return showPokemonItems(Number(node.dataset.index));
+    if (action === "pokemon-search-items") return loadPokemonItemChoices(inputValue("tm-pokemon-item-query"));
+    if (action === "pokemon-set-item") return run(function () {
+      return mod.setPokemonItem(context.pokemonIndex, node.dataset.key || "");
+    }, function () {
+      var modal = root.querySelector(".tm-pokemon-modal"); if (modal) modal.remove();
+      toast(translated("携带物品已更新"));
+      renderPokemon(root.querySelector(".tm-content"));
+    });
+    if (action === "pokemon-edit-stats") return showPokemonStats(Number(node.dataset.index));
     if (action === "actor-select") {
       context.actorId = Number(node.dataset.id || node.value);
       context.skillQuery = "";
@@ -1132,8 +1349,9 @@
   function open() {
     if (root) return;
     root = document.createElement("div"); root.id = "tyranor-mod-root";
-    root.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker RGSS 修改器</strong><button class="tm-refresh" data-action="render" title="刷新面板" aria-label="刷新面板">↻</button><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs">' + tabs.map(function (tab) { return '<button class="tm-tab" data-tab="' + tab[0] + '">' + tab[1] + '</button>'; }).join("") + '</div><main class="tm-content"></main></div>';
+    root.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker RGSS 修改器</strong><button class="tm-refresh" data-action="render" title="刷新面板" aria-label="刷新面板">↻</button><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs"></div><main class="tm-content"></main></div>';
     document.documentElement.appendChild(root);
+    renderTabs();
     root.addEventListener("pointerdown", function (event) {
       pendingEquipScroll = event.target.closest("[data-action='pick-equip-slot']") ? readEquipScroll() : null;
     }, true);
@@ -1201,6 +1419,7 @@
     root.addEventListener("input", function (event) {
       if (event.target.id === "tm-gold") fitGoldInput(event.target);
       else if (event.target.id === "tm-actor-query") { context.actorQuery = event.target.value; renderActorRoster(); }
+      else if (event.target.id === "tm-pokemon-move-query") renderPokemonMoveCandidates();
       else if (event.target.id === "tm-skill-query") { context.skillQuery = event.target.value; renderActorCollectionList("skills"); }
       else if (event.target.id === "tm-state-query") { context.stateQuery = event.target.value; renderActorCollectionList("states"); }
       else if (event.target.id === "tm-system-query") loadSystem();

@@ -258,7 +258,13 @@ class TyranorMvmzCheatPanel(
                     "freeSkill" to cheats.isEnabled(TyranorCheatToggle.FREE_SKILL_COST),
                 ))
                 "listCapabilities" -> cheats.loadCapabilities { capabilities ->
-                    done(mapOf("engine" to capabilities.engine, "toggles" to capabilities.toggles, "values" to capabilities.values))
+                    done(mapOf(
+                        "engine" to capabilities.engine,
+                        "toggles" to capabilities.toggles,
+                        "values" to capabilities.values,
+                        "features" to capabilities.features,
+                        "actorValues" to capabilities.actorValues,
+                    ))
                 }
                 "setFlag" -> setFlag(argString(a, 0), argBoolean(a, 1), done)
                 "setSpeed" -> cheats.setValue("speed", argString(a, 0)) {
@@ -312,6 +318,44 @@ class TyranorMvmzCheatPanel(
                 "setActorParty" -> cheats.setActorParty(argInt(a, 0), argBoolean(a, 1)) {
                     completeMessage(it, done) { done(argBoolean(a, 1)) }
                 }
+                "listPokemon" -> cheats.listPokemon { pokemon -> done(pokemon.map { entry ->
+                    mapOf(
+                        "index" to entry.index,
+                        "name" to entry.name,
+                        "level" to entry.level,
+                        "hp" to entry.hp,
+                        "mhp" to entry.maxHp,
+                        "exp" to entry.exp,
+                        "isEgg" to entry.isEgg,
+                        "status" to entry.status,
+                        "heldItem" to entry.heldItem,
+                    )
+                }) }
+                "setPokemonValue" -> cheats.setPokemonValue(
+                    argInt(a, 0), argString(a, 1), argString(a, 2),
+                ) { completeMessage(it, done) }
+                "recoverPokemon" -> cheats.recoverPokemon(argInt(a, 0)) { completeMessage(it, done) }
+                "listPokemonMoves" -> cheats.listPokemonMoves(argInt(a, 0)) { moves -> done(moves.map { move ->
+                    mapOf("slot" to move.slot, "key" to move.key, "name" to move.name)
+                }) }
+                "listPokemonMoveCandidates" -> cheats.listPokemonMoveCandidates { moves -> done(moves.map { move ->
+                    mapOf("key" to move.key, "name" to move.name)
+                }) }
+                "listPokemonStatuses" -> cheats.listPokemonStatuses(argInt(a, 0)) { statuses -> done(statuses.map { status ->
+                    mapOf("key" to status.key, "active" to status.active)
+                }) }
+                "listPokemonStats" -> cheats.listPokemonStats(argInt(a, 0)) { stats ->
+                    done(mapOf("ivs" to stats.ivs, "evs" to stats.evs))
+                }
+                "setPokemonMove" -> cheats.setPokemonMove(
+                    argInt(a, 0), argInt(a, 1), argString(a, 2),
+                ) { completeMessage(it, done) }
+                "setPokemonStatus" -> cheats.setPokemonStatus(
+                    argInt(a, 0), argString(a, 1),
+                ) { completeMessage(it, done) }
+                "setPokemonItem" -> cheats.setPokemonItem(
+                    argInt(a, 0), argString(a, 1),
+                ) { completeMessage(it, done) }
                 "recoverParty" -> cheats.runAction("recoverParty") { message ->
                     completeMessage(message, done) { cheats.listActors { actors ->
                         done(actors.map { actor -> actorMap(actor) })
