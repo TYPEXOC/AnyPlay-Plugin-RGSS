@@ -52,8 +52,24 @@
   function textInput(id, value, type, attrs) { return '<input class="tm-input" id="' + id + '" type="' + (type || "text") + '" value="' + escapeHtml(value == null ? "" : value) + '" ' + (attrs || "") + '>'; }
   function fitGoldInput(input) {
     if (!input) return;
-    var extra = Math.max(0, String(input.value || "").length - 4) * 8;
-    input.style.width = Math.min(94 + extra, 220) + "px";
+    var baseWidth = 94;
+    var maxWidth = 220;
+    var textWidth = 0;
+    try {
+      var style = window.getComputedStyle(input);
+      var canvas = fitGoldInput.canvas || (fitGoldInput.canvas = document.createElement("canvas"));
+      var measure = canvas.getContext("2d");
+      if (measure) {
+        measure.font = [style.fontStyle, style.fontVariant, style.fontWeight, style.fontSize, style.fontFamily].join(" ");
+        textWidth = measure.measureText(String(input.value || "")).width;
+      }
+    } catch (_) {}
+    var style = window.getComputedStyle(input);
+    var horizontalSpace = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) +
+      parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
+    if (!isFinite(horizontalSpace)) horizontalSpace = 20;
+    var desiredWidth = Math.max(baseWidth, Math.ceil(textWidth + horizontalSpace));
+    input.style.width = Math.min(desiredWidth, maxWidth) + "px";
   }
   function segmentedTabs(items, selected, action) {
     return '<div class="tm-segmented-tabs">' + items.map(function (item) {
@@ -162,7 +178,7 @@
     var list = root.querySelector("#tm-item-list");
     list.innerHTML = result.values.length ? result.values.map(function (item) {
       return '<div class="tm-item tm-lock-row tm-item-lock-row"><label class="tm-lock-cell"><input class="tm-lock-checkbox" type="checkbox" data-action="lock-item" data-id="' + escapeHtml(item.id) + '" ' + (item.locked ? "checked" : "") + '></label><span class="tm-name" title="' + escapeHtml(item.description) + '">#' + item.id + ' ' + escapeHtml(item.name) + '</span>' +
-        textInput("tm-count-" + item.id, item.count, "number", 'min="0" style="width:72px"') + button("应用", "set-item", "", 'data-id="' + item.id + '"') + '</div>';
+        textInput("tm-count-" + item.id, item.count, "number", 'min="0"') + button("应用", "set-item", "", 'data-id="' + item.id + '"') + '</div>';
     }).join("") : '<div class="tm-note">没有匹配项目</div>';
   }
   function renderActors(content) {
@@ -221,13 +237,19 @@
       section.innerHTML = card("属性", '<div class="tm-list">' + stats + '</div>');
     } else if (context.actorSection === "skills") {
       context.actorSkillEntries = mod.actorSkills(actor.id) || [];
-      var skillControls = textInput("tm-skill-query", context.skillQuery, "search", 'placeholder="搜索技能名称或 ID"') + '<div id="tm-skill-list" class="tm-list tm-actor-collection-list"></div>';
-      section.innerHTML = card("技能", skillControls);
+      var skillControls = textInput("tm-skill-query", context.skillQuery, "search", 'placeholder="' + escapeHtml(translated("搜索技能名称或 ID")) + '"') +
+        '<div class="tm-actor-collection-columns">' +
+        card(translated("已学会技能"), '<div id="tm-skill-known" class="tm-list tm-actor-collection-list"></div>', "tm-actor-collection-card") +
+        card(translated("可学习技能"), '<div id="tm-skill-available" class="tm-list tm-actor-collection-list"></div>', "tm-actor-collection-card") + '</div>';
+      section.innerHTML = card(translated("技能"), skillControls, "tm-actor-collection-page");
       renderActorCollectionList("skills");
     } else if (context.actorSection === "states") {
       context.actorStateEntries = mod.actorStates(actor.id) || [];
-      var stateControls = textInput("tm-state-query", context.stateQuery, "search", 'placeholder="搜索状态名称或 ID"') + '<div id="tm-state-list" class="tm-list tm-actor-collection-list"></div>';
-      section.innerHTML = card("状态", stateControls);
+      var stateControls = textInput("tm-state-query", context.stateQuery, "search", 'placeholder="' + escapeHtml(translated("搜索状态名称或 ID")) + '"') +
+        '<div class="tm-actor-collection-columns">' +
+        card(translated("当前状态"), '<div id="tm-state-active" class="tm-list tm-actor-collection-list"></div>', "tm-actor-collection-card") +
+        card(translated("可附加状态"), '<div id="tm-state-available" class="tm-list tm-actor-collection-list"></div>', "tm-actor-collection-card") + '</div>';
+      section.innerHTML = card(translated("状态"), stateControls, "tm-actor-collection-page");
       renderActorCollectionList("states");
     } else {
       renderActorEquipments(actor, section);
@@ -276,9 +298,10 @@
         (equipped ? '<span class="tm-badge">' + escapeHtml(translated("当前装备")) + '</span>' : '') + '</button>';
     }).join("") || '<div class="tm-note">' + escapeHtml(translated(slot ? "当前槽位没有可选装备" : "当前角色没有此类槽位")) + '</div>';
     var equipControls = '<div class="tm-equip-controls">' +
-      '<div class="tm-equip-select-row"><select id="tm-equip-kind" class="tm-select" aria-label="' + escapeHtml(translated("装备类型")) + '">' + kindOptions + '</select>' +
-      '<select id="tm-equip-slot" class="tm-select" aria-label="' + escapeHtml(translated("装备槽位")) + '">' + slotOptions + '</select></div>' +
-      '<div class="tm-equip-change-row">' + textInput("tm-equip-id", context.equipItemId, "number", 'placeholder="装备 ID"') + button("更换", "change-equip", slot ? "primary" : "", slot ? "" : "disabled") + '</div></div>';
+      '<select id="tm-equip-kind" class="tm-select" aria-label="' + escapeHtml(translated("装备类型")) + '">' + kindOptions + '</select>' +
+      '<select id="tm-equip-slot" class="tm-select" aria-label="' + escapeHtml(translated("装备槽位")) + '">' + slotOptions + '</select>' +
+      textInput("tm-equip-id", context.equipItemId, "number", 'placeholder="装备 ID"') +
+      button("更换", "change-equip", slot ? "primary" : "", slot ? "" : "disabled") + '</div>';
     section.innerHTML = '<div class="tm-equip-page">' + card("装备", equipControls, "tm-equip-control-card") +
       '<div class="tm-equip-columns">' +
       card("当前装备", '<div class="tm-list tm-equip-slots">' + currentRows + '</div>', "tm-equip-data-card") +
@@ -287,18 +310,23 @@
   }
   function renderActorCollectionList(kind) {
     var isSkill = kind === "skills";
-    var list = root.querySelector(isSkill ? "#tm-skill-list" : "#tm-state-list");
-    if (!list) return;
+    var knownList = root.querySelector(isSkill ? "#tm-skill-known" : "#tm-state-active");
+    var availableList = root.querySelector(isSkill ? "#tm-skill-available" : "#tm-state-available");
+    if (!knownList || !availableList) return;
     var query = String(inputValue(isSkill ? "tm-skill-query" : "tm-state-query") || "").trim().toLowerCase();
     var entries = isSkill ? context.actorSkillEntries : context.actorStateEntries;
-    list.innerHTML = (entries || []).filter(function (entry) {
+    var matches = (entries || []).filter(function (entry) {
       return !query || String(entry.name).toLowerCase().indexOf(query) >= 0 || String(entry.id).indexOf(query) >= 0;
-    }).map(function (entry) {
-      var enabled = !!entry.enabled;
+    });
+    function renderRows(rows, enabled) {
       var action = isSkill ? (enabled ? "forget-skill" : "learn-skill") : (enabled ? "remove-state" : "add-state");
       var label = isSkill ? (enabled ? "遗忘" : "学习") : (enabled ? "移除" : "附加");
-      return '<div class="tm-item"><span class="tm-name">#' + entry.id + ' ' + escapeHtml(entry.name) + '</span>' + button(label, action, enabled ? "" : "primary", 'data-id="' + entry.id + '"') + '</div>';
-    }).join("") || '<div class="tm-note">没有匹配项目</div>';
+      return rows.map(function (entry) {
+        return '<div class="tm-item"><span class="tm-name">#' + entry.id + ' ' + escapeHtml(entry.name) + '</span>' + button(translated(label), action, enabled ? "" : "primary", 'data-id="' + entry.id + '"') + '</div>';
+      }).join("") || '<div class="tm-note">' + escapeHtml(translated(query ? "没有匹配项目" : (isSkill ? (enabled ? "没有已学技能" : "没有可学习技能") : (enabled ? "没有当前状态" : "没有可附加状态")))) + '</div>';
+    }
+    knownList.innerHTML = renderRows(matches.filter(function (entry) { return !!entry.enabled; }), true);
+    availableList.innerHTML = renderRows(matches.filter(function (entry) { return !entry.enabled; }), false);
   }
   function refreshActorCollection(kind, entries) {
     if (kind === "skills") context.actorSkillEntries = entries || [];
