@@ -2071,7 +2071,11 @@ module AnyPlayFastFiles
   @slowfs = {}
   class << self
     attr_reader :short
-    def forget; @short.clear; end
+    def forget
+      @short.clear
+      @yes.clear
+      @dirs.clear
+    end
     def timed(path, orig)
       t0 = AnyPlayFastFiles.now
       v = orig.call(path)
@@ -6219,6 +6223,16 @@ module TyranorCheats
       nil
     end
 
+    # Save files can be touched by the modifier while the game's file-existence
+    # cache is warm. Use stat for save management so the picker always reflects
+    # the actual filesystem rather than a cached File.file? answer.
+    def save_file_exists?(path)
+      File.stat(path)
+      true
+    rescue Errno::ENOENT, Errno::ENOTDIR
+      false
+    end
+
     def save_slots_supported?
       if ess?
         has_save = Object.private_method_defined?(:pbSave) || Object.method_defined?(:pbSave)
@@ -6353,7 +6367,7 @@ module TyranorCheats
       slot_ids.each do |id|
         path = save_slot_path(id)
         next if path.to_s.empty?
-        exists = File.file?(path) rescue false
+        exists = save_file_exists?(path) rescue false
         modified = exists ? ((File.mtime(path).to_i rescue 0)) : 0
         label = ess? ? (id == 1 ? "Game.rxdata" : "Game_#{id}.rxdata") : File.basename(path)
         out << "S\t#{id}\t#{exists ? 1 : 0}\t#{id == current ? 1 : 0}\t#{modified}\t#{wire_text(label)}"
@@ -6423,7 +6437,7 @@ module TyranorCheats
       return "Enter a valid save slot." unless valid_save_slot_id?(id)
       path = save_slot_path(id)
       return "This game doesn't expose that save slot." if path.to_s.empty?
-      return "That save slot is empty." unless File.file?(path)
+      return "That save slot is empty." unless save_file_exists?(path)
       result = select_save_slot(id)
       return result unless result == "ok"
       if ess?
@@ -6471,9 +6485,10 @@ module TyranorCheats
       return "Enter a valid save slot." unless valid_save_slot_id?(id)
       path = save_slot_path(id)
       return "This game doesn't expose that save slot." if path.to_s.empty?
-      return "That save slot is empty." unless File.file?(path)
+      return "That save slot is empty." unless save_file_exists?(path)
       removed = File.delete(path)
-      still_exists = File.file?(path) rescue false
+      AnyPlayFastFiles.forget if AnyPlayFastFiles.respond_to?(:forget)
+      still_exists = save_file_exists?(path)
       AnyPlayLog.write("Cheat save delete id=#{id} path=#{path} removed=#{removed} exists_after=#{still_exists}") rescue nil
       return "Couldn't delete save slot: file still exists after deletion." if still_exists
       "Save slot #{id} deleted"

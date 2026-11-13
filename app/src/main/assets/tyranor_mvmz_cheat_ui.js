@@ -778,7 +778,7 @@
     content.innerHTML = card("存档管理", '<div id="tm-save-list" class="tm-list"><div class="tm-note">读取中…</div></div>');
     run(function () { return mod.listSaveSlots(); }, function (slots) {
       root.querySelector("#tm-save-list").innerHTML = slots.map(function (slot) {
-        return '<div class="tm-item"><span class="tm-name">存档 ' + slot.id + (slot.exists ? ' · ' + escapeHtml(slot.playtime || slot.title || '已有数据') : ' · 空') + '</span>' + button("保存", "save", "primary", 'data-id="' + slot.id + '"') + (slot.exists ? button("读取", "load", "", 'data-id="' + slot.id + '"') + button("删除", "delete-save", "danger", 'data-id="' + slot.id + '"') : '') + '</div>';
+        return '<div class="tm-item"><span class="tm-name">' + escapeHtml(translated("存档 ")) + slot.id + (slot.exists ? ' · ' + escapeHtml(slot.playtime || slot.title || translated("已有数据")) : ' · ' + escapeHtml(translated("空"))) + '</span>' + button(translated(slot.exists ? "覆盖" : "保存"), "save", "primary", 'data-id="' + slot.id + '"') + (slot.exists ? button(translated("读取"), "load", "", 'data-id="' + slot.id + '"') + button(translated("删除"), "delete-save", "danger", 'data-id="' + slot.id + '"') : '') + '</div>';
       }).join("");
     });
   }
@@ -972,7 +972,10 @@
     if (action === "escape") { if (!isInBattleNow()) return; return run(mod.forceEscape, close); }
     if (action === "save") return run(function () { return mod.saveGame(node.dataset.id); }, function () { toast("保存完成"); renderSave(root.querySelector(".tm-content")); });
     if (action === "load") return run(function () { return mod.loadGame(node.dataset.id); }, function () { toast("读取完成"); close(); });
-    if (action === "delete-save") return run(function () { return mod.deleteSave(node.dataset.id); }, function () { toast("存档已删除"); renderSave(root.querySelector(".tm-content")); });
+    if (action === "delete-save") return run(function () { return mod.deleteSave(node.dataset.id); }, function () { toast("存档已删除"); }).then(function () {
+      var content = root && root.querySelector(".tm-content");
+      if (content) renderSave(content);
+    });
     if (action === "enter-keys") {
       var bridge = inputBridge();
       if (!bridge) { toast("当前未启用虚拟按键", true); return; }
