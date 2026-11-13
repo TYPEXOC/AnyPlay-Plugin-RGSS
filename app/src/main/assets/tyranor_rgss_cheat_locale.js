@@ -4,6 +4,7 @@
   var languageTag = String(window.TyranorModLanguageTag || "").toLowerCase();
   var language = languageTag.indexOf("en") === 0 ? "en" : languageTag.indexOf("ja") === 0 ? "ja" : "zh";
   var dictionaries = {
+    zh: { "装备动作": "装备", "卸下动作": "卸下" },
     en: {
       "Tyranor RGSS 修改器": "Tyranor RGSS Cheats",
       "RPG Maker 修改器": "RPG Maker Cheats",
@@ -36,7 +37,7 @@
       "没有已学技能": "No learned skills", "没有可学习技能": "No skills available to learn", "没有当前状态": "No active states", "没有可附加状态": "No states available to add",
       "技能 ID": "Skill ID", "学习": "Learn", "遗忘": "Forget", "状态 ID": "State ID", "附加": "Add", "移除": "Remove",
       "搜索技能名称或 ID": "Search skills by name or ID", "搜索状态名称或 ID": "Search states by name or ID",
-      "槽位": "Slot", "武器": "Weapon", "护甲": "Armor", "装备 ID": "Equipment ID", "装备 ID，0=卸下": "Equipment ID (0 to unequip)", "装备槽位": "Equipment slot", "装备类型": "Equipment type", "选择装备": "Select equipment", "当前装备": "Current equipment", "当前装备：": "Equipped:", "当前槽位装备": "Equipped slots", "可选武器": "Available weapons", "可选护甲": "Available armor", "点击条目填入装备编号": "Tap an item to fill its ID", "当前槽位没有可选装备": "No compatible equipment is available for this slot", "当前角色没有此类槽位": "This character has no slot for this type", "卸下装备": "Unequip", "没有可选装备": "No available equipment", "当前角色没有可修改的装备槽位": "This character has no editable equipment slots", "更换": "Change",
+      "槽位": "Slot", "武器": "Weapon", "护甲": "Armor", "装备 ID": "Equipment ID", "装备 ID，0=卸下": "Equipment ID (0 to unequip)", "装备槽位": "Equipment slot", "装备类型": "Equipment type", "选择装备": "Select equipment", "当前装备": "Current equipment", "当前装备：": "Equipped:", "当前槽位装备": "Equipped slots", "可选武器": "Available weapons", "可选护甲": "Available armor", "选择左侧槽位后，点击装备": "Choose a slot on the left, then tap Equip", "当前槽位没有可选装备": "No compatible equipment is available for this slot", "当前角色没有此类槽位": "This character has no slot for this type", "卸下装备": "Unequip", "装备动作": "Equip", "卸下动作": "Unequip", "没有可选装备": "No available equipment", "当前角色没有可修改的装备槽位": "This character has no editable equipment slots", "更换": "Change",
       "无": "None", "开关与变量": "Switches and variables", "开关": "Switch", "变量": "Variable", "设为开": "Set on", "设为关": "Set off", "名称或 ID": "Name or ID",
       "地图": "Map", "事件": "Events", "地图 ID": "Map ID", "传送": "Warp", "地图操作": "Map actions", "传送到事件": "Warp to event", "事件详情": "Event details", "独立开关": "Self switch", "独立开关全开": "Enable all self-switches", "独立开关全关": "Disable all self-switches", "事件操作": "Event actions", "浏览": "Browse",
       "搜索地图名称 / ID": "Search map name or ID", "搜索 ID / 名称": "Search ID or name", "你在这里": "Current location",
@@ -60,7 +61,7 @@
       "可复制、删除按键，或恢复默认": "Copy or delete controls, or restore defaults", "保存后立即生效": "Changes take effect after saving",
       "进入按键编辑": "Edit controls", "恢复默认": "Restore defaults", "当前未启用虚拟按键。可在应用的引擎设置中开启。": "Virtual controls are disabled. Enable them in the app's engine settings.",
       "设置已保存": "Setting saved", "金币已修改": "Gold updated", "金币已拉满": "Gold maxed", "队伍已恢复": "Party recovered",
-      "数量已修改": "Quantity updated", "角色已恢复": "Character recovered", "队伍成员已更新": "Party membership updated", "属性已修改": "Stats updated", "装备已更换": "Equipment changed",
+      "数量已修改": "Quantity updated", "角色已恢复": "Character recovered", "队伍成员已更新": "Party membership updated", "属性已修改": "Stats updated", "装备已更换": "Equipment changed", "装备已卸下": "Equipment unequipped",
       "系统值已修改": "System value updated", "独立开关 A–D 已全开": "Self switches A–D enabled", "独立开关 A–D 已全关": "Self switches A–D disabled",
       "已预约传送": "Warp queued", "保存完成": "Save complete", "读取完成": "Load complete", "存档已删除": "Save deleted", "已恢复默认": "Defaults restored",
       "当前未启用虚拟按键": "Virtual controls are disabled", "RGSS 修改器桥未连接": "RGSS cheat bridge is unavailable",
@@ -99,7 +100,7 @@
       "没有已学技能": "習得済みスキルはありません", "没有可学习技能": "習得できるスキルはありません", "没有当前状态": "有効なステートはありません", "没有可附加状态": "追加できるステートはありません",
       "技能 ID": "スキル ID", "学习": "習得", "遗忘": "忘れる", "状态 ID": "ステート ID", "附加": "追加", "移除": "解除",
       "搜索技能名称或 ID": "スキル名または ID を検索", "搜索状态名称或 ID": "ステート名または ID を検索",
-      "槽位": "スロット", "武器": "武器", "护甲": "防具", "装备 ID": "装備 ID", "装备 ID，0=卸下": "装備 ID（0 で解除）", "装备槽位": "装備スロット", "装备类型": "装備タイプ", "选择装备": "装備を選択", "当前装备": "現在の装備", "当前装备：": "装備中:", "当前槽位装备": "装備中のスロット", "可选武器": "選択できる武器", "可选护甲": "選択できる防具", "点击条目填入装备编号": "項目をタップして ID を入力", "当前槽位没有可选装备": "このスロットに装備できるアイテムはありません", "当前角色没有此类槽位": "この種類の装備スロットはありません", "卸下装备": "装備を外す", "没有可选装备": "選択できる装備がありません", "当前角色没有可修改的装备槽位": "変更できる装備スロットがありません", "更换": "変更",
+      "槽位": "スロット", "武器": "武器", "护甲": "防具", "装备 ID": "装備 ID", "装备 ID，0=卸下": "装備 ID（0 で解除）", "装备槽位": "装備スロット", "装备类型": "装備タイプ", "选择装备": "装備を選択", "当前装备": "現在の装備", "当前装备：": "装備中:", "当前槽位装备": "装備中のスロット", "可选武器": "選択できる武器", "可选护甲": "選択できる防具", "选择左侧槽位后，点击装备": "左側のスロットを選び、装備をタップ", "当前槽位没有可选装备": "このスロットに装備できるアイテムはありません", "当前角色没有此类槽位": "この種類の装備スロットはありません", "卸下装备": "装備を外す", "装备动作": "装備", "卸下动作": "解除", "没有可选装备": "選択できる装備がありません", "当前角色没有可修改的装备槽位": "変更できる装備スロットがありません", "更换": "変更",
       "无": "なし", "开关与变量": "スイッチと変数", "开关": "スイッチ", "变量": "変数", "设为开": "オンにする", "设为关": "オフにする", "名称或 ID": "名前または ID",
       "事件": "イベント", "地图 ID": "マップ ID", "传送": "移動", "地图操作": "マップ操作", "传送到事件": "イベントへ移動", "事件详情": "イベント詳細", "独立开关": "セルフスイッチ", "独立开关全开": "セルフスイッチをすべてオン", "独立开关全关": "セルフスイッチをすべてオフ", "事件操作": "イベント操作", "浏览": "一覧",
       "搜索地图名称 / ID": "マップ名 / ID を検索", "搜索 ID / 名称": "ID / 名前を検索", "你在这里": "現在地",
@@ -123,7 +124,7 @@
       "可复制、删除按键，或恢复默认": "ボタンの複製・削除、初期化が可能", "保存后立即生效": "保存後すぐに反映",
       "进入按键编辑": "ボタンを編集", "恢复默认": "初期設定に戻す", "当前未启用虚拟按键。可在应用的引擎设置中开启。": "仮想ボタンは無効です。アプリのエンジン設定で有効にできます。",
       "设置已保存": "設定を保存しました", "金币已修改": "所持金を変更しました", "金币已拉满": "所持金を最大にしました", "队伍已恢复": "パーティを回復しました",
-      "数量已修改": "数量を変更しました", "角色已恢复": "キャラクターを回復しました", "队伍成员已更新": "パーティを更新しました", "属性已修改": "能力値を変更しました", "装备已更换": "装備を変更しました",
+      "数量已修改": "数量を変更しました", "角色已恢复": "キャラクターを回復しました", "队伍成员已更新": "パーティを更新しました", "属性已修改": "能力値を変更しました", "装备已更换": "装備を変更しました", "装备已卸下": "装備を外しました",
       "系统值已修改": "システム値を変更しました", "独立开关 A–D 已全开": "セルフスイッチ A–D をオンにしました", "独立开关 A–D 已全关": "セルフスイッチ A–D をオフにしました",
       "已预约传送": "移動を予約しました", "保存完成": "保存しました", "读取完成": "読み込みました", "存档已删除": "セーブを削除しました", "已恢复默认": "初期設定に戻しました",
       "当前未启用虚拟按键": "仮想ボタンは無効です", "RGSS 修改器桥未连接": "RGSS 改造ブリッジに接続できません",

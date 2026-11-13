@@ -13,7 +13,7 @@
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
   var goldCommitPending = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", equipItemId: null, quickSection: "角色与资源", inBattle: false, itemKind: "item", itemEntries: [], selectedItemId: null, systemKind: "switch", mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemEntries: [], selectedItemId: null, systemKind: "switch", mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -315,30 +315,17 @@
   function renderActorEquipments(actor, section) {
     var equips = mod.actorEquips(actor.id) || [];
     if (!equips.length) {
-      section.innerHTML = card("装备", '<div class="tm-note">当前角色没有可修改的装备槽位</div>');
+      section.innerHTML = card(translated("装备"), '<div class="tm-note">' + escapeHtml(translated("当前角色没有可修改的装备槽位")) + '</div>');
       return;
     }
-    if (context.equipKind !== "weapon" && context.equipKind !== "armor") {
-      var initialSlot = equips.filter(function (entry) { return Number(entry.slot) === Number(context.equipSlot); })[0] || equips[0];
-      context.equipKind = initialSlot.type === "weapon" ? "weapon" : "armor";
-    }
-    var matchingSlots = equips.filter(function (entry) { return entry.type === context.equipKind; });
-    var slot = matchingSlots.filter(function (entry) { return Number(entry.slot) === Number(context.equipSlot); })[0] || matchingSlots[0] || null;
+    var slot = equips.filter(function (entry) { return Number(entry.slot) === Number(context.equipSlot); })[0] || equips[0] || null;
     context.equipSlot = slot ? Number(slot.slot) : null;
+    context.equipKind = slot && slot.type === "weapon" ? "weapon" : "armor";
     var candidates = slot ? (mod.equipCandidates(actor.id, Number(slot.slot)) || []) : [];
-    var slotOptions = matchingSlots.map(function (entry) {
-      var typeName = entry.slotName || translated(entry.type === "weapon" ? "武器" : "护甲");
-      var itemName = entry.name && entry.name !== "None" ? entry.name : translated("无");
-      var label = translated("槽位" + entry.slot + "：") + typeName + " · " + itemName;
-      return '<option value="' + Number(entry.slot) + '" ' + (slot && Number(entry.slot) === Number(slot.slot) ? "selected" : "") + '>' + escapeHtml(label) + '</option>';
-    }).join("") || '<option value="" selected disabled>' + escapeHtml(translated("当前角色没有此类槽位")) + '</option>';
-    var kindOptions = '<option value="weapon" ' + (context.equipKind === "weapon" ? "selected" : "") + '>' + escapeHtml(translated("武器")) + '</option>' +
-      '<option value="armor" ' + (context.equipKind === "armor" ? "selected" : "") + '>' + escapeHtml(translated("护甲")) + '</option>';
     var currentId = slot ? Number(slot.id) || 0 : 0;
     var currentKind = slot ? slot.type : context.equipKind;
     var currentRawName = slot && slot.name && slot.name !== "None" ? String(slot.name) : "";
     var currentName = slot && slot.name && slot.name !== "None" ? slot.name : translated("无");
-    if (context.equipItemId == null) context.equipItemId = currentId;
     var available = candidates.filter(function (entry) {
       return entry.kind === context.equipKind && Number(entry.id) > 0 &&
         (!context.hideEmptyEquipCandidates || String(entry.name || "").trim().length > 0);
@@ -353,22 +340,17 @@
       var entrySlotName = entry.slotName || translated(entryType);
       var itemName = entry.name && entry.name !== "None" ? entry.name : translated("无");
       var selected = slot && Number(entry.slot) === Number(slot.slot);
-      return '<button type="button" class="tm-item tm-equip-slot-option' + (selected ? ' selected' : '') + '" data-action="pick-equip-slot" data-id="' + Number(entry.slot) + '"><span class="tm-equip-slot-name">' + escapeHtml(translated("槽位" + entry.slot + "：") + entrySlotName) + '</span><span class="tm-equip-slot-item">' + escapeHtml(itemName) + '</span></button>';
+      var unequip = Number(entry.id) > 0 ? button(translated("卸下动作"), "unequip-equip", "", 'data-id="' + Number(entry.slot) + '"') : '<span class="tm-badge">' + escapeHtml(translated("无")) + '</span>';
+      return '<div class="tm-item tm-equip-slot-row' + (selected ? ' selected' : '') + '"><button type="button" class="tm-equip-slot-option" data-action="pick-equip-slot" data-id="' + Number(entry.slot) + '"><span class="tm-equip-slot-name">' + escapeHtml(translated("槽位" + entry.slot + "：") + entrySlotName) + '</span><span class="tm-equip-slot-item">' + escapeHtml(itemName) + '</span></button>' + unequip + '</div>';
     }).join("");
     var itemRows = available.map(function (entry) {
       var equipped = Number(entry.id) === currentId && currentKind === context.equipKind;
-      return '<button type="button" class="tm-item tm-equip-option" data-action="pick-equip" data-id="' + Number(entry.id) + '"><span class="tm-equip-option-name">#' + Number(entry.id) + ' ' + escapeHtml(entry.name) + '</span>' +
-        (equipped ? '<span class="tm-badge">' + escapeHtml(translated("当前装备")) + '</span>' : '') + '</button>';
+      return '<div class="tm-item tm-equip-option"><span class="tm-equip-option-name">#' + Number(entry.id) + ' ' + escapeHtml(entry.name) + '</span>' +
+        (equipped ? '<span class="tm-badge">' + escapeHtml(translated("当前装备")) + '</span>' : button(translated("装备动作"), "equip-candidate", "primary", 'data-id="' + Number(entry.id) + '"')) + '</div>';
     }).join("") || '<div class="tm-note">' + escapeHtml(translated(slot ? "当前槽位没有可选装备" : "当前角色没有此类槽位")) + '</div>';
-    var equipControls = '<div class="tm-equip-controls">' +
-      '<select id="tm-equip-kind" class="tm-select" aria-label="' + escapeHtml(translated("装备类型")) + '">' + kindOptions + '</select>' +
-      '<select id="tm-equip-slot" class="tm-select" aria-label="' + escapeHtml(translated("装备槽位")) + '">' + slotOptions + '</select>' +
-      textInput("tm-equip-id", context.equipItemId, "number", 'placeholder="装备 ID"') +
-      button("更换", "change-equip", slot ? "primary" : "", slot ? "" : "disabled") + '</div>';
-    section.innerHTML = '<div class="tm-equip-page">' + card("装备", equipControls, "tm-equip-control-card") +
-      '<div class="tm-equip-columns">' +
-      card("当前装备", '<div class="tm-list tm-equip-slots">' + currentRows + '</div>', "tm-equip-data-card") +
-      card(context.equipKind === "weapon" ? "可选武器" : "可选护甲", '<small class="tm-equip-hint">点击条目填入装备编号</small><div class="tm-list tm-equip-candidates">' + itemRows + '</div>', "tm-equip-data-card", hideEmptyToggle("toggle-hide-empty-equips", context.hideEmptyEquipCandidates)) +
+    section.innerHTML = '<div class="tm-equip-page"><div class="tm-equip-columns">' +
+      card(translated("当前装备"), '<div class="tm-list tm-equip-slots">' + currentRows + '</div>', "tm-equip-data-card") +
+      card(translated(context.equipKind === "weapon" ? "可选武器" : "可选护甲"), '<small class="tm-equip-hint">' + escapeHtml(translated("选择左侧槽位后，点击装备")) + '</small><div class="tm-list tm-equip-candidates">' + itemRows + '</div>', "tm-equip-data-card", hideEmptyToggle("toggle-hide-empty-equips", context.hideEmptyEquipCandidates)) +
       '</div></div>';
   }
   function renderActorCollectionList(kind) {
@@ -401,7 +383,7 @@
   function renderSystem(content) {
     var kind = '<select class="tm-select" id="tm-system-kind" data-action="system-kind"><option value="switch">开关</option><option value="variable">变量</option></select>';
     var header = '<div class="tm-lock-list-header tm-system-lock-header"><span>锁定</span><span>名称</span><span>当前值</span><span></span></div>';
-    content.innerHTML = card("开关与变量", '<div class="tm-row">' + kind + textInput("tm-system-query", "", "search", 'placeholder="名称或 ID"') + button("搜索", "render-system", "primary") + '</div>' + header + '<div id="tm-system-list" class="tm-list"></div>', "tm-fill-card", hideEmptyToggle("toggle-hide-empty-system", context.hideEmptySystemEntries));
+    content.innerHTML = card("开关与变量", '<div class="tm-row">' + kind + textInput("tm-system-query", "", "search", 'placeholder="名称或 ID"') + '</div>' + header + '<div id="tm-system-list" class="tm-list"></div>', "tm-fill-card", hideEmptyToggle("toggle-hide-empty-system", context.hideEmptySystemEntries));
     root.querySelector("#tm-system-kind").value = context.systemKind; loadSystem();
   }
   function loadSystem() {
@@ -854,7 +836,6 @@
       context.stateQuery = "";
       context.equipSlot = null;
       context.equipKind = "";
-      context.equipItemId = null;
       renderActorRoster();
       return renderActorBody(context.actorEntries || []);
     }
@@ -877,47 +858,29 @@
     if (action === "toggle-hide-empty-equips") { context.hideEmptyEquipCandidates = !!node.checked; return renderActorSection(); }
     if (action === "toggle-hide-empty-battle-enemies") { context.hideEmptyBattleEnemies = !!node.checked; return renderBattle(root.querySelector(".tm-content")); }
     if (action === "toggle-hide-empty-battle-actors") { context.hideEmptyBattleActors = !!node.checked; return renderBattle(root.querySelector(".tm-content")); }
-    if (action === "equip-slot") {
-      context.equipSlot = Number(node.value);
-      var selectedEquipSlot = (mod.actorEquips(context.actorId) || []).filter(function (entry) { return Number(entry.slot) === context.equipSlot; })[0];
-      context.equipKind = selectedEquipSlot && (selectedEquipSlot.type === "weapon" || selectedEquipSlot.type === "armor")
-        ? selectedEquipSlot.type : (context.equipSlot === 0 ? "weapon" : "armor");
-      context.equipItemId = selectedEquipSlot ? Number(selectedEquipSlot.id) || 0 : 0;
-      return renderActorSection();
-    }
-    if (action === "equip-kind") {
-      context.equipKind = node.value;
-      var kindSlots = (mod.actorEquips(context.actorId) || []).filter(function (entry) { return entry.type === context.equipKind; });
-      var nextSlot = kindSlots.filter(function (entry) { return Number(entry.slot) === Number(context.equipSlot); })[0] || kindSlots[0];
-      context.equipSlot = nextSlot ? Number(nextSlot.slot) : null;
-      context.equipItemId = nextSlot ? Number(nextSlot.id) || 0 : 0;
-      return renderActorSection();
-    }
     if (action === "pick-equip-slot") {
       context.equipSlot = Number(node.dataset.id);
       var pickedSlot = (mod.actorEquips(context.actorId) || []).filter(function (entry) { return Number(entry.slot) === context.equipSlot; })[0];
-      context.equipKind = pickedSlot && (pickedSlot.type === "weapon" || pickedSlot.type === "armor") ? pickedSlot.type : (context.equipSlot === 0 ? "weapon" : "armor");
-      context.equipItemId = pickedSlot ? Number(pickedSlot.id) || 0 : 0;
+      context.equipKind = pickedSlot && pickedSlot.type === "weapon" ? "weapon" : "armor";
       return renderActorSection();
-    }
-    if (action === "pick-equip") {
-      context.equipItemId = Number(node.dataset.id) || 0;
-      var equipIdInput = root.querySelector("#tm-equip-id");
-      if (equipIdInput) equipIdInput.value = String(context.equipItemId);
-      return;
     }
     if (action === "recover-actor") return run(function () { mod.recoverActor(context.actorId); }, function () { toast("角色已恢复"); renderActorBody(); });
     if (action === "set-stat") return run(function () { mod.setActorStat(context.actorId, node.dataset.key, inputValue("tm-stat-" + node.dataset.key)); }, function () { toast("属性已修改"); renderActorBody(); });
     if (action === "learn-skill" || action === "forget-skill") return run(function () { var skillId = Number(node.dataset.id); return action === "learn-skill" ? mod.learnSkill(context.actorId, skillId) : mod.forgetSkill(context.actorId, skillId); }, function (entries) { refreshActorCollection("skills", entries); });
     if (action === "add-state" || action === "remove-state") return run(function () { var stateId = Number(node.dataset.id); return action === "add-state" ? mod.addState(context.actorId, stateId) : mod.removeState(context.actorId, stateId); }, function (entries) { refreshActorCollection("states", entries); });
-    if (action === "change-equip") return run(function () {
-      if (!inputValue("tm-equip-slot")) throw new Error("当前角色没有此类装备槽位");
-      var slotIndex = Number(inputValue("tm-equip-slot")) || 0;
-      var itemId = Number(inputValue("tm-equip-id")) || 0;
-      var currentSlot = (mod.actorEquips(context.actorId) || []).filter(function (entry) { return Number(entry.slot) === slotIndex; })[0];
-      var kind = itemId > 0 ? inputValue("tm-equip-kind") : (currentSlot && currentSlot.type) || inputValue("tm-equip-kind");
-      mod.changeEquip(context.actorId, slotIndex, kind, itemId);
-    }, function () { context.equipItemId = null; toast("装备已更换"); renderActorBody(); });
+    if (action === "equip-candidate" || action === "unequip-equip") {
+      var slotIndex = action === "unequip-equip" ? Number(node.dataset.id) : Number(context.equipSlot);
+      var targetSlot = (mod.actorEquips(context.actorId) || []).filter(function (entry) { return Number(entry.slot) === slotIndex; })[0];
+      if (!targetSlot) { toast(translated("当前角色没有此类槽位"), true); return; }
+      var itemId = action === "unequip-equip" ? 0 : Number(node.dataset.id);
+      if (action === "unequip-equip" && !(Number(targetSlot.id) > 0)) return;
+      if (action === "equip-candidate" && !(itemId > 0)) return;
+      var equipKind = targetSlot.type === "weapon" ? "weapon" : "armor";
+      return run(function () { return mod.changeEquip(context.actorId, slotIndex, equipKind, itemId); }, function () {
+        toast(translated(action === "unequip-equip" ? "装备已卸下" : "装备已更换"));
+        renderActorBody();
+      });
+    }
     if (action === "system-kind" || action === "render-system") return loadSystem();
     if (action === "set-system") return run(function () { var id = node.dataset.id; if (context.systemKind === "switch") mod.setSwitch(id, checked("tm-system-" + id)); else { var raw = inputValue("tm-system-" + id); var value; try { value = JSON.parse(raw); } catch (_) { value = raw; } mod.setVariable(id, value); } }, function () { toast("系统值已修改"); loadSystem(); });
     if (action === "lock-system") {
@@ -1049,8 +1012,6 @@
         if (state) state.textContent = event.target.checked ? "设为开" : "设为关";
       }
       if (event.target.id === "tm-gold") applyGoldInput(event.target);
-      else if (event.target.id === "tm-equip-slot") handleAction("equip-slot", event.target);
-      else if (event.target.id === "tm-equip-kind") handleAction("equip-kind", event.target);
       else { var action = event.target.closest("[data-action]"); if (action) handleAction(action.dataset.action, action); }
       event.stopPropagation();
     });
@@ -1063,10 +1024,10 @@
     });
     root.addEventListener("input", function (event) {
       if (event.target.id === "tm-gold") fitGoldInput(event.target);
-      else if (event.target.id === "tm-equip-id") context.equipItemId = event.target.value;
       else if (event.target.id === "tm-actor-query") { context.actorQuery = event.target.value; renderActorRoster(); }
       else if (event.target.id === "tm-skill-query") { context.skillQuery = event.target.value; renderActorCollectionList("skills"); }
       else if (event.target.id === "tm-state-query") { context.stateQuery = event.target.value; renderActorCollectionList("states"); }
+      else if (event.target.id === "tm-system-query") loadSystem();
     });
     ["touchstart","touchmove","touchend","pointerdown","pointerup","mousedown","mouseup","keydown","keyup","wheel"].forEach(function (name) { root.addEventListener(name, block); });
     render();
