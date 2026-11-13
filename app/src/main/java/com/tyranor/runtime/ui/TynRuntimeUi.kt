@@ -48,6 +48,7 @@ class TynRuntimeUi(
     padEnabled: Boolean,
     private val primaryColor: Int,
     private val onPrimaryColor: Int,
+    private val darkMode: Boolean,
     cheatsEnabled: Boolean,
     private val copyTextEnabled: Boolean,
     private val speedUp: Int,
@@ -183,6 +184,9 @@ class TynRuntimeUi(
         activity,
         root,
         cheatController,
+        primaryColor = primaryColor,
+        onPrimaryColor = onPrimaryColor,
+        darkMode = darkMode,
         padAvailable = { true },
         enterPadEdit = {
             controller.setPadVisible(true)

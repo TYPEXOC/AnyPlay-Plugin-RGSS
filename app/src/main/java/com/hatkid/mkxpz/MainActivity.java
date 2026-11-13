@@ -92,6 +92,7 @@ public class MainActivity extends SDLActivity
     private static final String TYN_EXTRA_RTP_ROOT = "com.tyranor.runtime.extra.RTP_ROOT";
     private static final String TYN_EXTRA_THEME_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_PRIMARY_COLOR";
     private static final String TYN_EXTRA_THEME_ON_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_ON_PRIMARY_COLOR";
+    private static final String TYN_EXTRA_THEME_DARK_MODE = "com.tyranor.runtime.extra.THEME_DARK_MODE";
     private static final String TYN_EXTRA_SAVE_SESSION_ENDED_CALLBACK = "com.tyranor.runtime.extra.SAVE_SESSION_ENDED_CALLBACK";
     private static final String[] RUBY_187_LIBRARIES = {
         "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_sound", "openal", "fluidsynth", "ruby187", "mkxp-z-187"
@@ -113,6 +114,7 @@ public class MainActivity extends SDLActivity
     private int mSpeedUp = 1;
     private int mThemePrimaryColor = 0xFF18B978;
     private int mThemeOnPrimaryColor = 0xFFFFFFFF;
+    private boolean mThemeDarkMode;
     private String mPadProfileUri;
     private String mTranslationMapUri;
     private String mGameId;
@@ -305,6 +307,7 @@ public class MainActivity extends SDLActivity
             mTynRtpRoot = intent.getStringExtra(TYN_EXTRA_RTP_ROOT);
             mThemePrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_PRIMARY_COLOR, mThemePrimaryColor);
             mThemeOnPrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_ON_PRIMARY_COLOR, mThemeOnPrimaryColor);
+            mThemeDarkMode = intent.getBooleanExtra(TYN_EXTRA_THEME_DARK_MODE, mThemeDarkMode);
             mTranslationMapUri = intent.getStringExtra(TYN_EXTRA_TRANSLATION_MAP_URI);
             mGameId = intent.getStringExtra(TYN_EXTRA_GAME_ID);
             mTynGameTitle = intent.getStringExtra(TYN_EXTRA_TITLE);
@@ -1215,6 +1218,8 @@ public class MainActivity extends SDLActivity
     {
         // Must be before super.onCreate(): picks the game folder before SDL starts.
         Intent launchIntent = getIntent();
+        mThemeDarkMode = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+            == Configuration.UI_MODE_NIGHT_YES;
         applyTynUiLanguage(launchIntent);
         applyGameDirFromIntent(launchIntent);
 
@@ -1273,6 +1278,7 @@ public class MainActivity extends SDLActivity
                 mPadEnabled,
                 mThemePrimaryColor,
                 mThemeOnPrimaryColor,
+                mThemeDarkMode,
                 mCheatsEnabled,
                 mCopyTextEnabled,
                 mSpeedUp,

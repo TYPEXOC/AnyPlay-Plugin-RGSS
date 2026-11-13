@@ -30,6 +30,9 @@ class TyranorMvmzCheatPanel(
     private val activity: Activity,
     private val parent: FrameLayout,
     private val controller: TyranorCheatController,
+    private val primaryColor: Int,
+    private val onPrimaryColor: Int,
+    private val darkMode: Boolean,
     private val padAvailable: () -> Boolean,
     private val enterPadEdit: () -> Unit,
     private val resetPad: () -> Unit,
@@ -64,6 +67,7 @@ class TyranorMvmzCheatPanel(
                     super.onPageFinished(view, url)
                     if (destroyed || !url.endsWith(PANEL_ASSET)) return
                     pageLoaded = true
+                    applyTheme()
                     if (openRequested) openPanel()
                 }
             }
@@ -112,9 +116,24 @@ class TyranorMvmzCheatPanel(
 
     private fun openPanel() {
         if (!openRequested || destroyed) return
+        applyTheme()
         webView.evaluateJavascript("window.TyranorModUI && window.TyranorModUI.open();", null)
         keepRuntimeActionsOnTop()
     }
+
+    private fun applyTheme() {
+        val accent = cssColor(primaryColor)
+        val onAccent = cssColor(onPrimaryColor)
+        val theme = if (darkMode) "dark" else "light"
+        webView.evaluateJavascript(
+            "(function(){var r=document.documentElement;r.dataset.theme='$theme';" +
+                "r.style.setProperty('--tm-primary','$accent');" +
+                "r.style.setProperty('--tm-on-primary','$onAccent');})();",
+            null,
+        )
+    }
+
+    private fun cssColor(color: Int): String = "#%06X".format(color and 0x00FFFFFF)
 
     private fun closePanel(restoreFocus: Boolean) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
