@@ -13,7 +13,7 @@
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
   var goldCommitPending = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemEntries: [], selectedItemId: null, systemKind: "switch", mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -36,6 +36,10 @@
   function inputValue(id) { var node = root && root.querySelector("#" + id); return node ? node.value : ""; }
   function checked(id) { var node = root && root.querySelector("#" + id); return !!(node && node.checked); }
   function systemSwitchOn(value) { return value === true || value === 1 || String(value).toLowerCase() === "true" || String(value) === "1"; }
+  function isDashPlaceholder(value) {
+    var name = String(value == null ? "" : value).replace(/\s+/g, "");
+    return !!name && /^[\-‐‑‒–—―−﹣－_＿]+$/.test(name);
+  }
   function toast(message, error) {
     if (!root) return;
     var old = root.querySelector(".tm-toast"); if (old) old.remove();
@@ -213,7 +217,7 @@
     context.itemKind = inputValue("tm-item-kind") || context.itemKind;
     var result = mod.listDatabase(context.itemKind, inputValue("tm-item-query"), 0, 200);
     var list = root.querySelector("#tm-item-list");
-    context.itemEntries = result.values || [];
+    context.itemEntries = (result.values || []).filter(function (item) { return !isDashPlaceholder(item.name); });
     if (!context.itemEntries.some(function (item) { return Number(item.id) === Number(context.selectedItemId); })) {
       context.selectedItemId = context.itemEntries.length ? Number(context.itemEntries[0].id) : null;
     }
@@ -236,8 +240,8 @@
     detail.innerHTML = '<div class="tm-item-detail-heading"><h3>' + escapeHtml(translated("物品详情")) + '</h3><span class="tm-badge">#' + escapeHtml(item.id) + '</span></div>' +
       '<div class="tm-item-detail-info"><div class="tm-item-detail-name"><span>' + escapeHtml(translated("名称:")) + '</span><strong>' + escapeHtml(item.name || "—") + '</strong></div>' +
       '<div class="tm-item-detail-description"><span>' + escapeHtml(translated("描述:")) + '</span><p>' + escapeHtml(description) + '</p></div></div>' +
-      '<section class="tm-item-quantity-card"><h4>' + escapeHtml(translated("数量操作")) + '</h4><div class="tm-row"><label>' + escapeHtml(translated("当前数量")) + '<span class="tm-badge">' + escapeHtml(item.count) + '</span></label>' +
-      textInput("tm-detail-count", item.count, "number", 'min="0" inputmode="numeric"') + button(translated("应用"), "set-item", "primary", 'data-id="' + escapeHtml(item.id) + '"') + '</div></section>';
+      '<section class="tm-item-quantity-card"><div class="tm-item-quantity-heading"><h4>' + escapeHtml(translated("数量操作")) + '</h4><div class="tm-item-current-count"><span>' + escapeHtml(translated("当前数量")) + '</span><strong>' + escapeHtml(item.count) + '</strong></div></div>' +
+      '<div class="tm-item-quantity-control">' + textInput("tm-detail-count", item.count, "number", 'min="0" inputmode="numeric" aria-label="' + escapeHtml(translated("数量操作")) + '"') + button(translated("应用"), "set-item", "primary", 'data-id="' + escapeHtml(item.id) + '"') + '</div></section>';
   }
   function renderActors(content) {
     var actors = mod.listActors();
@@ -338,11 +342,11 @@
     var currentRawName = slot && slot.name && slot.name !== "None" ? String(slot.name) : "";
     var currentName = slot && slot.name && slot.name !== "None" ? slot.name : translated("无");
     var available = candidates.filter(function (entry) {
-      return entry.kind === context.equipKind && Number(entry.id) > 0 &&
+      return entry.kind === context.equipKind && Number(entry.id) > 0 && !isDashPlaceholder(entry.name) &&
         (!context.hideEmptyEquipCandidates || String(entry.name || "").trim().length > 0);
     });
     var currentCandidateExists = candidates.some(function (entry) { return entry.kind === currentKind && Number(entry.id) === currentId; });
-    if (slot && currentId > 0 && currentKind === context.equipKind && !currentCandidateExists &&
+    if (slot && currentId > 0 && currentKind === context.equipKind && !currentCandidateExists && !isDashPlaceholder(currentRawName) &&
       (!context.hideEmptyEquipCandidates || currentRawName.trim().length > 0)) {
       available.unshift({ kind: currentKind, id: currentId, name: currentName });
     }
@@ -373,6 +377,7 @@
     var entries = isSkill ? context.actorSkillEntries : context.actorStateEntries;
     var matches = (entries || []).filter(function (entry) {
       var name = String(entry.name || "");
+      if (isDashPlaceholder(name)) return false;
       if (isSkill && context.hideEmptySkills && !name.trim()) return false;
       return !query || name.toLowerCase().indexOf(query) >= 0 || String(entry.id).indexOf(query) >= 0;
     });
@@ -392,16 +397,23 @@
     renderActorCollectionList(kind);
   }
   function renderSystem(content) {
-    var kind = '<select class="tm-select" id="tm-system-kind" data-action="system-kind"><option value="switch">开关</option><option value="variable">变量</option></select>';
+    var kinds = [["switch", "开关"], ["variable", "变量"]];
+    var selectedKind = translated(context.systemKind === "switch" ? "开关" : "变量");
+    var options = kinds.map(function (entry) {
+      return '<button type="button" class="tm-system-kind-option' + (context.systemKind === entry[0] ? ' active' : '') + '" role="option" aria-selected="' + (context.systemKind === entry[0] ? 'true' : 'false') + '" data-action="select-system-kind" data-kind="' + entry[0] + '">' + escapeHtml(translated(entry[1])) + '</button>';
+    }).join("");
+    var kind = '<div class="tm-system-kind-picker"><button type="button" class="tm-system-kind-trigger" data-action="toggle-system-kind" aria-haspopup="listbox" aria-expanded="' + (context.systemKindExpanded ? 'true' : 'false') + '"><span>' + escapeHtml(selectedKind) + '</span><span class="tm-system-kind-arrow" aria-hidden="true">▾</span></button>' +
+      (context.systemKindExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + options + '</div>' : '') + '</div>';
     var header = '<div class="tm-lock-list-header tm-system-lock-header"><span>锁定</span><span>名称</span><span>当前值</span><span></span></div>';
-    content.innerHTML = card("开关与变量", '<div class="tm-row">' + kind + textInput("tm-system-query", "", "search", 'placeholder="名称或 ID"') + '</div>' + header + '<div id="tm-system-list" class="tm-list"></div>', "tm-fill-card", hideEmptyToggle("toggle-hide-empty-system", context.hideEmptySystemEntries));
-    root.querySelector("#tm-system-kind").value = context.systemKind; loadSystem();
+    content.innerHTML = card("开关与变量", '<div class="tm-row">' + kind + textInput("tm-system-query", context.systemQuery, "search", 'placeholder="名称或 ID"') + '</div>' + header + '<div id="tm-system-list" class="tm-list"></div>', "tm-fill-card", hideEmptyToggle("toggle-hide-empty-system", context.hideEmptySystemEntries));
+    loadSystem();
   }
   function loadSystem() {
-    context.systemKind = inputValue("tm-system-kind") || context.systemKind;
+    context.systemQuery = inputValue("tm-system-query");
     var includeUnnamed = !context.hideEmptySystemEntries;
-    var result = context.systemKind === "switch" ? mod.listSwitches(inputValue("tm-system-query"), 0, 200, includeUnnamed) : mod.listVariables(inputValue("tm-system-query"), 0, 200, includeUnnamed);
+    var result = context.systemKind === "switch" ? mod.listSwitches(context.systemQuery, 0, 200, includeUnnamed) : mod.listVariables(context.systemQuery, 0, 200, includeUnnamed);
     root.querySelector("#tm-system-list").innerHTML = result.values.filter(function (item) {
+      if (isDashPlaceholder(item.name)) return false;
       return !context.hideEmptySystemEntries || item.named !== false;
     }).map(function (item) {
       var name = String(item.name || (context.systemKind === "switch" ? "开关 " : "变量 ") + item.id);
@@ -901,7 +913,16 @@
         renderActorBody();
       });
     }
-    if (action === "system-kind" || action === "render-system") return loadSystem();
+    if (action === "toggle-system-kind") {
+      context.systemKindExpanded = !context.systemKindExpanded;
+      return renderSystem(root.querySelector(".tm-content"));
+    }
+    if (action === "select-system-kind") {
+      context.systemKind = node.dataset.kind === "variable" ? "variable" : "switch";
+      context.systemKindExpanded = false;
+      return renderSystem(root.querySelector(".tm-content"));
+    }
+    if (action === "render-system") return loadSystem();
     if (action === "set-system-switch") {
       var nextSwitchValue = !!node.checked;
       var previousSwitchValue = node.dataset.currentValue === "1";
@@ -1037,6 +1058,13 @@
           if (browseQuery) browseQuery.value = "";
           loadBrowse();
         }
+      }
+      if (context.systemKindExpanded && !event.target.closest(".tm-system-kind-picker")) {
+        context.systemKindExpanded = false;
+        var systemMenu = root.querySelector(".tm-system-kind-menu");
+        var systemTrigger = root.querySelector(".tm-system-kind-trigger");
+        if (systemMenu) systemMenu.remove();
+        if (systemTrigger) systemTrigger.setAttribute("aria-expanded", "false");
       }
       var tab = event.target.closest("[data-tab]"); if (tab) { activeTab = tab.dataset.tab; render(); return; }
       var action = event.target.closest("[data-action]");
