@@ -50,10 +50,12 @@
     getCoins: function () { return Number(invoke("getCoins") || 0); },
     setGold: function (value) { return invoke("setGold", [value]); },
     setCoins: function (value) { return invoke("setCoins", [value]); },
-    listDatabase: function (kind, query, offset, limit) {
-      var values = invoke("listDatabase", [kind, query, offset, limit]);
+    listDatabase: function (kind, query, offset, limit, category) {
+      var values = invoke("listDatabase", [kind, query, offset, limit, category || ""]);
       return values || { total: 0, values: [] };
     },
+    listBagCategories: function () { return invoke("listBagCategories") || []; },
+    give: function (kind, key, amount) { return invoke("give", [kind, key, amount]); },
     itemCount: function (kind, id) { return invoke("itemCount", [kind, id]); },
     setItemCount: function (kind, id, value) { return invoke("setItemCount", [kind, id, value]); },
     setItemLock: function (kind, id, locked) { return invoke("setItemLock", [kind, id, !!locked]); },
@@ -67,10 +69,14 @@
     setPokemonValue: function (index, field, value) { return invoke("setPokemonValue", [index, field, value]); },
     recoverPokemon: function (index) { return invoke("recoverPokemon", [index]); },
     listPokemonMoves: function (index) { return invoke("listPokemonMoves", [index]) || []; },
+    listPokemonTraits: function (index) { return invoke("listPokemonTraits", [index]) || []; },
     listPokemonMoveCandidates: function () { return invoke("listPokemonMoveCandidates") || []; },
     listPokemonStatuses: function (index) { return invoke("listPokemonStatuses", [index]) || []; },
     listPokemonStats: function (index) { return invoke("listPokemonStats", [index]) || { ivs: [], evs: [] }; },
     setPokemonMove: function (index, slot, key) { return invoke("setPokemonMove", [index, slot, key]); },
+    setPokemonMovePp: function (index, slot, field, value) { return invoke("setPokemonMovePp", [index, slot, field, value]); },
+    setPokemonTrait: function (index, field, key) { return invoke("setPokemonTrait", [index, field, key]); },
+    setPokemonOrder: function (index, target) { return invoke("setPokemonOrder", [index, target]); },
     setPokemonStatus: function (index, key) { return invoke("setPokemonStatus", [index, key]); },
     setPokemonItem: function (index, key) { return invoke("setPokemonItem", [index, key]); },
     recoverParty: function () { return invoke("recoverParty"); },

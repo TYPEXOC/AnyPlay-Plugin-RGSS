@@ -3477,6 +3477,146 @@ module TyranorCheats
       []
     end
 
+    def pokemon_obtain_supported?
+      ess? && trainer && (Object.private_method_defined?(:pbAddPokemonSilent) ||
+        Object.private_method_defined?(:pbAddPokemon))
+    rescue Exception
+      false
+    end
+
+    def pokemon_move_class
+      return Pokemon::Move if defined?(Pokemon::Move)
+      return PokeBattle_Move if defined?(PokeBattle_Move)
+      nil
+    rescue Exception
+      nil
+    end
+
+    def max_pokemon_moves(pokemon = nil)
+      value = if defined?(Pokemon::MAX_MOVES)
+                Pokemon::MAX_MOVES.to_i
+              elsif defined?(PokeBattle_Pokemon::MAX_MOVES)
+                PokeBattle_Pokemon::MAX_MOVES.to_i
+              else
+                4
+              end
+      count = [[value, 1].max, 12].min
+      moves = pokemon && pokemon.respond_to?(:moves) ? pokemon.moves : nil
+      moves.is_a?(Array) ? [count, moves.length].max : count
+    rescue Exception
+      4
+    end
+
+    def pokemon_move_pp_supported?(pokemon = nil)
+      move = pokemon && pokemon.respond_to?(:moves) ? (pokemon.moves || []).find { |entry| entry } : nil
+      klass = move ? move.class : pokemon_move_class
+      klass && class_method?(klass, :pp) && class_method?(klass, :pp=) &&
+        (class_method?(klass, :total_pp) || class_method?(klass, :totalpp))
+    rescue Exception
+      false
+    end
+
+    def pokemon_trait_options(pokemon, field)
+      case field
+      when 'nature'
+        return [] unless pokemon && pokemon.respond_to?(:nature) && pokemon.respond_to?(:nature=)
+        out = []
+        if defined?(GameData::Nature) && GameData::Nature.respond_to?(:each)
+          GameData::Nature.each do |entry|
+            out << [entry.id, entry.name] if entry.respond_to?(:id) && entry.respond_to?(:name)
+          end
+        elsif defined?(PBNature) && PBNature.respond_to?(:maxValue) && PBNature.respond_to?(:getName)
+          (0...PBNature.maxValue.to_i).each do |id|
+            name = (PBNature.getName(id) rescue '').to_s
+            out << [id, name] unless name.empty?
+          end
+        end
+        out
+      when 'ability'
+        return [] unless pokemon && pokemon.respond_to?(:ability) && pokemon.respond_to?(:ability=)
+        values = if pokemon && pokemon.respond_to?(:getAbilityList)
+                   pokemon.getAbilityList
+                 elsif gd? && pokemon && defined?(GameData::Species)
+                   data = (GameData::Species.get(pokemon.species) rescue nil)
+                   natural = data && data.respond_to?(:abilities) ? data.abilities : []
+                   hidden = data && data.respond_to?(:hidden_abilities) ? data.hidden_abilities : []
+                   (natural || []).each_with_index.map { |id, index| [id, index] } +
+                     (hidden || []).each_with_index.map { |id, index| [id, index + 2] }
+                 else
+                   []
+                 end
+        values.map do |entry|
+          id = entry.is_a?(Array) ? entry[0] : entry
+          index = entry.is_a?(Array) ? entry[1] : nil
+          name = if defined?(GameData::Ability)
+                   ability = (GameData::Ability.get(id) rescue nil)
+                   ability.name if ability && ability.respond_to?(:name)
+                 elsif defined?(PBAbilities) && PBAbilities.respond_to?(:getName)
+                   (PBAbilities.getName(id) rescue nil)
+                 end
+          next if name.to_s.empty?
+          index_label = index.nil? ? '' : " (#{index.to_i >= 2 ? '隐藏' : '普通'}#{index.to_i >= 2 ? index.to_i - 1 : index.to_i + 1})"
+          [id, "#{name}#{index_label}"]
+        end.compact
+      when 'form'
+        return [] unless pokemon && pokemon.respond_to?(:form) && pokemon.respond_to?(:form=) &&
+          defined?(GameData::Species) && GameData::Species.respond_to?(:each)
+        out = []
+        GameData::Species.each do |entry|
+          next unless entry.respond_to?(:species) && entry.species.to_s == pokemon.species.to_s
+          next unless entry.respond_to?(:form)
+          form_name = entry.respond_to?(:form_name) ? entry.form_name.to_s : ''
+          label = form_name.empty? ? (entry.respond_to?(:name) ? entry.name.to_s : "Form #{entry.form}") : form_name
+          out << [entry.form, label]
+        end
+        out = out.uniq { |entry| entry[0].to_s }
+        out.length > 1 ? out : []
+      when 'gender'
+        return [] unless pokemon && pokemon.respond_to?(:gender) && pokemon.respond_to?(:gender=)
+        return [] if pokemon.respond_to?(:singleGendered?) && pokemon.singleGendered?
+        [[0, '雄性'], [1, '雌性']]
+      when 'shiny'
+        return [] unless pokemon && pokemon.respond_to?(:shiny?) && pokemon.respond_to?(:shiny=)
+        [[0, '否'], [1, '是']]
+      when 'superShiny'
+        return [] unless pokemon && pokemon.respond_to?(:super_shiny?) && pokemon.respond_to?(:super_shiny=)
+        [[0, '否'], [1, '是']]
+      else
+        []
+      end
+    rescue Exception
+      []
+    end
+
+    def pokemon_trait_value(pokemon, field)
+      value = case field
+              when 'nature'
+                nature = pokemon.nature
+                nature.respond_to?(:id) ? nature.id : nature
+              when 'ability'
+                if pokemon.respond_to?(:ability_id)
+                  pokemon.ability_id
+                else
+                  ability = pokemon.ability
+                  ability.respond_to?(:id) ? ability.id : ability
+                end
+              when 'form' then pokemon.form
+              when 'gender' then pokemon.gender
+              when 'shiny' then pokemon.shiny? ? 1 : 0
+              when 'superShiny' then pokemon.super_shiny? ? 1 : 0
+              end
+      value.to_s
+    rescue Exception
+      ''
+    end
+
+    def pokemon_trait_label(pokemon, field, key)
+      option = pokemon_trait_options(pokemon, field).find { |entry| entry[0].to_s == key.to_s }
+      option ? option[1].to_s : key.to_s
+    rescue Exception
+      key.to_s
+    end
+
     def in_battle?
       case engine
       when :essentials then !@battle.nil?
@@ -3597,6 +3737,9 @@ module TyranorCheats
       when 'pokemon_value' then set_pokemon_value(a, b)
       when 'pokemon_recover' then recover_pokemon(a)
       when 'pokemon_move' then set_pokemon_move(a, b)
+      when 'pokemon_move_pp' then set_pokemon_move_pp(a, b)
+      when 'pokemon_trait' then set_pokemon_trait(a, b)
+      when 'pokemon_order' then set_pokemon_order(a, b)
       when 'pokemon_status' then set_pokemon_status(a, b)
       when 'pokemon_item' then set_pokemon_item(a, b)
       when 'actor_value' then set_actor_value(a, b)
@@ -4079,7 +4222,13 @@ module TyranorCheats
         return "Trainer data isn't ready yet. Start or load a game first." unless trainer
         lv = [[qty, 1].max, max_level].min
         sp = gd? ? key.to_sym : key.to_i
-        r = pbAddPokemonSilent(sp, lv)
+        r = if Object.private_method_defined?(:pbAddPokemonSilent)
+              pbAddPokemonSilent(sp, lv)
+            elsif Object.private_method_defined?(:pbAddPokemon)
+              pbAddPokemon(sp, lv)
+            else
+              false
+            end
         r ? "Pokemon added (level #{lv})" : "Couldn't add it. Your party and storage may be full."
       else
         NOPE
@@ -4119,6 +4268,49 @@ module TyranorCheats
       "item #{id}"
     end
 
+    def essentials_item_pocket_id(key)
+      pocket = nil
+      if gd?
+        item = (GameData::Item.get(key.to_sym) rescue nil) if defined?(GameData::Item)
+        pocket = item.pocket if item && item.respond_to?(:pocket)
+      elsif defined?(PBItems)
+        if PBItems.respond_to?(:getPocket)
+          pocket = (PBItems.getPocket(key.to_i) rescue nil)
+        elsif PBItems.respond_to?(:get_pocket)
+          pocket = (PBItems.get_pocket(key.to_i) rescue nil)
+        end
+        if pocket.nil? && Object.private_method_defined?(:pbGetPocket)
+          pocket = (Object.new.send(:pbGetPocket, key.to_i) rescue nil)
+        end
+        if pocket.nil? && Object.private_method_defined?(:pbGetItemPocket)
+          pocket = (Object.new.send(:pbGetItemPocket, key.to_i) rescue nil)
+        end
+      end
+      pocket.to_i
+    rescue Exception
+      0
+    end
+
+    def essentials_item_pocket_name(key)
+      id = essentials_item_pocket_id(key)
+      names = if defined?(Settings::BAG_POCKET_NAMES)
+                Settings::BAG_POCKET_NAMES
+              elsif defined?(Settings::POCKET_NAMES)
+                Settings::POCKET_NAMES
+              elsif Object.private_method_defined?(:pbPocketNames)
+                (Object.new.send(:pbPocketNames) rescue nil)
+              end
+      name = names && names[id] if names.respond_to?(:[])
+      return wire_text(name) unless name.to_s.strip.empty?
+      fallback = {
+        0 => '道具', 1 => '道具', 2 => '药品', 3 => '精灵球', 4 => '技能机',
+        5 => '树果', 6 => '邮件', 7 => '对战道具', 8 => '重要物品'
+      }
+      fallback[id] || "背包口袋 #{id}"
+    rescue Exception
+      '道具'
+    end
+
     # Answer is "kind<TAB>key<TAB>name" lines, one per thing the player can pick.
     def list_data(kind = "", arg = "")
       return list_system if kind == 'system'
@@ -4127,6 +4319,7 @@ module TyranorCheats
       return list_maps if kind == 'maps'
       return list_pokemon if kind == 'pokemon'
       return list_pokemon_moves(arg) if kind == 'pokemon_moves'
+      return list_pokemon_traits(arg) if kind == 'pokemon_traits'
       return list_pokemon_move_candidates if kind == 'pokemon_move_candidates'
       return list_pokemon_statuses(arg) if kind == 'pokemon_statuses'
       return list_pokemon_stats(arg) if kind == 'pokemon_stats'
@@ -4337,6 +4530,9 @@ module TyranorCheats
           (bag.respond_to?(:add) || bag.respond_to?(:pbStoreItem))
         out << "F\titemBag"
       end
+      out << "F\tpokemonObtain" if pokemon_obtain_supported?
+      out << "F\tpokemonPartyOrder" if ess? && !in_battle? && trainer && trainer.respond_to?(:party) &&
+        trainer.party.is_a?(Array) && trainer.party.length > 1
       if ess? && $game_switches && $game_variables &&
           (!system_runtime_keys('switch', essentials_system_names(system_database, :switches)).empty? ||
            !system_runtime_keys('variable', essentials_system_names(system_database, :variables)).empty?)
@@ -4353,6 +4549,7 @@ module TyranorCheats
                         nil
                       end
       out << "F\tpokemonLevel" if ess? && class_method?(pokemon_class, :level=)
+      out << "F\tpokemonHappiness" if ess? && class_method?(pokemon_class, :happiness) && class_method?(pokemon_class, :happiness=)
       out << "F\tpokemonHp" if ess? && class_method?(pokemon_class, :hp=) && class_method?(pokemon_class, :totalhp)
       out << "F\tpokemonExp" if ess? && class_method?(pokemon_class, :exp=)
       out << "F\tpokemonRecover" if ess? && class_method?(pokemon_class, :hp=) && class_method?(pokemon_class, :totalhp)
@@ -4364,6 +4561,13 @@ module TyranorCheats
       out << "F\tpokemonStatus" if ess? && class_method?(pokemon_class, :status=)
       out << "F\tpokemonItem" if ess? && (class_method?(pokemon_class, :item=) || class_method?(pokemon_class, :setItem))
       out << "F\tpokemonStats" if ess? && class_method?(pokemon_class, :iv) && class_method?(pokemon_class, :iv=) && class_method?(pokemon_class, :ev) && class_method?(pokemon_class, :ev=) && (class_method?(pokemon_class, :calc_stats) || class_method?(pokemon_class, :calcStats))
+      out << "F\tpokemonMovePp" if ess? && (party_pokemon.any? { |pokemon| pokemon_move_pp_supported?(pokemon) } || pokemon_move_pp_supported?)
+      move_class = pokemon_move_class
+      out << "F\tpokemonMovePpUp" if ess? && move_class && class_method?(move_class, :ppup) && class_method?(move_class, :ppup=)
+      pokemon_traits_supported = party_pokemon.any? do |pokemon|
+        %w[nature ability form gender shiny superShiny].any? { |field| !pokemon_trait_options(pokemon, field).empty? }
+      end
+      out << "F\tpokemonTraits" if ess? && pokemon_traits_supported
       if rpgm?
         out << "F\tactors"
         actor_value_fields.each { |name| out << "AS\t#{name}" }
@@ -4431,7 +4635,8 @@ module TyranorCheats
         egg = pokemon.respond_to?(:egg?) && pokemon.egg?
         status = pokemon.respond_to?(:status) ? pokemon_status_key(pokemon.status) : ""
         item = wire_text(pokemon_item_name(pokemon))
-        out << "P\t#{index}\t#{name}\t#{level}\t#{hp}\t#{maximum}\t#{exp}\t#{egg ? 1 : 0}\t#{status}\t#{item}"
+        happiness = pokemon.respond_to?(:happiness) ? pokemon.happiness.to_i : ''
+        out << "P\t#{index}\t#{name}\t#{level}\t#{hp}\t#{maximum}\t#{exp}\t#{egg ? 1 : 0}\t#{status}\t#{item}\t#{happiness}"
       end
       out.join("\n")
     rescue Exception => e
@@ -4593,12 +4798,21 @@ module TyranorCheats
       return error if error
       return NOPE unless pokemon.respond_to?(:moves)
       moves = pokemon.moves || []
-      (0...4).map do |slot|
+      (0...max_pokemon_moves(pokemon)).map do |slot|
         move = moves[slot]
         key = pokemon_move_key(move)
         key = nil if key == 0 || key.to_s.upcase == "NONE"
         name = key.nil? ? "" : wire_text(pokemon_move_name(key))
-        "M\t#{slot}\t#{wire_text(key)}\t#{name}"
+        pp = move && move.respond_to?(:pp) ? move.pp.to_i : ''
+        total_pp = if move && move.respond_to?(:total_pp)
+                     move.total_pp.to_i
+                   elsif move && move.respond_to?(:totalpp)
+                     move.totalpp.to_i
+                   else
+                     ''
+                   end
+        ppup = move && move.respond_to?(:ppup) ? move.ppup.to_i : ''
+        "M\t#{slot}\t#{wire_text(key)}\t#{name}\t#{pp}\t#{total_pp}\t#{ppup}"
       end.join("\n")
     rescue Exception => e
       "Couldn't read Pokemon moves: #{e.class}: #{e.message}"
@@ -4608,6 +4822,98 @@ module TyranorCheats
       pokemon_move_catalog.map { |key, name| "C\t#{wire_text(key)}\t#{wire_text(name)}" }.join("\n")
     rescue Exception => e
       "Couldn't read move list: #{e.class}: #{e.message}"
+    end
+
+    def list_pokemon_traits(index_text)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      out = []
+      %w[nature ability form gender shiny superShiny].each do |field|
+        options = pokemon_trait_options(pokemon, field)
+        next if options.empty?
+        key = pokemon_trait_value(pokemon, field)
+        label = pokemon_trait_label(pokemon, field, key)
+        out << "T\t#{field}\t#{wire_text(key)}\t#{wire_text(label)}"
+        options.each { |entry| out << "O\t#{field}\t#{wire_text(entry[0])}\t#{wire_text(entry[1])}" }
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read Pokemon properties: #{e.class}: #{e.message}"
+    end
+
+    def set_pokemon_trait(index_text, payload)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      field, raw = payload.to_s.split("\t", 2)
+      key = raw.to_s.strip
+      candidate = pokemon_trait_options(pokemon, field).find { |entry| entry[0].to_s == key }
+      return NOPE unless candidate
+      case field
+      when 'nature'
+        pokemon.nature = gd? ? key.to_sym : key.to_i
+        mon_calc(pokemon)
+      when 'ability'
+        pokemon.ability = gd? ? key.to_sym : key.to_i
+      when 'form'
+        pokemon.form = key.to_i
+        mon_calc(pokemon)
+      when 'gender'
+        pokemon.gender = key.to_i
+      when 'shiny'
+        pokemon.shiny = (key.to_i != 0)
+        pokemon.super_shiny = false if key.to_i == 0 && pokemon.respond_to?(:super_shiny=)
+      when 'superShiny'
+        pokemon.super_shiny = (key.to_i != 0)
+      else
+        return NOPE
+      end
+      "#{wire_text(pokemon_display_name(pokemon))} #{field} set to #{wire_text(candidate[1])}"
+    rescue Exception => e
+      "Couldn't change Pokemon property: #{e.class}: #{e.message}"
+    end
+
+    def set_pokemon_order(index_text, payload)
+      target_text = payload.to_s.strip
+      return "Choose a valid party slot." unless target_text =~ /\A\d+\z/
+      return "Party order can't change during battle." if in_battle?
+      party = trainer && trainer.respond_to?(:party) ? trainer.party : nil
+      return NOPE unless party.is_a?(Array)
+      index = index_text.to_i
+      target = target_text.to_i
+      return "Choose a valid party slot." unless index >= 0 && target >= 0 && index < party.length && target < party.length
+      return "Choose a different party slot." if index == target
+      party[index], party[target] = party[target], party[index]
+      "Party order updated."
+    rescue Exception => e
+      "Couldn't reorder party: #{e.class}: #{e.message}"
+    end
+
+    def set_pokemon_move_pp(index_text, payload)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      slot_text, field, raw = payload.to_s.split("\t", 3)
+      return "Choose a move slot first." unless slot_text.to_s =~ /\A\d+\z/ && slot_text.to_i < max_pokemon_moves(pokemon)
+      return "Enter a whole number." unless raw.to_s =~ /\A\d+\z/
+      move = (pokemon.moves || [])[slot_text.to_i]
+      return "This move has no editable PP data." unless move && move.respond_to?(:pp) && move.respond_to?(:pp=)
+      value = raw.to_i
+      case field
+      when 'pp'
+        maximum = move.respond_to?(:total_pp) ? move.total_pp.to_i : (move.totalpp.to_i rescue 0)
+        return NOPE if maximum <= 0
+        move.pp = [[value, 0].max, maximum].min
+      when 'ppup'
+        return NOPE unless move.respond_to?(:ppup) && move.respond_to?(:ppup=)
+        move.ppup = [[value, 0].max, 3].min
+        maximum = move.respond_to?(:total_pp) ? move.total_pp.to_i : (move.totalpp.to_i rescue 0)
+        move.pp = [move.pp.to_i, maximum].min if maximum > 0
+      else
+        return NOPE
+      end
+      value = field == 'pp' ? move.pp.to_i : move.ppup.to_i
+      "Move #{field} set to #{value}."
+    rescue Exception => e
+      "Couldn't change move PP: #{e.class}: #{e.message}"
     end
 
     def list_pokemon_statuses(index_text)
@@ -4662,6 +4968,10 @@ module TyranorCheats
         return NOPE unless pokemon.respond_to?(:hp=) && pokemon.respond_to?(:totalhp)
         value = [[value, 0].max, pokemon.totalhp.to_i].min
         pokemon.hp = value
+      when 'happiness'
+        return NOPE unless pokemon.respond_to?(:happiness=)
+        value = [[value, 0].max, 255].min
+        pokemon.happiness = value
       when /\Aiv_([0-5])\z/
         return NOPE unless pokemon.respond_to?(:iv=)
         slot = field[3, 1].to_i
@@ -4712,7 +5022,7 @@ module TyranorCheats
       return error if error
       return NOPE unless pokemon.respond_to?(:moves) && pokemon.respond_to?(:moves=)
       slot_text, raw_key = payload.to_s.split("\t", 2)
-      return "Choose a move slot first." unless slot_text.to_s =~ /\A[0-3]\z/
+      return "Choose a move slot first." unless slot_text.to_s =~ /\A\d+\z/ && slot_text.to_i < max_pokemon_moves(pokemon)
       slot = slot_text.to_i
       key = raw_key.to_s.strip
       moves = (pokemon.moves || []).dup
@@ -4721,7 +5031,7 @@ module TyranorCheats
         if defined?(Pokemon::Move) && pokemon.respond_to?(:learn_move)
           moves.delete_at(slot) if slot < moves.length
         else
-          moves << nil while moves.length < 4
+          moves << nil while moves.length <= slot
           moves[slot] = nil
         end
         pokemon.moves = moves
@@ -4743,7 +5053,7 @@ module TyranorCheats
       elsif pokemon.respond_to?(:pbLearnMoveAtIndex)
         pokemon.pbLearnMoveAtIndex(move_key, slot)
       elsif defined?(PBMove)
-        moves << nil while moves.length < 4
+        moves << nil while moves.length <= slot
         moves[slot] = PBMove.new(move_key)
         pokemon.moves = moves
         (pokemon.updateZMoveIndex(slot) rescue nil) if pokemon.respond_to?(:updateZMoveIndex)
@@ -6536,7 +6846,8 @@ module TyranorCheats
           GameData::Item.each do |i|
             n = i.name.to_s
             description = i.respond_to?(:description) ? wire_text(i.description) : ""
-            out << "item\t#{i.id}\t#{quantity_of('item', i.id)}\t#{wire_text(n)}\t#{description}\t#{item_locked?('item', i.id) ? 1 : 0}" unless n.empty?
+            pocket = wire_text(essentials_item_pocket_name(i.id))
+            out << "item\t#{i.id}\t#{quantity_of('item', i.id)}\t#{wire_text(n)}\t#{description}\t#{item_locked?('item', i.id) ? 1 : 0}\t#{pocket}" unless n.empty?
           end
           GameData::Species.each do |s|
             next if s.form != 0
@@ -6546,7 +6857,8 @@ module TyranorCheats
         else
           (1..(PBItems.maxValue rescue 0)).each do |i|
             n = (PBItems.getName(i) rescue "").to_s
-            out << "item\t#{i}\t#{quantity_of('item', i)}\t#{wire_text(n)}\t\t#{item_locked?('item', i) ? 1 : 0}" unless n.empty?
+            pocket = wire_text(essentials_item_pocket_name(i))
+            out << "item\t#{i}\t#{quantity_of('item', i)}\t#{wire_text(n)}\t\t#{item_locked?('item', i) ? 1 : 0}\t#{pocket}" unless n.empty?
           end
           (1..(PBSpecies.maxValue rescue 0)).each do |i|
             n = (PBSpecies.getName(i) rescue "").to_s

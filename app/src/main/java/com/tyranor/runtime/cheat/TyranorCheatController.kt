@@ -117,11 +117,26 @@ class TyranorCheatController(
         val exp: Int,
         val isEgg: Boolean,
         val status: String = "",
-        val heldItem: String = ""
+        val heldItem: String = "",
+        val happiness: Int? = null,
     )
 
-    data class PokemonMoveEntry(val slot: Int, val key: String, val name: String)
+    data class PokemonMoveEntry(
+        val slot: Int,
+        val key: String,
+        val name: String,
+        val pp: Int? = null,
+        val totalPp: Int? = null,
+        val ppUp: Int? = null,
+    )
     data class PokemonMoveCandidate(val key: String, val name: String)
+    data class PokemonTraitOption(val key: String, val name: String)
+    data class PokemonTraitEntry(
+        val field: String,
+        val currentKey: String,
+        val currentName: String,
+        val options: List<PokemonTraitOption>,
+    )
     data class PokemonStatusEntry(val key: String, val active: Boolean)
     data class PokemonStatValues(val ivs: List<Int>, val evs: List<Int>)
 
@@ -593,11 +608,11 @@ class TyranorCheatController(
         send("list\tpokemon", 30_000L) { raw ->
             val out = mutableListOf<PokemonEntry>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 10)
-                if (p.size != 10 || p[0] != "P") return@forEach
+                val p = line.split('\t', limit = 11)
+                if (p.size < 10 || p[0] != "P") return@forEach
                 val index = p[1].toIntOrNull() ?: return@forEach
                 out.add(PokemonEntry(index, p[2], p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0,
-                    p[5].toIntOrNull() ?: 0, p[6].toIntOrNull() ?: 0, p[7] == "1", p[8], p[9]))
+                    p[5].toIntOrNull() ?: 0, p[6].toIntOrNull() ?: 0, p[7] == "1", p[8], p[9], p.getOrNull(10)?.toIntOrNull()))
             }
             onResult(out)
         }
@@ -615,11 +630,31 @@ class TyranorCheatController(
         send("list\tpokemon_moves\t$index", 30_000L) { raw ->
             val out = mutableListOf<PokemonMoveEntry>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 4)
+                val p = line.split('\t', limit = 7)
                 val slot = p.getOrNull(1)?.toIntOrNull() ?: return@forEach
-                if (p.size == 4 && p[0] == "M") out.add(PokemonMoveEntry(slot, p[2], p[3]))
+                if (p.size >= 4 && p[0] == "M") out.add(PokemonMoveEntry(
+                    slot, p[2], p[3], p.getOrNull(4)?.toIntOrNull(), p.getOrNull(5)?.toIntOrNull(), p.getOrNull(6)?.toIntOrNull(),
+                ))
             }
             onResult(out)
+        }
+    }
+
+    fun listPokemonTraits(index: Int, onResult: (List<PokemonTraitEntry>) -> Unit) {
+        send("list\tpokemon_traits\t$index", 30_000L) { raw ->
+            val current = linkedMapOf<String, Pair<String, String>>()
+            val options = linkedMapOf<String, MutableList<PokemonTraitOption>>()
+            raw.lineSequence().forEach { line ->
+                val p = line.split('\t', limit = 4)
+                when {
+                    p.size == 4 && p[0] == "T" -> current[p[1]] = p[2] to p[3]
+                    p.size == 4 && p[0] == "O" -> options.getOrPut(p[1]) { mutableListOf() }
+                        .add(PokemonTraitOption(p[2], p[3]))
+                }
+            }
+            onResult(current.map { (field, value) ->
+                PokemonTraitEntry(field, value.first, value.second, options[field].orEmpty())
+            })
         }
     }
 
@@ -665,6 +700,18 @@ class TyranorCheatController(
 
     fun setPokemonMove(index: Int, slot: Int, key: String, onResult: (String) -> Unit) {
         send("pokemon_move\t$index\t$slot\t${clean(key)}", onResult)
+    }
+
+    fun setPokemonMovePp(index: Int, slot: Int, field: String, value: Int, onResult: (String) -> Unit) {
+        send("pokemon_move_pp\t$index\t$slot\t$field\t$value", onResult)
+    }
+
+    fun setPokemonTrait(index: Int, field: String, key: String, onResult: (String) -> Unit) {
+        send("pokemon_trait\t$index\t$field\t${clean(key)}", onResult)
+    }
+
+    fun setPokemonOrder(index: Int, target: Int, onResult: (String) -> Unit) {
+        send("pokemon_order\t$index\t$target", onResult)
     }
 
     fun setPokemonStatus(index: Int, key: String, onResult: (String) -> Unit) {
@@ -897,7 +944,8 @@ class TyranorCheatController(
         val quantity: Int,
         val name: String,
         val description: String,
-        val locked: Boolean = false
+        val locked: Boolean = false,
+        val category: String = ""
     )
 
     /**
@@ -909,9 +957,12 @@ class TyranorCheatController(
         send("list\t") { raw ->
             val out = mutableListOf<Pickable>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 6)
+                val p = line.split('\t', limit = 7)
                 if (p.size >= 4 && p[0].isNotBlank() && p[1].isNotBlank()) {
-                    out.add(Pickable(p[0], p[1], p[2].toIntOrNull() ?: 0, p[3], p.getOrNull(4).orEmpty(), p.getOrNull(5) == "1"))
+                    out.add(Pickable(
+                        p[0], p[1], p[2].toIntOrNull() ?: 0, p[3], p.getOrNull(4).orEmpty(),
+                        p.getOrNull(5) == "1", p.getOrNull(6).orEmpty(),
+                    ))
                 }
             }
             onResult(out)

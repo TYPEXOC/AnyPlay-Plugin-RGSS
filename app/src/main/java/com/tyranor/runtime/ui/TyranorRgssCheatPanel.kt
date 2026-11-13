@@ -289,6 +289,14 @@ class TyranorRgssCheatPanel(
                     }
                 }
                 "listDatabase" -> listDatabase(a, done)
+                "listBagCategories" -> cheats.listPickables { entries ->
+                    done(entries.asSequence().filter { it.kind == "item" && it.category.isNotBlank() }
+                        .map { it.category }.distinct()
+                        .map { mapOf("id" to it, "name" to it.ifBlank { "背包" }) }.toList())
+                }
+                "give" -> cheats.give(argString(a, 0), argString(a, 1), argString(a, 2)) {
+                    completeMessage(it, done)
+                }
                 "itemCount" -> itemCount(argString(a, 0), argString(a, 1), done)
                 "setItemCount" -> cheats.setItemQuantity(
                     argString(a, 0), argString(a, 1), argInt(a, 2),
@@ -332,6 +340,7 @@ class TyranorRgssCheatPanel(
                         "hp" to entry.hp,
                         "mhp" to entry.maxHp,
                         "exp" to entry.exp,
+                        "happiness" to entry.happiness,
                         "isEgg" to entry.isEgg,
                         "status" to entry.status,
                         "heldItem" to entry.heldItem,
@@ -342,7 +351,13 @@ class TyranorRgssCheatPanel(
                 ) { completeMessage(it, done) }
                 "recoverPokemon" -> cheats.recoverPokemon(argInt(a, 0)) { completeMessage(it, done) }
                 "listPokemonMoves" -> cheats.listPokemonMoves(argInt(a, 0)) { moves -> done(moves.map { move ->
-                    mapOf("slot" to move.slot, "key" to move.key, "name" to move.name)
+                    mapOf("slot" to move.slot, "key" to move.key, "name" to move.name,
+                        "pp" to move.pp, "totalPp" to move.totalPp, "ppUp" to move.ppUp)
+                }) }
+                "listPokemonTraits" -> cheats.listPokemonTraits(argInt(a, 0)) { traits -> done(traits.map { trait ->
+                    mapOf("field" to trait.field, "currentKey" to trait.currentKey,
+                        "currentName" to trait.currentName,
+                        "options" to trait.options.map { mapOf("key" to it.key, "name" to it.name) })
                 }) }
                 "listPokemonMoveCandidates" -> cheats.listPokemonMoveCandidates { moves -> done(moves.map { move ->
                     mapOf("key" to move.key, "name" to move.name)
@@ -355,6 +370,15 @@ class TyranorRgssCheatPanel(
                 }
                 "setPokemonMove" -> cheats.setPokemonMove(
                     argInt(a, 0), argInt(a, 1), argString(a, 2),
+                ) { completeMessage(it, done) }
+                "setPokemonMovePp" -> cheats.setPokemonMovePp(
+                    argInt(a, 0), argInt(a, 1), argString(a, 2), argInt(a, 3),
+                ) { completeMessage(it, done) }
+                "setPokemonTrait" -> cheats.setPokemonTrait(
+                    argInt(a, 0), argString(a, 1), argString(a, 2),
+                ) { completeMessage(it, done) }
+                "setPokemonOrder" -> cheats.setPokemonOrder(
+                    argInt(a, 0), argInt(a, 1),
                 ) { completeMessage(it, done) }
                 "setPokemonStatus" -> cheats.setPokemonStatus(
                     argInt(a, 0), argString(a, 1),
@@ -467,16 +491,18 @@ class TyranorRgssCheatPanel(
             val query = argString(a, 1).trim()
             val offset = argInt(a, 2).coerceAtLeast(0)
             val limit = argInt(a, 3, 100).coerceIn(1, 300)
+            val category = argString(a, 4)
             cheats.listPickables { entries ->
                 val filtered = entries.asSequence()
                     .filter { it.kind == kind }
+                    .filter { category.isBlank() || it.category == category }
                     .filter { query.isEmpty() || it.name.contains(query, true) ||
                         it.description.contains(query, true) || it.key.contains(query, true) }
                     .toList()
                 done(mapOf(
                     "total" to filtered.size,
                     "values" to filtered.drop(offset).take(limit).map {
-                        mapOf("id" to it.key, "name" to it.name, "description" to it.description, "count" to it.quantity, "locked" to it.locked)
+                        mapOf("id" to it.key, "name" to it.name, "description" to it.description, "count" to it.quantity, "locked" to it.locked, "category" to it.category)
                     },
                 ))
             }
