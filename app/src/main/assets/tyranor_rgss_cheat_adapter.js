@@ -1,6 +1,6 @@
 /*
- * MVMZ cheat UI API adapter for the RGSS Ruby controller.
- * The UI and CSS are ported from Tyranor-Next; this file only translates the
+ * RGSS cheat UI API adapter for the RGSS Ruby controller.
+ * The Web UI calls this adapter, which translates the
  * UI's MV/MZ runtime calls into the RGSS module's existing controller API.
  */
 (function () {
@@ -47,7 +47,9 @@
     setGameSpeed: function (value) { return invoke("setGameSpeed", [value]); },
     setRewardMultiplier: function (name, value) { return invoke("setRewardMultiplier", [name, value]); },
     getGold: function () { return Number(invoke("getGold") || 0); },
+    getCoins: function () { return Number(invoke("getCoins") || 0); },
     setGold: function (value) { return invoke("setGold", [value]); },
+    setCoins: function (value) { return invoke("setCoins", [value]); },
     listDatabase: function (kind, query, offset, limit) {
       var values = invoke("listDatabase", [kind, query, offset, limit]);
       return values || { total: 0, values: [] };

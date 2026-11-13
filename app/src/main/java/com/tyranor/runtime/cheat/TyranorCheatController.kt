@@ -561,6 +561,13 @@ class TyranorCheatController(
         }
     }
 
+    fun getCoins(onResult: (Int?) -> Unit) {
+        send("list\tcoins") { raw ->
+            val fields = raw.lineSequence().firstOrNull()?.split('\t', limit = 2)
+            onResult(if (fields?.size == 2 && fields[0] == "C") fields[1].toIntOrNull() else null)
+        }
+    }
+
     fun listActors(onResult: (List<ActorEntry>) -> Unit) {
         send("list\tactors", 30_000L) { raw ->
             val out = mutableListOf<ActorEntry>()

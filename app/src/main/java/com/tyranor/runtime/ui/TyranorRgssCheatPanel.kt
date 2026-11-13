@@ -21,12 +21,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * MVMZ cheat panel UI hosted by the RGSS module.
+ * RGSS cheat panel WebView hosted by the runtime.
  *
- * The HTML/CSS interaction is the MVMZ panel. [RgssCheatApi] only translates
+ * The Web UI is served from the RGSS assets. [RgssCheatApi] only translates
  * its calls to the module's own Ruby-backed [TyranorCheatController].
  */
-class TyranorMvmzCheatPanel(
+class TyranorRgssCheatPanel(
     private val activity: Activity,
     private val parent: FrameLayout,
     private val controller: TyranorCheatController,
@@ -277,9 +277,15 @@ class TyranorMvmzCheatPanel(
                     completeMessage(it, done)
                 }
                 "getGold" -> cheats.getGold { done(it ?: 0) }
+                "getCoins" -> cheats.getCoins { done(it ?: 0) }
                 "setGold" -> cheats.setValue("gold", argString(a, 0)) { message ->
                     completeMessage(message, done) {
                         cheats.getGold { done(it ?: 0) }
+                    }
+                }
+                "setCoins" -> cheats.setValue("coins", argString(a, 0)) { message ->
+                    completeMessage(message, done) {
+                        cheats.getCoins { done(it ?: 0) }
                     }
                 }
                 "listDatabase" -> listDatabase(a, done)
@@ -735,7 +741,7 @@ class TyranorMvmzCheatPanel(
     private data class JsFailure(val message: String)
 
     private companion object {
-        const val TAG = "TyranorMvmzCheat"
+        const val TAG = "TyranorRgssCheat"
         const val PANEL_ASSET = "tyranor_rgss_cheats.html"
         const val CHEAT_BRIDGE = "TyranorCheatNative"
         const val INPUT_BRIDGE = "TyranorInputNative"

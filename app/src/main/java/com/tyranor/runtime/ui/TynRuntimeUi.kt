@@ -62,7 +62,7 @@ class TynRuntimeUi(
     private val controller: TyranorPadController
     private val mouseController: TyranorMouseController
     private val cheats = if (cheatsEnabled) TyranorCheatController(activity, gameKey) else null
-    private var cheatMenu: TyranorMvmzCheatPanel? = null
+    private var cheatMenu: TyranorRgssCheatPanel? = null
     private var actionBar: TyranorRuntimeActionBar? = null
     private var dialog: Dialog? = null
     private var loadingGone = false
@@ -180,7 +180,7 @@ class TynRuntimeUi(
         menu.show()
     }
 
-    private fun createCheatMenu(cheatController: TyranorCheatController) = TyranorMvmzCheatPanel(
+    private fun createCheatMenu(cheatController: TyranorCheatController) = TyranorRgssCheatPanel(
         activity,
         root,
         cheatController,

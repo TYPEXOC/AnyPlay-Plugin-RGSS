@@ -3393,8 +3393,29 @@ module TyranorCheats
     end
 
     # Essentials: the player object, the bag, and the party (v17 and v21 names)
-    def trainer; $player || $Trainer; end
-    def bag; $bag || $PokemonBag; end
+    def trainer
+      candidates = []
+      candidates << $player if defined?($player)
+      candidates << $Trainer if defined?($Trainer)
+      candidates.each { |candidate| return candidate if candidate && candidate.respond_to?(:party) }
+      nil
+    rescue Exception
+      nil
+    end
+    def bag
+      candidates = []
+      candidates << $bag if defined?($bag)
+      candidates << $PokemonBag if defined?($PokemonBag)
+      candidates.each do |candidate|
+        next unless candidate
+        can_read = candidate.respond_to?(:quantity) || candidate.respond_to?(:pbQuantity)
+        can_add = candidate.respond_to?(:add) || candidate.respond_to?(:pbStoreItem)
+        return candidate if can_read && can_add
+      end
+      nil
+    rescue Exception
+      nil
+    end
     def coin_resource
       return nil unless ess? && defined?($PokemonGlobal) && $PokemonGlobal
       return nil unless $PokemonGlobal.respond_to?(:coins) && $PokemonGlobal.respond_to?(:coins=)
@@ -3429,10 +3450,19 @@ module TyranorCheats
       nil
     end
     def bag_add(id, q)
-      bag.respond_to?(:add) ? bag.add(id, q) : bag.pbStoreItem(id, q)
+      return bag.add(id, q) if bag.respond_to?(:add)
+      return bag.pbStoreItem(id, q) if bag.respond_to?(:pbStoreItem)
+      false
     end
     def bag_qty(id)
-      bag.respond_to?(:quantity) ? bag.quantity(id) : bag.pbQuantity(id)
+      return bag.quantity(id) if bag.respond_to?(:quantity)
+      return bag.pbQuantity(id) if bag.respond_to?(:pbQuantity)
+      0
+    end
+    def bag_remove(id, q)
+      return bag.remove(id, q) if bag.respond_to?(:remove)
+      return bag.pbDeleteItem(id, q) if bag.respond_to?(:pbDeleteItem)
+      false
     end
     def key_item?(i)
       if i.respond_to?(:is_key_item?) then i.is_key_item?
@@ -4093,6 +4123,7 @@ module TyranorCheats
     def list_data(kind = "", arg = "")
       return list_system if kind == 'system'
       return list_gold if kind == 'gold'
+      return list_coins if kind == 'coins'
       return list_maps if kind == 'maps'
       return list_pokemon if kind == 'pokemon'
       return list_pokemon_moves(arg) if kind == 'pokemon_moves'
@@ -4140,6 +4171,105 @@ module TyranorCheats
       value.is_a?(Array) ? value : nil
     rescue Exception
       nil
+    end
+    # Essentials/Reborn can keep switch and variable values under Symbol keys
+    # rather than in the numeric RPG Maker System tables.
+    def essentials_system_names(database, name)
+      return nil unless database
+      value = database.respond_to?(name) ? (database.send(name) rescue nil) : nil
+      value ||= (database.instance_variable_get("@#{name}") rescue nil)
+      return value if value.is_a?(Array)
+      if value.is_a?(Hash)
+        highest = value.keys.select { |key| key.is_a?(Integer) && key >= 0 }.max || 0
+        names = Array.new(highest + 1)
+        value.each { |key, label| names[key] = label if key.is_a?(Integer) && key >= 0 }
+        return names
+      end
+      nil
+    rescue Exception
+      nil
+    end
+
+    def system_store(kind)
+      kind == 'switch' ? $game_switches : $game_variables
+    rescue Exception
+      nil
+    end
+
+    def system_runtime_keys(kind, names)
+      keys = []
+      if names && names.length > 1
+        1.upto(names.length - 1) { |id| keys << id }
+      end
+      store = system_store(kind)
+      data = store && (store.instance_variable_get(:@data) rescue nil)
+      if data.is_a?(Hash)
+        data.each_key do |key|
+          if key.is_a?(Symbol)
+            keys << key unless keys.include?(key)
+          elsif key.is_a?(Integer) && key > 0 && (!names || names.empty?)
+            keys << key unless keys.include?(key)
+          end
+        end
+      elsif (!names || names.empty?) && data.is_a?(Array)
+        1.upto(data.length - 1) do |id|
+          value = data[id]
+          next if kind == 'switch' ? !value : value.nil?
+          keys << id unless keys.include?(id)
+        end
+      end
+      keys
+    rescue Exception
+      keys || []
+    end
+
+    def system_external_id(kind, key)
+      return key if key.is_a?(Integer)
+      @system_external_ids ||= { 'switch' => {}, 'variable' => {} }
+      table = @system_external_ids[kind] ||= {}
+      table.each { |id, current| return id if current == key }
+      id = -1
+      id -= 1 while table.has_key?(id)
+      table[id] = key
+      id
+    rescue Exception
+      -1
+    end
+
+    def system_resolve_id(kind, raw_id)
+      id = raw_id.is_a?(Integer) ? raw_id : (raw_id.to_s =~ /\A-?\d+\z/ ? raw_id.to_i : nil)
+      return nil if id.nil?
+      return id if id >= 0
+      table = @system_external_ids && @system_external_ids[kind.to_s]
+      table && table[id]
+    rescue Exception
+      nil
+    end
+
+    def essentials_system_key_exists?(kind, key)
+      return false if key.nil?
+      names = essentials_system_names(system_database, kind == 'switch' ? :switches : :variables)
+      return true if key.is_a?(Integer) && key > 0 && names && key < names.length
+      system_runtime_keys(kind, names).include?(key)
+    rescue Exception
+      false
+    end
+
+    def system_key_name(kind, key, names)
+      if key.is_a?(Integer)
+        label = names && key < names.length ? wire_text(names[key]) : ''
+        return ["#{kind == 'switch' ? 'Switch' : 'Variable'} #{key}", false] if label.strip.empty?
+        return [label, true]
+      end
+      label = key.to_s.gsub(/_+/, ' ').strip
+      [label.empty? ? key.to_s : label, !label.empty?]
+    rescue Exception
+      [key.to_s, false]
+    end
+
+    def system_lock_map(kind)
+      @system_locks ||= { 'switch' => {}, 'variable' => {} }
+      @system_locks[kind.to_s] ||= {}
     end
 
     def json_module
@@ -4197,13 +4327,20 @@ module TyranorCheats
       out << "F\tevents" if $game_map && $game_map.respond_to?(:events)
       out << "F\teventSelfSwitches" if event_switches && event_switches.respond_to?(:[]=)
       out << "F\tminimap" if $game_map && $game_map.respond_to?(:width) && $game_map.respond_to?(:height)
-      out << "F\tbattle" if (ess? && @battle) || $game_troop
+      out << "F\tmapControl" if $game_player && $game_map && defined?(Game_Map) && map_info_table
+      out << "F\tbattle" if ess? || $game_troop
       out << "F\tbattleEscape" if toggle_supported?('escape')
       out << "F\tsaveSlots" if save_slots_supported?
-      out << "F\tpokemonParty" if ess? && trainer && trainer.respond_to?(:party)
-      if ess? && bag && (bag.respond_to?(:add) || bag.respond_to?(:pbStoreItem)) &&
-          (bag.respond_to?(:quantity) || bag.respond_to?(:pbQuantity))
+      out << "F\tpokemonParty" if ess? && trainer
+      if ess? && bag && (bag.respond_to?(:remove) || bag.respond_to?(:pbDeleteItem)) &&
+          (bag.respond_to?(:quantity) || bag.respond_to?(:pbQuantity)) &&
+          (bag.respond_to?(:add) || bag.respond_to?(:pbStoreItem))
         out << "F\titemBag"
+      end
+      if ess? && $game_switches && $game_variables &&
+          (!system_runtime_keys('switch', essentials_system_names(system_database, :switches)).empty? ||
+           !system_runtime_keys('variable', essentials_system_names(system_database, :variables)).empty?)
+        out << "F\tsystemData"
       end
       party_pokemon = pokes
       pokemon_class = if party_pokemon.first
@@ -4215,6 +4352,10 @@ module TyranorCheats
                       else
                         nil
                       end
+      out << "F\tpokemonLevel" if ess? && class_method?(pokemon_class, :level=)
+      out << "F\tpokemonHp" if ess? && class_method?(pokemon_class, :hp=) && class_method?(pokemon_class, :totalhp)
+      out << "F\tpokemonExp" if ess? && class_method?(pokemon_class, :exp=)
+      out << "F\tpokemonRecover" if ess? && class_method?(pokemon_class, :hp=) && class_method?(pokemon_class, :totalhp)
       can_learn_pokemon_moves = class_method?(pokemon_class, :pbLearnMoveAtIndex) ||
         class_method?(pokemon_class, :learn_move) || defined?(PBMove) || defined?(Pokemon::Move)
       out << "F\tpokemonMoves" if ess? && can_learn_pokemon_moves &&
@@ -5389,9 +5530,7 @@ module TyranorCheats
         item = gd? ? key.to_sym : key.to_i
         current = bag_qty(item).to_i
         if count < current
-          removed = if bag.respond_to?(:remove) then bag.remove(item, current - count)
-                    elsif bag.respond_to?(:pbDeleteItem) then bag.pbDeleteItem(item, current - count)
-                    else false end
+          removed = bag_remove(item, current - count)
           return "This bag doesn't support removing that item." unless removed
         elsif count > current
           return "The bag is full or doesn't accept this amount." unless bag_add(item, count - current)
@@ -5463,6 +5602,11 @@ module TyranorCheats
     # The game's System database contains the labels used by its own debug
     # screen. Values remain in the game's live Game_Switches/Game_Variables.
     def list_system
+      return list_essentials_system if ess?
+      list_system_rpgm
+    end
+
+    def list_system_rpgm
       return "Start or load a game first." unless $game_switches && $game_variables
       database = system_database
       return "The game's System database is unavailable." unless database
@@ -5523,6 +5667,57 @@ module TyranorCheats
       "Couldn't read game switches and variables: #{e.class}: #{e.message}"
     end
 
+    def list_essentials_system
+      return "Start or load a game first." unless $game_switches && $game_variables
+      database = system_database
+      out = []
+      [['switch', :switches], ['variable', :variables]].each do |kind, name_key|
+        names = essentials_system_names(database, name_key)
+        system_runtime_keys(kind, names).each do |key|
+          name, named = system_key_name(kind, key, names)
+          id = system_external_id(kind, key)
+          store = system_store(kind)
+          if kind == 'switch'
+            value = store[key] ? '1' : '0'
+            locked = system_lock_map(kind).has_key?(key)
+            out << "S\t#{id}\t#{value}\t#{name}\t#{locked ? 1 : 0}\t#{named ? 1 : 0}"
+          else
+            value = store[key]
+            if value.is_a?(Numeric)
+              type = 'number'
+              text = wire_text(value)
+            elsif value == true || value == false
+              type = 'boolean'
+              text = value ? 'true' : 'false'
+            elsif value.nil?
+              type = 'json'
+              text = 'null'
+            elsif value.is_a?(String)
+              type = 'string'
+              text = wire_text(value)
+            elsif value.is_a?(Array) || value.is_a?(Hash)
+              parser = json_module
+              serialized = parser && json_generate_value(parser, value)
+              if serialized
+                type = 'json'
+                text = wire_text(serialized)
+              else
+                type = 'complex'
+                text = "<#{value.class}>"
+              end
+            else
+              type = 'complex'
+              text = "<#{value.class}>"
+            end
+            locked = system_lock_map(kind).has_key?(key)
+            out << "V\t#{id}\t#{type}\t#{text}\t#{name}\t#{locked ? 1 : 0}\t#{named ? 1 : 0}"
+          end
+        end
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read Essentials switches and variables: #{e.class}: #{e.message}"
+    end
     def refresh_game_map
       if $game_map && $game_map.respond_to?(:need_refresh=)
         $game_map.need_refresh = true
@@ -5532,11 +5727,23 @@ module TyranorCheats
     end
 
     def system_locked?(kind, id)
-      return false unless id.is_a?(Integer) || id.is_a?(String)
-      numeric_id = id.is_a?(Integer) ? id : (id =~ /\A\d+\z/ ? id.to_i : nil)
-      return false if numeric_id.nil?
+      return system_locked_essentials?(kind, id) if ess?
+      numeric_id = id.is_a?(Integer) ? id : id.to_i
       locks = @system_locks && @system_locks[kind.to_s]
       locks && locks.has_key?(numeric_id) ? true : false
+    rescue Exception
+      false
+    end
+
+    def system_locked_essentials?(kind, id)
+      return false unless id.is_a?(Integer) || id.is_a?(String) || id.is_a?(Symbol)
+      key = if id.is_a?(String) && id =~ /\A-?\d+\z/
+              system_resolve_id(kind, id)
+            else
+              id
+            end
+      locks = @system_locks && @system_locks[kind.to_s]
+      key && locks && locks.has_key?(key) ? true : false
     rescue Exception
       false
     end
@@ -5549,13 +5756,45 @@ module TyranorCheats
     end
 
     def system_lock_value(kind, id)
+      return system_lock_value_essentials(kind, id) if ess?
       locks = @system_locks && @system_locks[kind.to_s]
       locks && locks.has_key?(id.to_i) ? copy_system_value(locks[id.to_i]) : nil
     rescue Exception
       nil
     end
 
+    def system_lock_value_essentials(kind, id)
+      locks = @system_locks && @system_locks[kind.to_s]
+      key = if id.is_a?(String) && id =~ /\A-?\d+\z/ then system_resolve_id(kind, id) else id end
+      key && locks && locks.has_key?(key) ? copy_system_value(locks[key]) : nil
+    rescue Exception
+      nil
+    end
+
     def set_system_lock(kind, payload)
+      return set_essentials_system_lock(kind, payload) if ess?
+      set_system_lock_rpgm(kind, payload)
+    end
+
+    def set_essentials_system_lock(kind, payload)
+      id_text, enabled_text = payload.to_s.split("\t", 2)
+      return "Choose a switch or variable first." if id_text.to_s.empty?
+      return "Lock must be on or off." unless enabled_text == '0' || enabled_text == '1'
+      return "Start or load a game first." unless $game_switches && $game_variables
+      return NOPE unless kind == 'switch' || kind == 'variable'
+      id = system_resolve_id(kind, id_text)
+      return "That ID is not in this game's switch or variable data." unless essentials_system_key_exists?(kind, id)
+      locks = system_lock_map(kind)
+      if enabled_text == '1'
+        locks[id] = copy_system_value(system_store(kind)[id])
+      else
+        locks.delete(id)
+      end
+      ""
+    rescue Exception => e
+      "Couldn't lock Essentials system value: #{e.class}: #{e.message}"
+    end
+    def set_system_lock_rpgm(kind, payload)
       id_text, enabled_text = payload.to_s.split("\t", 2)
       return "Choose a switch or variable first." if id_text.to_s.empty?
       return "Lock must be on or off." unless enabled_text == '0' || enabled_text == '1'
@@ -5610,6 +5849,23 @@ module TyranorCheats
     end
 
     def set_system_switch(id_text, value)
+      return set_essentials_system_switch(id_text, value) if ess?
+      set_system_switch_rpgm(id_text, value)
+    end
+
+    def set_essentials_system_switch(id_text, value)
+      return "Start or load a game first." unless $game_switches
+      id = system_resolve_id('switch', id_text)
+      return "That switch is not in this game's switch data." unless essentials_system_key_exists?('switch', id)
+      return "Switch value must be 0 or 1." unless value == '0' || value == '1'
+      system_lock_map('switch')[id] = (value == '1') if system_locked?('switch', id)
+      $game_switches[id] = (value == '1')
+      refresh_game_map
+      ""
+    rescue Exception => e
+      "Couldn't set Essentials switch #{id_text}: #{e.class}: #{e.message}"
+    end
+    def set_system_switch_rpgm(id_text, value)
       return "Start or load a game first." unless $game_switches
       id = id_text.to_i
       database = system_database
@@ -5625,6 +5881,29 @@ module TyranorCheats
     end
 
     def set_system_variable(id_text, value)
+      return set_essentials_system_variable(id_text, value) if ess?
+      set_system_variable_rpgm(id_text, value)
+    end
+
+    def set_essentials_system_variable(id_text, value)
+      return "Start or load a game first." unless $game_variables
+      id = system_resolve_id('variable', id_text)
+      return "That variable is not in this game's variable data." unless essentials_system_key_exists?('variable', id)
+      parser = json_module
+      begin
+        replacement = parser ? json_parse_value(parser, value.to_s) : value.to_s
+      rescue Exception
+        replacement = value.to_s
+      end
+      locks = system_lock_map('variable')
+      locks[id] = copy_system_value(replacement) if system_locked?('variable', id)
+      $game_variables[id] = replacement
+      refresh_game_map
+      ""
+    rescue Exception => e
+      "Couldn't set Essentials variable #{id_text}: #{e.class}: #{e.message}"
+    end
+    def set_system_variable_rpgm(id_text, value)
       return "Start or load a game first." unless $game_variables
       id = id_text.to_i
       database = system_database
@@ -6302,6 +6581,14 @@ module TyranorCheats
       "G\t#{amount}"
     rescue Exception => e
       "Couldn't read gold: #{e.class}: #{e.message}"
+    end
+
+    def list_coins
+      resource = coin_resource
+      return "C\t#{resource.coins.to_i}" if resource
+      "C\t0"
+    rescue Exception => e
+      "Couldn't read coins: #{e.class}: #{e.message}"
     end
 
     def quantity_of(kind, key)
