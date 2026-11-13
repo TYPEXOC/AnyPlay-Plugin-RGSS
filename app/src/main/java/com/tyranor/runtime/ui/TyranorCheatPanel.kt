@@ -234,21 +234,21 @@ class TyranorCheatPanel(
                 toggles = commonToggles,
                 values = setOf("gold", "level", "exp", "atk", "def", "mat", "mdf", "agi", "dex", "speed"),
                 features = setOf("actors"),
-                actorValues = setOf("level", "hp", "mhp", "mp", "mmp", "atk", "def", "mat", "mdf", "agi", "dex"),
+                actorValues = setOf("level", "exp", "hp", "mhp", "mp", "mmp", "atk", "def", "mat", "mdf", "agi", "dex"),
             )
             2 -> TyranorCheatController.Capabilities(
                 engine = "vx",
                 toggles = commonToggles,
                 values = setOf("gold", "level", "exp", "atk", "def", "mat", "agi", "speed"),
                 features = setOf("actors"),
-                actorValues = setOf("level", "hp", "mhp", "mp", "mmp", "atk", "def", "mat", "agi"),
+                actorValues = setOf("level", "exp", "hp", "mhp", "mp", "mmp", "atk", "def", "mat", "agi"),
             )
             else -> TyranorCheatController.Capabilities(
                 engine = "ace",
                 toggles = commonToggles + "tp",
                 values = setOf("gold", "level", "exp", "atk", "def", "mat", "mdf", "agi", "luk", "speed"),
                 features = setOf("actors"),
-                actorValues = setOf("level", "hp", "mhp", "mp", "mmp", "atk", "def", "mat", "mdf", "agi", "luk"),
+                actorValues = setOf("level", "exp", "hp", "mhp", "mp", "mmp", "atk", "def", "mat", "mdf", "agi", "luk"),
             )
         }
     }
@@ -797,6 +797,7 @@ class TyranorCheatPanel(
     private fun editActor(actor: TyranorCheatController.ActorEntry) {
         val fields = listOf(
             "level" to R.string.tyn_cheat_level,
+            "exp" to R.string.tyn_cheat_exp,
             "hp" to R.string.tyn_cheat_current_hp,
             "mhp" to R.string.tyn_cheat_max_hp,
             "mp" to if (capabilities?.engine == "xp") R.string.tyn_cheat_current_sp else R.string.tyn_cheat_current_mp,

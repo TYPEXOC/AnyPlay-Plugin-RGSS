@@ -4228,9 +4228,9 @@ module TyranorCheats
 
     def actor_value_fields
       fields = case engine
-      when :xp then %w[level hp mhp mp mmp atk def mat mdf agi dex]
-      when :vx then %w[level hp mhp mp mmp atk def mat agi]
-      when :ace then %w[level hp mhp mp mmp atk def mat mdf agi luk]
+      when :xp then %w[level exp hp mhp mp mmp atk def mat mdf agi dex]
+      when :vx then %w[level exp hp mhp mp mmp atk def mat agi]
+      when :ace then %w[level exp hp mhp mp mmp atk def mat mdf agi luk]
       else []
       end
       fields << 'points' if custom_points_supported?
@@ -4685,6 +4685,7 @@ module TyranorCheats
 
     def actor_stat_value(actor, name)
       return actor.points if name == 'points' && actor.respond_to?(:points)
+      return actor.exp if name == 'exp' && actor.respond_to?(:exp)
       key = case engine
             when :xp then { 'atk' => :str, 'def' => :pdef, 'mat' => :int, 'mdf' => :mdef, 'agi' => :agi, 'dex' => :dex }[name]
             when :vx then { 'atk' => :atk, 'def' => :def, 'mat' => :spi, 'agi' => :agi }[name]
@@ -4710,6 +4711,15 @@ module TyranorCheats
         value = [[value, 1].max, (actor.respond_to?(:max_level) ? actor.max_level.to_i : 99)].min
         result = set_actor_level(actor, value)
         return result if result.is_a?(String)
+      when 'exp'
+        value = [value, 0].max
+        if actor.respond_to?(:change_exp)
+          actor.change_exp(value, false)
+        elsif actor.respond_to?(:exp=)
+          actor.exp = value
+        else
+          return NOPE
+        end
       when 'hp'
         maximum = actor.respond_to?(:mhp) ? actor.mhp.to_i : actor.maxhp.to_i
         actor.hp = [[value, 0].max, maximum].min

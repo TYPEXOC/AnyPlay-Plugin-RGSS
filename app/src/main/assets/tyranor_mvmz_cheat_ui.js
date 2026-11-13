@@ -223,14 +223,18 @@
       else if (activeTab === "battle") renderBattle(root.querySelector(".tm-content"));
     }, 0);
   }
+  function itemKindOptionsMarkup() {
+    var itemKinds = [["item", "物品"], ["weapon", "武器"], ["armor", "护甲"]];
+    return itemKinds.map(function (entry) {
+      var selected = context.itemKind === entry[0];
+      return '<button type="button" class="tm-system-kind-option' + (selected ? ' active' : '') + '" role="option" aria-selected="' + (selected ? 'true' : 'false') + '" data-action="select-item-kind" data-kind="' + entry[0] + '">' + escapeHtml(translated(entry[1])) + '</button>';
+    }).join("");
+  }
   function renderItems(content) {
     var itemKinds = [["item", "物品"], ["weapon", "武器"], ["armor", "护甲"]];
     var selectedKind = itemKinds.filter(function (entry) { return entry[0] === context.itemKind; })[0] || itemKinds[0];
-    var kindOptions = itemKinds.map(function (entry) {
-      return '<button type="button" class="tm-system-kind-option' + (context.itemKind === entry[0] ? ' active' : '') + '" role="option" aria-selected="' + (context.itemKind === entry[0] ? 'true' : 'false') + '" data-action="select-item-kind" data-kind="' + entry[0] + '">' + escapeHtml(translated(entry[1])) + '</button>';
-    }).join("");
     var kinds = '<div class="tm-system-kind-picker tm-item-kind-picker"><button type="button" class="tm-system-kind-trigger" data-action="toggle-item-kind" aria-haspopup="listbox" aria-expanded="' + (context.itemKindExpanded ? 'true' : 'false') + '"><span>' + escapeHtml(translated(selectedKind[1])) + '</span><span class="tm-system-kind-arrow" aria-hidden="true">▾</span></button>' +
-      (context.itemKindExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + kindOptions + '</div>' : '') + '</div>';
+      (context.itemKindExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + itemKindOptionsMarkup() + '</div>' : '') + '</div>';
     var tools = '<div class="tm-row">' + kinds + textInput("tm-item-query", context.itemQuery, "search", 'placeholder="' + escapeHtml(translated("搜索名称")) + '"') + button(translated("搜索"), "render-items", "primary") + '</div>';
     var header = '<div class="tm-lock-list-header tm-item-lock-header"><span>' + escapeHtml(translated("锁定")) + '</span><span>' + escapeHtml(translated("物品")) + '</span><span>' + escapeHtml(translated("数量")) + '</span></div>';
     content.innerHTML = '<div class="tm-grid tm-item-layout">' +
@@ -355,8 +359,8 @@
       var classRow = classOptions.length
         ? '<div class="tm-item tm-actor-class-row"><span class="tm-name">' + escapeHtml(translated("职业")) + '</span>' + classPicker + '</div>'
         : '<div class="tm-note">' + escapeHtml(translated("当前游戏没有职业列表")) + '</div>';
-      var statLabels = { level: "等级", hp: "HP", mp: "MP", mhp: "最大 HP", mmp: "最大 MP", atk: "攻击", def: "防御", mat: "魔攻", mdf: "魔防", agi: "敏捷", luk: "幸运" };
-      var stats = ["level","hp","mp","mhp","mmp","atk","def","mat","mdf","agi","luk"].map(function (key) {
+      var statLabels = { level: "等级", exp: "经验", hp: "HP", mp: "MP", mhp: "最大 HP", mmp: "最大 MP", atk: "攻击", def: "防御", mat: "魔攻", mdf: "魔防", agi: "敏捷", luk: "幸运" };
+      var stats = ["level","exp","hp","mp","mhp","mmp","atk","def","mat","mdf","agi","luk"].map(function (key) {
       return '<div class="tm-item"><span class="tm-name">' + escapeHtml(translated(statLabels[key] || key.toUpperCase())) + '</span>' + textInput("tm-stat-" + key, actor[key], "number", 'style="width:94px"') + button("设置", "set-stat", "", 'data-key="' + key + '"') + '</div>';
       }).join("");
       section.innerHTML = card(translated("属性"), classRow + '<div class="tm-list">' + stats + '</div>');
@@ -895,7 +899,19 @@
     if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); render(); });
     if (action === "toggle-item-kind") {
       context.itemKindExpanded = !context.itemKindExpanded;
-      return renderItems(root.querySelector(".tm-content"));
+      var picker = root.querySelector(".tm-item-kind-picker");
+      var trigger = picker && picker.querySelector(".tm-system-kind-trigger");
+      var menu = picker && picker.querySelector(".tm-system-kind-menu");
+      if (trigger) trigger.setAttribute("aria-expanded", context.itemKindExpanded ? "true" : "false");
+      if (menu) menu.remove();
+      if (context.itemKindExpanded && picker) {
+        menu = document.createElement("div");
+        menu.className = "tm-system-kind-menu";
+        menu.setAttribute("role", "listbox");
+        menu.innerHTML = itemKindOptionsMarkup();
+        picker.appendChild(menu);
+      }
+      return;
     }
     if (action === "select-item-kind") {
       context.itemKind = node.dataset.kind === "weapon" || node.dataset.kind === "armor" ? node.dataset.kind : "item";
