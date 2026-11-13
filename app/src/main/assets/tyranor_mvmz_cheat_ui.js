@@ -13,6 +13,7 @@
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
   var goldCommitPending = null;
+  var pendingEquipScroll = null;
   var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
@@ -35,6 +36,26 @@
   function escapeHtml(value) { return String(value == null ? "" : value).replace(/[&<>'"]/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]; }); }
   function inputValue(id) { var node = root && root.querySelector("#" + id); return node ? node.value : ""; }
   function checked(id) { var node = root && root.querySelector("#" + id); return !!(node && node.checked); }
+  function readEquipScroll() {
+    if (!root) return null;
+    var content = root.querySelector(".tm-content");
+    var slots = root.querySelector(".tm-equip-slots");
+    var candidates = root.querySelector(".tm-equip-candidates");
+    return {
+      content: content ? content.scrollTop : 0,
+      slots: slots ? slots.scrollTop : 0,
+      candidates: candidates ? candidates.scrollTop : 0
+    };
+  }
+  function restoreEquipScroll(position) {
+    if (!root || !position) return;
+    var content = root.querySelector(".tm-content");
+    var slots = root.querySelector(".tm-equip-slots");
+    var candidates = root.querySelector(".tm-equip-candidates");
+    if (content) content.scrollTop = position.content;
+    if (slots) slots.scrollTop = position.slots;
+    if (candidates) candidates.scrollTop = position.candidates;
+  }
   function systemSwitchOn(value) { return value === true || value === 1 || String(value).toLowerCase() === "true" || String(value) === "1"; }
   function isDashPlaceholder(value) {
     var name = String(value == null ? "" : value).replace(/\s+/g, "");
@@ -290,6 +311,30 @@
       segmentedTabs(sections, context.actorSection, "actor-section") + '<div id="tm-actor-section"></div>';
     renderActorSection();
   }
+  function positionActorClassMenu() {
+    var menu = root && root.querySelector(".tm-actor-class-picker .tm-system-kind-menu");
+    var trigger = root && root.querySelector("#tm-actor-class");
+    if (!menu || !trigger) return;
+    var rect = trigger.getBoundingClientRect();
+    var viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    var edge = 12;
+    var gap = 4;
+    var width = Math.max(0, Math.min(rect.width, viewportWidth - edge * 2));
+    var left = Math.max(edge, Math.min(rect.left, viewportWidth - edge - width));
+    var roomBelow = Math.max(0, viewportHeight - edge - rect.bottom - gap);
+    var roomAbove = Math.max(0, rect.top - edge - gap);
+    var desiredHeight = Math.min(220, menu.scrollHeight);
+    var openAbove = roomBelow < desiredHeight && roomAbove > roomBelow;
+    var availableHeight = Math.min(220, openAbove ? roomAbove : roomBelow);
+    menu.style.position = "fixed";
+    menu.style.left = left + "px";
+    menu.style.right = "auto";
+    menu.style.width = width + "px";
+    menu.style.maxHeight = availableHeight + "px";
+    menu.style.top = openAbove ? "auto" : (rect.bottom + gap) + "px";
+    menu.style.bottom = openAbove ? (viewportHeight - rect.top + gap) + "px" : "auto";
+  }
   function renderActorSection() {
     var actor = (context.actorEntries || []).filter(function (a) { return a.id === context.actorId; })[0];
     var section = root.querySelector("#tm-actor-section");
@@ -315,6 +360,7 @@
       return '<div class="tm-item"><span class="tm-name">' + escapeHtml(translated(statLabels[key] || key.toUpperCase())) + '</span>' + textInput("tm-stat-" + key, actor[key], "number", 'style="width:94px"') + button("设置", "set-stat", "", 'data-key="' + key + '"') + '</div>';
       }).join("");
       section.innerHTML = card(translated("属性"), classRow + '<div class="tm-list">' + stats + '</div>');
+      if (context.actorClassExpanded) positionActorClassMenu();
     } else if (context.actorSection === "skills") {
       context.actorSkillEntries = mod.actorSkills(actor.id) || [];
       var skillControls = textInput("tm-skill-query", context.skillQuery, "search", 'placeholder="' + escapeHtml(translated("搜索技能名称或 ID")) + '"') +
@@ -597,7 +643,7 @@
     var pages = (detail.pages || []).map(function (page) {
       return '<div class="tm-event-page">'
         + '<div class="tm-event-page-head"><strong>事件页 ' + (Number(page.index) + 1) + '</strong><span>指令数 ' + page.commandCount + ' · 条件数 ' + page.validCount + '</span>'
-        + '<div class="tm-event-page-actions">' + button(translated("开关") + " (" + (page.conditions || []).length + ")", "show-event-conditions", "", 'data-page="' + page.index + '"') + button("事件解释器", "show-event-interpreter", "", 'data-page="' + page.index + '"') + '</div></div>'
+        + '<div class="tm-event-page-actions">' + button(translated("事件页开关") + " (" + (page.conditions || []).length + ")", "show-event-conditions", "", 'data-page="' + page.index + '"') + button(translated("事件解释器按钮"), "show-event-interpreter", "", 'data-page="' + page.index + '"') + '</div></div>'
         + '</div>';
     }).join("") || '<div class="tm-note">事件没有可显示的页面</div>';
     var description = String(detail.description || "").trim();
@@ -898,10 +944,15 @@
     if (action === "toggle-hide-empty-battle-enemies") { context.hideEmptyBattleEnemies = !!node.checked; return renderBattle(root.querySelector(".tm-content")); }
     if (action === "toggle-hide-empty-battle-actors") { context.hideEmptyBattleActors = !!node.checked; return renderBattle(root.querySelector(".tm-content")); }
     if (action === "pick-equip-slot") {
+      var equipScroll = pendingEquipScroll || readEquipScroll();
+      pendingEquipScroll = null;
       context.equipSlot = Number(node.dataset.id);
       var pickedSlot = (mod.actorEquips(context.actorId) || []).filter(function (entry) { return Number(entry.slot) === context.equipSlot; })[0];
       context.equipKind = pickedSlot && pickedSlot.type === "weapon" ? "weapon" : "armor";
-      return renderActorSection();
+      renderActorSection();
+      restoreEquipScroll(equipScroll);
+      if (window.requestAnimationFrame) window.requestAnimationFrame(function () { restoreEquipScroll(equipScroll); });
+      return;
     }
     if (action === "recover-actor") return run(function () { mod.recoverActor(context.actorId); }, function () { toast("角色已恢复"); renderActorBody(); });
     if (action === "toggle-actor-class") {
@@ -1067,6 +1118,9 @@
     root = document.createElement("div"); root.id = "tyranor-mod-root";
     root.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker RGSS 修改器</strong><button class="tm-refresh" data-action="render" title="刷新面板" aria-label="刷新面板">↻</button><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs">' + tabs.map(function (tab) { return '<button class="tm-tab" data-tab="' + tab[0] + '">' + tab[1] + '</button>'; }).join("") + '</div><main class="tm-content"></main></div>';
     document.documentElement.appendChild(root);
+    root.addEventListener("pointerdown", function (event) {
+      pendingEquipScroll = event.target.closest("[data-action='pick-equip-slot']") ? readEquipScroll() : null;
+    }, true);
     root.addEventListener("click", function (event) {
       event.stopPropagation();
       if (context.mapListExpanded) {

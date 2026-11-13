@@ -4,7 +4,7 @@
   var languageTag = String(window.TyranorModLanguageTag || "").toLowerCase();
   var language = languageTag.indexOf("en") === 0 ? "en" : languageTag.indexOf("ja") === 0 ? "ja" : "zh";
   var dictionaries = {
-    zh: { "装备动作": "装备", "卸下动作": "卸下" },
+    zh: { "装备动作": "装备", "卸下动作": "卸下", "事件页开关": "开关", "事件解释器按钮": "事件解释器" },
     en: {
       "Tyranor RGSS 修改器": "Tyranor RGSS Cheats",
       "RPG Maker 修改器": "RPG Maker Cheats",
@@ -25,7 +25,7 @@
       "操作失败": "Operation failed", "完成": "Done", "请先进入游戏存档或开始新游戏，修改器正在等待 RPG Maker 运行时就绪。": "Load a save or start a new game. Waiting for the RPG Maker runtime.",
       "当前金币": "Current gold", "金币：": "Gold:", "设置": "Set", "拉满": "Max", "全体恢复": "Recover party", "刷新面板": "Refresh panel",
       "当前没有可用的快捷功能": "No quick actions are available",
-      "运行时开关": "Runtime toggles", "金币": "Gold", "队伍": "Party", "物品数据库": "Item database", "物品详情": "Item details", "请选择物品查看详情": "Select an item to view its details", "数量操作": "Quantity controls", "当前数量": "Current quantity", "已选择": "Selected",
+      "运行时开关": "Runtime toggles", "金币": "Gold", "队伍": "Party", "物品数据库": "Item database", "物品详情": "Item details", "请选择物品查看详情": "Select an item to view its details", "数量操作": "Quantity controls", "当前数量": "Owned", "已选择": "Selected",
       "加载中…": "Loading…", "搜索": "Search", "搜索名称": "Search names", "应用": "Apply", "数量": "Quantity",
       "锁定": "Lock", "名称": "Name", "当前值": "Current value",
       "物品已锁定": "Item quantity locked", "系统值已锁定": "System value locked", "已取消锁定": "Lock removed",
@@ -52,7 +52,7 @@
       "强制胜利": "Force victory", "强制战败": "Force defeat", "强制逃跑": "Force escape", "战斗操作": "Battle actions", "战斗开关": "Battle modifiers", "当前游戏没有可用的战斗开关": "No battle modifiers are available in this game", "敌方": "Enemies", "我方": "Party",
       "所选地图全部事件独立开关:": "Self-switches for all events on selected map:", "全部开启": "Enable all", "全部关闭": "Disable all", "该事件独立开关:": "Selected event self-switches:", "所选地图事件开关已全开": "Enabled switches for all events on selected map", "所选地图事件开关已全关": "Disabled switches for all events on selected map",
       "事件条件开关已更新": "Event condition switch updated",
-      "名称:": "Name:", "描述:": "Description:", "独立开关:": "Self-switches:", "事件解释器": "Event interpreter", "事件条件": "Event conditions", "条件": "Conditions", "点击开关或独立开关条件可单独切换": "Tap a switch or self-switch condition to toggle it", "事件长度": "Commands", "无条件": "No conditions", "无法读取所选事件详情": "Unable to read the selected event", "事件没有可显示的页面": "This event has no pages to display", "此事件页没有指令": "This event page has no commands", "点击指令可展开查看参数": "Tap a command to expand its parameters", "开": "On", "关": "Off", "指令数": "Commands", "条件数": "Conditions",
+      "名称:": "Name:", "描述:": "Description:", "独立开关:": "Self-switches:", "事件解释器": "Event interpreter", "事件解释器按钮": "Interpreter", "事件页开关": "Cond.", "事件条件": "Event conditions", "条件": "Conditions", "点击开关或独立开关条件可单独切换": "Tap a switch or self-switch condition to toggle it", "事件长度": "Commands", "无条件": "No conditions", "无法读取所选事件详情": "Unable to read the selected event", "事件没有可显示的页面": "This event has no pages to display", "此事件页没有指令": "This event page has no commands", "点击指令可展开查看参数": "Tap a command to expand its parameters", "开": "On", "关": "Off", "指令数": "Commands", "条件数": "Conditions",
       "结束": "End", "显示文本": "Show Text", "显示选项": "Show Choices", "数值输入": "Input Number", "物品选择": "Select Item", "滚动文本": "Scroll Text", "注释": "Comment", "条件分支": "Conditional Branch", "循环": "Loop", "中断循环": "Break Loop", "事件处理结束": "Exit Event Processing", "调用公共事件": "Call Common Event", "标签": "Label", "跳转标签": "Jump to Label", "控制开关": "Control Switches", "控制变量": "Control Variables", "控制独立开关": "Control Self Switch", "传送玩家": "Transfer Player", "设置事件位置": "Set Event Location", "设置移动路线": "Set Move Route", "等待": "Wait", "播放 BGM": "Play BGM", "播放 BGS": "Play BGS", "播放 ME": "Play ME", "播放 SE": "Play SE", "战斗处理": "Battle Processing", "商店处理": "Shop Processing", "增减 HP": "Change HP", "增减 MP": "Change MP", "更改状态": "Change State", "全体恢复": "Recover All", "打开菜单": "Open Menu", "打开存档画面": "Open Save Screen", "游戏结束": "Game Over", "脚本": "Script", "文本内容": "Text", "选项分支": "Choice Branch", "取消分支": "Cancel Branch", "结束选项分支": "End Choice Branch", "结束条件分支": "End Branch", "重复循环": "Repeat Above", "胜利时": "When Victory", "逃跑时": "When Escape", "失败时": "When Defeat", "结束战斗分支": "End Battle Branch", "脚本行": "Script Line", "事件指令": "Event Command",
       "存档管理": "Save management", "读取中…": "Loading…", "存档 ": "Save ", "已有数据": "Existing data", "空": "Empty",
       "保存": "Save", "覆盖": "Overwrite", "读取": "Load", "删除": "Delete", "Tyranor 修改器": "Tyranor Cheats", "版本 ": "Version ",
@@ -117,7 +117,7 @@
       "强制胜利": "強制勝利", "强制战败": "強制敗北", "强制逃跑": "強制逃走", "战斗操作": "戦闘操作", "战斗开关": "戦闘チート", "当前游戏没有可用的战斗开关": "このゲームで使える戦闘チートはありません", "敌方": "敵", "我方": "味方",
       "所选地图全部事件独立开关:": "選択したマップの全イベントセルフスイッチ:", "全部开启": "すべてオン", "全部关闭": "すべてオフ", "该事件独立开关:": "選択中イベントのセルフスイッチ:", "所选地图事件开关已全开": "選択したマップの全イベントスイッチをオンにしました", "所选地图事件开关已全关": "選択したマップの全イベントスイッチをオフにしました",
       "事件条件开关已更新": "イベント条件スイッチを更新しました",
-      "名称:": "名前:", "描述:": "説明:", "独立开关:": "セルフスイッチ:", "事件解释器": "イベントインタプリタ", "事件条件": "イベント条件", "条件": "条件", "点击开关或独立开关条件可单独切换": "スイッチまたはセルフスイッチ条件をタップして切り替え", "事件长度": "コマンド数", "无条件": "条件なし", "无法读取所选事件详情": "選択したイベントを読み込めません", "事件没有可显示的页面": "表示できるページがありません", "此事件页没有指令": "このイベントページにコマンドはありません", "点击指令可展开查看参数": "タップするとコマンドのパラメーターを表示します", "开": "オン", "关": "オフ", "指令数": "コマンド数", "条件数": "条件数",
+      "名称:": "名前:", "描述:": "説明:", "独立开关:": "セルフスイッチ:", "事件解释器": "イベントインタプリタ", "事件解释器按钮": "インタプリタ", "事件页开关": "条件", "事件条件": "イベント条件", "条件": "条件", "点击开关或独立开关条件可单独切换": "スイッチまたはセルフスイッチ条件をタップして切り替え", "事件长度": "コマンド数", "无条件": "条件なし", "无法读取所选事件详情": "選択したイベントを読み込めません", "事件没有可显示的页面": "表示できるページがありません", "此事件页没有指令": "このイベントページにコマンドはありません", "点击指令可展开查看参数": "タップするとコマンドのパラメーターを表示します", "开": "オン", "关": "オフ", "指令数": "コマンド数", "条件数": "条件数",
       "结束": "終了", "显示文本": "文章の表示", "显示选项": "選択肢の表示", "数值输入": "数値入力", "物品选择": "アイテム選択", "滚动文本": "スクロール文章", "注释": "注釈", "条件分支": "条件分岐", "循环": "ループ", "中断循环": "ループ中断", "事件处理结束": "イベント処理の終了", "调用公共事件": "コモンイベント", "标签": "ラベル", "跳转标签": "ラベルジャンプ", "控制开关": "スイッチの操作", "控制变量": "変数の操作", "控制独立开关": "セルフスイッチの操作", "传送玩家": "場所移動", "设置事件位置": "イベント位置設定", "设置移动路线": "移動ルートの設定", "等待": "ウェイト", "播放 BGM": "BGM の演奏", "播放 BGS": "BGS の演奏", "播放 ME": "ME の演奏", "播放 SE": "SE の演奏", "战斗处理": "戦闘の処理", "商店处理": "ショップの処理", "增减 HP": "HP の増減", "增减 MP": "MP の増減", "更改状态": "ステートの変更", "全体恢复": "全回復", "打开菜单": "メニュー画面", "打开存档画面": "セーブ画面", "游戏结束": "ゲーム終了", "脚本": "スクリプト", "文本内容": "文章", "选项分支": "選択肢分岐", "取消分支": "キャンセル分岐", "结束选项分支": "選択肢分岐終了", "结束条件分支": "条件分岐終了", "重复循环": "ループの再開", "胜利时": "勝利時", "逃跑时": "逃走時", "失败时": "敗北時", "结束战斗分支": "戦闘分岐終了", "脚本行": "スクリプト行", "事件指令": "イベントコマンド",
       "存档管理": "セーブ管理", "读取中…": "読み込み中…", "存档 ": "セーブ ", "已有数据": "データあり", "空": "空",
       "保存": "保存", "覆盖": "上書き", "读取": "読み込み", "删除": "削除", "Tyranor 修改器": "Tyranor 改造パネル", "版本 ": "バージョン ",
@@ -142,11 +142,11 @@
     var text = String(value == null ? "" : value);
     if (dictionary[text]) return dictionary[text];
     var eventPage = text.match(/^事件页\s*(\d+)$/);
-    if (eventPage) return language === "ja" ? "イベントページ " + eventPage[1] : "Event page " + eventPage[1];
+    if (eventPage) return language === "ja" ? "ページ " + eventPage[1] : "Page " + eventPage[1];
     var eventCounts = text.match(/^指令数\s*(\d+)\s*·\s*条件数\s*(\d+)$/);
     if (eventCounts) return language === "ja"
       ? "コマンド " + eventCounts[1] + " · 条件 " + eventCounts[2]
-      : "Commands " + eventCounts[1] + " · Conditions " + eventCounts[2];
+      : "Cmd " + eventCounts[1] + " · Cond " + eventCounts[2];
     var dynamic = text.match(/^(槽位\s*\d+：|存档\s+|迷你地图 #|已选中事件 #)/);
     if (dynamic) {
       var prefix = dynamic[0];
