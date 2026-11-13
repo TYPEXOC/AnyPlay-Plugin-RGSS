@@ -41,10 +41,11 @@
     version: "1.5.1",
     isReady: function () { return !!invoke("isReady"); },
     getState: function () { return invoke("getState") || {}; },
-    listCapabilities: function () { return invoke("listCapabilities") || { engine: "unknown", toggles: [] }; },
+    listCapabilities: function () { return invoke("listCapabilities") || { engine: "unknown", toggles: [], values: [] }; },
     setFlag: function (name, enabled) { return invoke("setFlag", [name, !!enabled]); },
     setSpeed: function (value) { return invoke("setSpeed", [value]); },
     setGameSpeed: function (value) { return invoke("setGameSpeed", [value]); },
+    setRewardMultiplier: function (name, value) { return invoke("setRewardMultiplier", [name, value]); },
     getGold: function () { return Number(invoke("getGold") || 0); },
     setGold: function (value) { return invoke("setGold", [value]); },
     listDatabase: function (kind, query, offset, limit) {

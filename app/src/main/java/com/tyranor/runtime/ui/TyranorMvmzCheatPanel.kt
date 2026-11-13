@@ -230,6 +230,8 @@ class TyranorMvmzCheatPanel(
                     "speed" to cheats.isEnabled(TyranorCheatToggle.SPEED_BOOST),
                     "speedMultiplier" to cheats.speedMultiplier(),
                     "gameSpeedMultiplier" to cheats.gameSpeedMultiplier(),
+                    "expMultiplier" to cheats.expMultiplier(),
+                    "dropMultiplier" to cheats.dropMultiplier(),
                     "fastText" to cheats.isEnabled(TyranorCheatToggle.FAST_TEXT),
                     "eventSpeed" to cheats.isEnabled(TyranorCheatToggle.EVENT_SPEED),
                     "msgSkip" to cheats.isEnabled(TyranorCheatToggle.MESSAGE_SKIP),
@@ -237,13 +239,16 @@ class TyranorMvmzCheatPanel(
                     "freeSkill" to cheats.isEnabled(TyranorCheatToggle.FREE_SKILL_COST),
                 ))
                 "listCapabilities" -> cheats.loadCapabilities { capabilities ->
-                    done(mapOf("engine" to capabilities.engine, "toggles" to capabilities.toggles))
+                    done(mapOf("engine" to capabilities.engine, "toggles" to capabilities.toggles, "values" to capabilities.values))
                 }
                 "setFlag" -> setFlag(argString(a, 0), argBoolean(a, 1), done)
                 "setSpeed" -> cheats.setValue("speed", argString(a, 0)) {
                     completeMessage(it, done)
                 }
                 "setGameSpeed" -> cheats.setGameSpeed(argString(a, 0)) {
+                    completeMessage(it, done)
+                }
+                "setRewardMultiplier" -> cheats.setRewardMultiplier(argString(a, 0), argString(a, 1)) {
                     completeMessage(it, done)
                 }
                 "getGold" -> cheats.getGold { done(it ?: 0) }

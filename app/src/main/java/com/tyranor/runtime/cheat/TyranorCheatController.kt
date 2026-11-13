@@ -226,6 +226,8 @@ class TyranorCheatController(
     private val togglesKey = "$keyBase.toggles"
     private val speedKey = "$keyBase.speed"
     private val gameSpeedKey = "$keyBase.game_speed"
+    private val expMultiplierKey = "$keyBase.exp_multiplier"
+    private val dropMultiplierKey = "$keyBase.drop_multiplier"
 
     private val dir = context.applicationContext.cacheDir
     private val cmdFile = File(dir, "tyranor_cheat_cmd.txt")
@@ -293,15 +295,21 @@ class TyranorCheatController(
         replyFile.delete()
         runtimeStateFile.delete()
         // Gives the game the saved checkboxes as soon as it starts running.
-        enqueue("restore\t${speedMultiplier()}\t${enabledNames().joinToString(",")}\t${gameSpeedMultiplier()}", 0L) { ready = true }
+        enqueue("restore\t${speedMultiplier()}\t${enabledNames().joinToString(",")}\t${gameSpeedMultiplier()}\t${expMultiplier()}\t${dropMultiplier()}", 0L) { ready = true }
     }
 
     private fun syncRuntimeState() {
-        val fields = runCatching { runtimeStateFile.readText().split('\t', limit = 2) }.getOrNull() ?: return
-        if (fields.size != 2) return
+        val fields = runCatching { runtimeStateFile.readText().split('\t', limit = 4) }.getOrNull() ?: return
+        if (fields.size < 2) return
         val speed = fields[0].toFloatOrNull()?.takeIf { it > 0f } ?: return
         val enabled = fields[1].split(',').filter { it.isNotBlank() }.toMutableSet()
         prefs.edit().putFloat(speedKey, speed.coerceIn(0.25f, 8f)).putStringSet(togglesKey, enabled).apply()
+        fields.getOrNull(2)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let {
+            prefs.edit().putFloat(expMultiplierKey, it).apply()
+        }
+        fields.getOrNull(3)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let {
+            prefs.edit().putFloat(dropMultiplierKey, it).apply()
+        }
     }
 
     private fun enabledNames(): Set<String> {
@@ -320,6 +328,28 @@ class TyranorCheatController(
     }
 
     fun gameSpeedMultiplier(): Int = prefs.getInt(gameSpeedKey, 1).coerceIn(1, 9)
+
+    fun expMultiplier(): Float = prefs.getFloat(expMultiplierKey, 1f).coerceIn(0f, 100f)
+
+    fun dropMultiplier(): Float = prefs.getFloat(dropMultiplierKey, 1f).coerceIn(0f, 100f)
+
+    fun setRewardMultiplier(name: String, value: String, onResult: (String) -> Unit) {
+        val key = when (name) {
+            "expMultiplier" -> expMultiplierKey
+            "dropMultiplier" -> dropMultiplierKey
+            else -> {
+                onResult("Unknown reward multiplier.")
+                return
+            }
+        }
+        send("value\t$name\t${clean(value)}") { message ->
+            val multiplier = value.trim().toFloatOrNull()?.takeIf { it in 0f..100f }
+            if (multiplier != null && message.startsWith("${if (name == "expMultiplier") "EXP" else "Drop"} multiplier x")) {
+                prefs.edit().putFloat(key, multiplier).apply()
+            }
+            onResult(message)
+        }
+    }
 
     /**
      * Checkbox tapped. [onResult] gets "" when it worked, otherwise a message

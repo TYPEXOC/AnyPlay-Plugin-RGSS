@@ -583,6 +583,19 @@
       button("强制胜利", "victory", "primary", actionDisabled) +
       button("强制战败", "defeat", "danger", actionDisabled) +
       button("强制逃跑", "escape", "", actionDisabled) + '</div>';
+    var supportedValues = context.capabilities && context.capabilities.values;
+    var rewardFields = [];
+    if (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0) {
+      rewardFields.push('<div class="tm-row"><label for="tm-exp-multiplier">经验倍率</label>' +
+        textInput("tm-exp-multiplier", state.expMultiplier == null ? 1 : state.expMultiplier, "number", 'min="0" max="100" step="0.1"') +
+        button("设置", "set-exp-multiplier", "primary") + '</div>');
+    }
+    if (!supportedValues || supportedValues.indexOf("dropMultiplier") >= 0) {
+      rewardFields.push('<div class="tm-row"><label for="tm-drop-multiplier">掉落倍率</label>' +
+        textInput("tm-drop-multiplier", state.dropMultiplier == null ? 1 : state.dropMultiplier, "number", 'min="0" max="100" step="0.1"') +
+        button("设置", "set-drop-multiplier", "primary") + '</div>');
+    }
+    var rewards = rewardFields.length ? card("战斗奖励倍率", '<div class="tm-reward-multipliers">' + rewardFields.join("") + '</div>', "tm-battle-reward") : "";
     var enemies = snapshot.enemies.map(function (enemy) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(enemy.name) + ' HP ' + enemy.hp + '/' + enemy.mhp + '</span>' + textInput("tm-enemy-" + enemy.index, enemy.hp, "number", 'style="width:86px"') + button("设置", "set-enemy", "", 'data-index="' + enemy.index + '"') + '</div>'; }).join("");
     var actors = snapshot.actors.map(function (actor) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(actor.name) + '</span><span class="tm-badge">HP ' + actor.hp + '/' + actor.mhp + '</span></div>'; }).join("");
     if (!snapshot.inBattle) {
@@ -590,7 +603,7 @@
       actors = '<div class="tm-note">当前不在战斗中</div>';
     }
     content.innerHTML = '<div class="tm-battle-page">' +
-      '<div class="tm-grid tm-battle-controls">' + card("战斗开关", toggles) + card("战斗操作", actions) + '</div>' +
+      '<div class="tm-grid tm-battle-controls">' + card("战斗开关", toggles) + card("战斗操作", actions) + rewards + '</div>' +
       '<div class="tm-grid tm-battle-grid">' + card("我方", '<div class="tm-list">' + actors + '</div>') + card("敌方", '<div class="tm-list">' + enemies + '</div>') + '</div>' +
       '</div>';
     ensureCapabilities();
@@ -636,6 +649,8 @@
     }
     if (action === "set-speed") return run(function () { return mod.setSpeed(inputValue("tm-speed")); }, function () { toast("移动速度已设置"); renderQuick(root.querySelector(".tm-content"), false); });
     if (action === "set-game-speed") return run(function () { return mod.setGameSpeed(inputValue("tm-game-speed")); }, function () { toast("游戏倍速已设置"); renderQuick(root.querySelector(".tm-content"), false); });
+    if (action === "set-exp-multiplier") return run(function () { return mod.setRewardMultiplier("expMultiplier", inputValue("tm-exp-multiplier")); }, function () { toast("经验倍率已设置"); renderBattle(root.querySelector(".tm-content")); });
+    if (action === "set-drop-multiplier") return run(function () { return mod.setRewardMultiplier("dropMultiplier", inputValue("tm-drop-multiplier")); }, function () { toast("掉落倍率已设置"); renderBattle(root.querySelector(".tm-content")); });
     if (action === "set-gold") return run(function () { mod.setGold(inputValue("tm-gold")); }, function () { toast("金币已修改"); render(); });
     if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () { toast("金币已拉满"); render(); });
     if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); render(); });

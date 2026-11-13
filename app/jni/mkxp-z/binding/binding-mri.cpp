@@ -3178,6 +3178,8 @@ module TyranorCheats
   @on = {}
   @speed = 2.0
   @game_speed = 1
+  @exp_multiplier = 1.0
+  @drop_multiplier = 1.0
   @engine = nil
   @ess21 = false
   @tick = 0
@@ -3323,11 +3325,28 @@ module TyranorCheats
     def speed_on?; @on['speed'] ? true : false; end
     def write_state
       File.open(STATE + ".tmp", "wb") do |file|
-        file.write("#{@speed}\t#{@on.keys.join(',')}")
+        file.write("#{@speed}\t#{@on.keys.join(',')}\t#{@exp_multiplier}\t#{@drop_multiplier}")
       end
       File.rename(STATE + ".tmp", STATE)
     rescue Exception
     end
+    def restored_multiplier(value, fallback)
+      text = value.to_s.strip
+      return fallback unless text =~ /\A(?:\d+(?:\.\d*)?|\.\d+)\z/
+      number = text.to_f
+      number >= 0 && number <= 100 ? number : fallback
+    rescue Exception
+      fallback
+    end
+    def reward_multiplier_supported?(name)
+      return false unless rpgm? && defined?(Game_Troop)
+      name == 'expMultiplier' ? class_method?(Game_Troop, :exp_total) :
+        (name == 'dropMultiplier' && class_method?(Game_Troop, :make_drop_items))
+    rescue Exception
+      false
+    end
+    def exp_multiplier; @exp_multiplier.to_f; end
+    def drop_multiplier; @drop_multiplier.to_f; end
     def speed_bonus
       m = @speed.to_f
       m = 1.0 if m <= 0
@@ -3561,12 +3580,16 @@ module TyranorCheats
     end
 
     def restore(speed, names)
-      toggle_names, saved_game_speed = names.to_s.split("\t", 2)
+      fields = names.to_s.split("\t", -1)
+      toggle_names = fields[0]
+      saved_game_speed = fields[1]
       s = speed.to_f
       @speed = [[s, 0.25].max, 8.0].min if s > 0
       @on = {}
       toggle_names.to_s.split(',').each { |n| @on[n] = true unless n.empty? }
       restore_game_speed(saved_game_speed)
+      @exp_multiplier = restored_multiplier(fields[2], 1.0)
+      @drop_multiplier = restored_multiplier(fields[3], 1.0)
       @item_snap = nil
       @points_snap = nil
       @coins_snap = nil
@@ -3799,6 +3822,22 @@ module TyranorCheats
         Graphics.set_fast_forward_speed(speed)
         @game_speed = speed
         return "Game speed x#{@game_speed}"
+      end
+      if name == 'expMultiplier' || name == 'dropMultiplier'
+        value = v.to_s.strip
+        return "Enter a number from 0 to 100." unless value =~ /\A(?:\d+(?:\.\d*)?|\.\d+)\z/
+        multiplier = value.to_f
+        return "Enter a number from 0 to 100." unless multiplier >= 0 && multiplier <= 100
+        return NOPE unless rpgm? && reward_multiplier_supported?(name)
+        if name == 'expMultiplier'
+          @exp_multiplier = multiplier
+          label = "EXP"
+        else
+          @drop_multiplier = multiplier
+          label = "Drop"
+        end
+        write_state
+        return "#{label} multiplier x#{multiplier}"
       end
       n = v.to_s.strip
       return "Enter a number first." if n.empty?
@@ -4136,6 +4175,10 @@ module TyranorCheats
       values << 'points' if custom_points_supported?
       values.each { |name| out << "V\t#{name}" }
       out << "V\tspeed" if engine != :unknown
+      if rpgm? && defined?(Game_Troop)
+        out << "V\texpMultiplier" if class_method?(Game_Troop, :exp_total)
+        out << "V\tdropMultiplier" if class_method?(Game_Troop, :make_drop_items)
+      end
       out << "F\tevents" if $game_map && $game_map.respond_to?(:events)
       out << "F\teventSelfSwitches" if event_switches && event_switches.respond_to?(:[]=)
       out << "F\tminimap" if $game_map && $game_map.respond_to?(:width) && $game_map.respond_to?(:height)
@@ -6554,6 +6597,44 @@ module TyranorCheats
       return if @hooked
       return if engine == :unknown
       @hooked = true
+
+      # Standard RGSS1/2/3 battle rewards flow through these Game_Troop
+      # methods. Keep the hooks here so custom games retain their own enemy
+      # data and drop tables; only the final reward calculation is scaled.
+      if rpgm? && defined?(Game_Troop)
+        Game_Troop.class_eval do
+          if method_defined?(:exp_total) && !method_defined?(:__ap_cheat_exp_total)
+            alias_method :__ap_cheat_exp_total, :exp_total
+            def exp_total(*args)
+              value = __ap_cheat_exp_total(*args)
+              return value if TyranorCheats.exp_multiplier == 1.0
+              (value.to_f * TyranorCheats.exp_multiplier).round
+            end
+          end
+          if method_defined?(:make_drop_items) && !method_defined?(:__ap_cheat_make_drop_items)
+            alias_method :__ap_cheat_make_drop_items, :make_drop_items
+            def make_drop_items(*args)
+              multiplier = TyranorCheats.drop_multiplier
+              return [] if multiplier <= 0
+              base = __ap_cheat_make_drop_items(*args) || []
+              return base if multiplier == 1.0
+              if multiplier < 1.0
+                return base.select { rand < multiplier }
+              end
+              result = base.dup
+              whole = multiplier.to_i - 1
+              whole.times do
+                result.concat(__ap_cheat_make_drop_items(*args) || [])
+              end
+              fraction = multiplier - multiplier.to_i
+              if fraction > 0 && rand < fraction
+                result.concat(__ap_cheat_make_drop_items(*args) || [])
+              end
+              result
+            end
+          end
+        end
+      end
 
       if defined?(Game_Character) && Game_Character.method_defined?(:update)
         Game_Character.class_eval do
