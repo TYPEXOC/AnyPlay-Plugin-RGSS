@@ -3543,7 +3543,10 @@ module TyranorCheats
 
     def max_exp_of(p)
       if gd?
-        p.growth_rate.maximum_exp
+        growth_rate = p.growth_rate
+        return growth_rate.maximum_exp if growth_rate.respond_to?(:maximum_exp)
+        return growth_rate.minimum_exp_for_level(max_level) if growth_rate.respond_to?(:minimum_exp_for_level)
+        raise NoMethodError, "growth rate doesn't expose an experience limit"
       else
         PBExperience.pbGetMaxExperience(p.growthrate)
       end
@@ -4208,7 +4211,8 @@ module TyranorCheats
                       else
                         nil
                       end
-      can_learn_pokemon_moves = class_method?(pokemon_class, :pbLearnMoveAtIndex) || defined?(PBMove)
+      can_learn_pokemon_moves = class_method?(pokemon_class, :pbLearnMoveAtIndex) ||
+        class_method?(pokemon_class, :learn_move) || defined?(PBMove) || defined?(Pokemon::Move)
       out << "F\tpokemonMoves" if ess? && can_learn_pokemon_moves &&
         class_method?(pokemon_class, :moves) && class_method?(pokemon_class, :moves=) &&
         !pokemon_move_catalog.empty?
@@ -4293,6 +4297,58 @@ module TyranorCheats
       [:SLEEP, "Sleep"], [:POISON, "Poison"], [:BURN, "Burn"],
       [:PARALYSIS, "Paralysis"], [:FROZEN, "Frozen"]
     ]
+    POKEMON_STAT_KEYS = [:HP, :ATTACK, :DEFENSE, :SPECIAL_ATTACK, :SPECIAL_DEFENSE, :SPEED]
+    POKEMON_LEGACY_STAT_INDEXES = [0, 1, 2, 4, 5, 3]
+
+    def pokemon_stat_data(pokemon, kind)
+      return nil unless pokemon && pokemon.respond_to?(kind)
+      values = pokemon.send(kind)
+      return values if values.is_a?(Hash)
+      return values if values.is_a?(Array) && values.length >= 6
+      nil
+    rescue Exception
+      nil
+    end
+
+    def pokemon_stat_value(values, slot)
+      return 0 unless values
+      if values.is_a?(Array)
+        value = values[POKEMON_LEGACY_STAT_INDEXES[slot]]
+      elsif values.is_a?(Hash)
+        key = POKEMON_STAT_KEYS[slot]
+        value = values.has_key?(key) ? values[key] : values[key.to_s]
+      end
+      value.respond_to?(:to_i) ? value.to_i : 0
+    rescue Exception
+      0
+    end
+
+    def set_pokemon_stat_value(values, slot, value)
+      if values.is_a?(Array)
+        values[POKEMON_LEGACY_STAT_INDEXES[slot]] = value
+      elsif values.is_a?(Hash)
+        key = POKEMON_STAT_KEYS[slot]
+        key = key.to_s if !values.has_key?(key) && values.has_key?(key.to_s)
+        values[key] = value
+      else
+        return false
+      end
+      true
+    rescue Exception
+      false
+    end
+
+    def pokemon_ev_total_except(values, excluded_slot)
+      total = 0
+      POKEMON_STAT_KEYS.each_index do |slot|
+        next if slot == excluded_slot
+        total += pokemon_stat_value(values, slot)
+      end
+      total
+    rescue Exception
+      0
+    end
+
     def pokemon_status_key(value)
       return "" if no_status?(value)
       return value.to_s.gsub(/^:/, "").upcase unless value.is_a?(Numeric)
@@ -4395,6 +4451,7 @@ module TyranorCheats
       (0...4).map do |slot|
         move = moves[slot]
         key = pokemon_move_key(move)
+        key = nil if key == 0 || key.to_s.upcase == "NONE"
         name = key.nil? ? "" : wire_text(pokemon_move_name(key))
         "M\t#{slot}\t#{wire_text(key)}\t#{name}"
       end.join("\n")
@@ -4423,11 +4480,14 @@ module TyranorCheats
     def list_pokemon_stats(index_text)
       pokemon, error = pokemon_at(index_text)
       return error if error
-      return NOPE unless pokemon.respond_to?(:iv) && pokemon.respond_to?(:ev)
+      ivs = pokemon_stat_data(pokemon, :iv)
+      evs = pokemon_stat_data(pokemon, :ev)
+      return NOPE unless ivs && evs
       out = []
-      [ ["I", pokemon.iv], ["E", pokemon.ev] ].each do |kind, values|
-        next unless values.is_a?(Array)
-        values[0, 6].each_with_index { |value, index| out << "#{kind}\t#{index}\t#{value.to_i}" }
+      [["I", ivs], ["E", evs]].each do |kind, values|
+        POKEMON_STAT_KEYS.each_index do |index|
+          out << "#{kind}\t#{index}\t#{pokemon_stat_value(values, index)}"
+        end
       end
       out.join("\n")
     rescue Exception => e
@@ -4458,28 +4518,30 @@ module TyranorCheats
         value = [[value, 0].max, pokemon.totalhp.to_i].min
         pokemon.hp = value
       when /\Aiv_([0-5])\z/
-        return NOPE unless pokemon.respond_to?(:iv) && pokemon.respond_to?(:iv=)
-        stats = pokemon.iv
-        return NOPE unless stats.is_a?(Array) && stats.length >= 6
+        return NOPE unless pokemon.respond_to?(:iv=)
         slot = field[3, 1].to_i
+        stats = pokemon_stat_data(pokemon, :iv)
+        return NOPE unless stats
         stats = stats.dup
-        stats[slot] = [[value, 0].max, 31].min
+        value = [[value, 0].max, 31].min
+        return NOPE unless set_pokemon_stat_value(stats, slot, value)
         pokemon.iv = stats
         mon_calc(pokemon)
-        value = stats[slot]
+        value = pokemon_stat_value(stats, slot)
       when /\Aev_([0-5])\z/
-        return NOPE unless pokemon.respond_to?(:ev) && pokemon.respond_to?(:ev=)
-        stats = pokemon.ev
-        return NOPE unless stats.is_a?(Array) && stats.length >= 6
+        return NOPE unless pokemon.respond_to?(:ev=)
         slot = field[3, 1].to_i
+        stats = pokemon_stat_data(pokemon, :ev)
+        return NOPE unless stats
         current_total = 0
-        stats.each_with_index { |n, i| current_total += n.to_i if i != slot }
+        current_total = pokemon_ev_total_except(stats, slot)
         maximum = [[252, 510 - current_total].min, 0].max
         stats = stats.dup
-        stats[slot] = [[value, 0].max, maximum].min
+        value = [[value, 0].max, maximum].min
+        return NOPE unless set_pokemon_stat_value(stats, slot, value)
         pokemon.ev = stats
         mon_calc(pokemon)
-        value = stats[slot]
+        value = pokemon_stat_value(stats, slot)
       else
         return NOPE
       end
@@ -4510,9 +4572,13 @@ module TyranorCheats
       key = raw_key.to_s.strip
       moves = (pokemon.moves || []).dup
       return "This Pokemon has no move data." unless moves.is_a?(Array)
-      moves << nil while moves.length < 4
       if key.empty?
-        moves[slot] = nil
+        if defined?(Pokemon::Move) && pokemon.respond_to?(:learn_move)
+          moves.delete_at(slot) if slot < moves.length
+        else
+          moves << nil while moves.length < 4
+          moves[slot] = nil
+        end
         pokemon.moves = moves
         (pokemon.zmoves[slot] = nil rescue nil) if pokemon.respond_to?(:zmoves) && pokemon.zmoves.is_a?(Array)
         return "Move slot cleared."
@@ -4520,9 +4586,19 @@ module TyranorCheats
       candidate = pokemon_move_catalog.find { |entry| entry[0].to_s == key }
       return "That move isn't in this game's move list." unless candidate
       move_key = candidate[0]
-      if pokemon.respond_to?(:pbLearnMoveAtIndex)
+      if defined?(Pokemon::Move) && pokemon.respond_to?(:learn_move)
+        slot = [slot, moves.length].min
+        move = Pokemon::Move.new(move_key)
+        if slot == moves.length
+          moves << move
+        else
+          moves[slot] = move
+        end
+        pokemon.moves = moves
+      elsif pokemon.respond_to?(:pbLearnMoveAtIndex)
         pokemon.pbLearnMoveAtIndex(move_key, slot)
       elsif defined?(PBMove)
+        moves << nil while moves.length < 4
         moves[slot] = PBMove.new(move_key)
         pokemon.moves = moves
         (pokemon.updateZMoveIndex(slot) rescue nil) if pokemon.respond_to?(:updateZMoveIndex)
@@ -4552,7 +4628,14 @@ module TyranorCheats
       end
       allowed = POKEMON_STATUSES.find { |entry| entry[0].to_s == status }
       return "That status isn't supported." unless allowed
-      pokemon.status = status.to_sym
+      status_value = if gd?
+                       status.to_sym
+                     elsif defined?(PBStatuses) && PBStatuses.const_defined?(status.to_sym)
+                       PBStatuses.const_get(status.to_sym)
+                     else
+                       return NOPE
+                     end
+      pokemon.status = status_value
       pokemon.statusCount = 0 if pokemon.respond_to?(:statusCount=)
       "#{wire_text(pokemon_display_name(pokemon))} status set to #{allowed[1]}"
     rescue Exception => e
@@ -5445,8 +5528,11 @@ module TyranorCheats
     end
 
     def system_locked?(kind, id)
+      return false unless id.is_a?(Integer) || id.is_a?(String)
+      numeric_id = id.is_a?(Integer) ? id : (id =~ /\A\d+\z/ ? id.to_i : nil)
+      return false if numeric_id.nil?
       locks = @system_locks && @system_locks[kind.to_s]
-      locks && locks.has_key?(id.to_i) ? true : false
+      locks && locks.has_key?(numeric_id) ? true : false
     rescue Exception
       false
     end

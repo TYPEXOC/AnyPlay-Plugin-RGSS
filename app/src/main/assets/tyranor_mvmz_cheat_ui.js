@@ -14,7 +14,8 @@
   var activeTab = "quick";
   var goldCommitPending = null;
   var pendingEquipScroll = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, pokemonMoveCandidates: [], pokemonIndex: 0, pokemonMoveSlot: 0, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, pokemonMoveCandidates: [], pokemonIndex: 0, pokemonMoveSlot: 0, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false, capabilityRetryCount: 0, capabilityRetryTimer: null, profileInitialized: false };
+  var capabilityGeneration = 0;
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["pokemon", "宝可梦"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -137,22 +138,30 @@
   }
   function visibleTabs() {
     return tabs.filter(function (tab) {
-      return tab[0] !== "pokemon" || !!(context.capabilities && context.capabilities.features && context.capabilities.features.indexOf("pokemonParty") >= 0);
+      if (tab[0] === "pokemon") return !!(context.capabilities && context.capabilities.features && context.capabilities.features.indexOf("pokemonParty") >= 0);
+      if (tab[0] === "actors" && context.capabilities && context.capabilities.engine === "essentials") return false;
+      return true;
     });
   }
   function renderTabs() {
     var tabBar = root && root.querySelector(".tm-tabs");
     if (!tabBar) return;
-    tabBar.innerHTML = visibleTabs().map(function (tab) {
+    var title = root.querySelector(".tm-head strong");
+    if (title) title.textContent = translated(context.capabilities && context.capabilities.engine === "essentials" ? "宝可梦修改器" : "RPG Maker RGSS 修改器");
+    var available = visibleTabs();
+    if (context.capabilities && !available.some(function (tab) { return tab[0] === activeTab; })) activeTab = "quick";
+    tabBar.innerHTML = available.map(function (tab) {
       return '<button class="tm-tab' + (tab[0] === activeTab ? ' active' : '') + '" data-tab="' + tab[0] + '">' + escapeHtml(translated(tab[1])) + '</button>';
     }).join("");
   }
   function render() {
     if (!root) return;
+    var ready = mod.isReady();
+    if (ready) ensureCapabilities();
     renderTabs();
     var content = root.querySelector(".tm-content");
     root.querySelectorAll(".tm-tab").forEach(function (node) { node.classList.toggle("active", node.dataset.tab === activeTab); });
-    if (!mod.isReady()) { content.innerHTML = '<div class="tm-note">请先进入游戏存档或开始新游戏，修改器正在等待 RPG Maker 运行时就绪。</div>'; return; }
+    if (!ready) { content.innerHTML = '<div class="tm-note">请先进入游戏存档或开始新游戏，修改器正在等待 RPG Maker 运行时就绪。</div>'; return; }
     if (activeTab === "quick") renderQuick(content);
     else if (activeTab === "items") renderItems(content);
     else if (activeTab === "actors") renderActors(content);
@@ -186,7 +195,9 @@
     var sectionBody;
     if (selectedGroup) {
       var toggles = selectedGroup.entries.map(function (entry) {
-        return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
+        var label = context.capabilities && context.capabilities.engine === "essentials" && entry[0] === "hpmp"
+          ? translated("HP/PP不减") : translated(entry[1]);
+        return row(label, '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
       }).join("");
       var speedControls = "";
       if (selectedGroup.id === "探索") {
@@ -219,25 +230,53 @@
           console.warn("RGSS gold refresh failed", error);
         }
       }, 0);
-    ensureCapabilities();
   }
-  function ensureCapabilities() {
-    if (context.capabilities || context.capabilitiesLoading) return;
+  function resetCapabilities() {
+    capabilityGeneration++;
+    if (context.capabilityRetryTimer) clearTimeout(context.capabilityRetryTimer);
+    context.capabilityRetryTimer = null;
+    context.capabilityRetryCount = 0;
+    context.capabilities = null;
+    context.capabilitiesLoading = false;
+  }
+  function scheduleCapabilityRetry() {
+    var shouldRetry = !context.capabilities || (context.capabilities.engine === "essentials" &&
+      context.capabilities.features.indexOf("pokemonParty") < 0);
+    if (!root || !shouldRetry || context.capabilityRetryTimer || context.capabilityRetryCount >= 12) return;
+    context.capabilityRetryCount++;
+    context.capabilityRetryTimer = setTimeout(function () {
+      context.capabilityRetryTimer = null;
+      if (root && mod.isReady()) ensureCapabilities(true);
+    }, 5000);
+  }
+  function ensureCapabilities(force) {
+    if (!root || context.capabilitiesLoading || (context.capabilities && !force)) return;
     context.capabilitiesLoading = true;
+    var generation = capabilityGeneration;
     setTimeout(function () {
+      if (!root || generation !== capabilityGeneration) return;
       try {
         var loaded = mod.listCapabilities();
         if (loaded && loaded.engine !== "unknown" && Array.isArray(loaded.toggles)) {
+          var previouslyHadPokemonParty = !!(context.capabilities && context.capabilities.features && context.capabilities.features.indexOf("pokemonParty") >= 0);
           context.capabilities = loaded;
           if (!Array.isArray(context.capabilities.features)) context.capabilities.features = [];
           if (!Array.isArray(context.capabilities.actorValues)) context.capabilities.actorValues = [];
+          var hasPokemonParty = context.capabilities.features.indexOf("pokemonParty") >= 0;
+          if (!context.profileInitialized) {
+            if (context.capabilities.engine === "essentials") activeTab = hasPokemonParty ? "pokemon" : "quick";
+            context.profileInitialized = true;
+          } else if (context.capabilities.engine === "essentials" && !previouslyHadPokemonParty && hasPokemonParty && activeTab === "quick") {
+            activeTab = "pokemon";
+          }
         }
       } catch (error) {
         console.warn("RGSS cheat capability read failed", error);
       }
+      if (generation !== capabilityGeneration) return;
       context.capabilitiesLoading = false;
-      if (!context.capabilities || !root) return;
-      render();
+      if (context.capabilities && root) render();
+      scheduleCapabilityRetry();
     }, 0);
   }
   function itemKindOptionsMarkup() {
@@ -1045,7 +1084,7 @@
   }
   function handleAction(action, node) {
     if (action === "close") return close();
-    if (action === "render") return render();
+    if (action === "render") { resetCapabilities(); return render(); }
     if (action === "quick-section") { context.quickSection = node.dataset.section; return renderQuick(root.querySelector(".tm-content"), false); }
     if (action === "flag") {
       var flagOn = node.type === "checkbox" ? node.checked : !mod.getState()[node.dataset.flag];
@@ -1348,6 +1387,8 @@
   }
   function open() {
     if (root) return;
+    resetCapabilities();
+    context.profileInitialized = false;
     root = document.createElement("div"); root.id = "tyranor-mod-root";
     root.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker RGSS 修改器</strong><button class="tm-refresh" data-action="render" title="刷新面板" aria-label="刷新面板">↻</button><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs"></div><main class="tm-content"></main></div>';
     document.documentElement.appendChild(root);
@@ -1429,6 +1470,10 @@
   }
   function close(restoreGameFocus) {
     if (!root) return false;
+    capabilityGeneration++;
+    if (context.capabilityRetryTimer) clearTimeout(context.capabilityRetryTimer);
+    context.capabilityRetryTimer = null;
+    context.capabilitiesLoading = false;
     root.remove(); root = null;
     try { if (window.TyranorCheatNative) window.TyranorCheatNative.onPanelClosed(restoreGameFocus !== false); } catch (_) {}
     return true;
