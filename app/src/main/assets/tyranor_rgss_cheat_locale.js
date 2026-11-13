@@ -30,7 +30,7 @@
       "锁定": "Lock", "名称": "Name", "当前值": "Current value",
       "物品已锁定": "Item quantity locked", "系统值已锁定": "System value locked", "已取消锁定": "Lock removed",
       "没有匹配项目": "No matching entries", "当前队伍没有角色": "The party has no characters", "当前游戏没有角色": "This game has no characters",
-      "队伍管理": "Party management", "在队伍中": "In party", "不在队伍中": "Not in party", "搜索角色名称或 ID": "Search characters by name or ID",
+      "队伍管理": "Party management", "在队伍中": "In party", "不在队伍中": "Not in party", "搜索角色名称或 ID": "Search characters",
       "恢复": "Recover", "属性": "Stats", "技能": "Skills", "状态": "States", "装备": "Equipment",
       "职业": "Class", "选择职业": "Select a class", "更换职业": "Change class", "职业已更换": "Class changed", "当前游戏没有职业列表": "No class data is available in this game", "请先选择职业": "Select a class first",
       "等级": "Level", "最大 HP": "Max HP", "最大 MP": "Max MP", "攻击": "Attack", "防御": "Defense", "魔攻": "Magic Attack", "魔防": "Magic Defense", "敏捷": "Agility", "幸运": "Luck",
