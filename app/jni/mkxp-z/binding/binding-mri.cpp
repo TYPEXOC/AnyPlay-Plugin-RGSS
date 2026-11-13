@@ -4815,7 +4815,7 @@ module TyranorCheats
         actor.mp = maxmp if actor.respond_to?(:mp=)
         actor.sp = maxmp if actor.respond_to?(:sp=)
         if actor.respond_to?(:states) && actor.respond_to?(:remove_state)
-          actor.states.dup.each { |state| actor.remove_state(state.respond_to?(:id) ? state.id : state) }
+          actor_state_ids(actor).dup.each { |state_id| actor.remove_state(state_id) }
         end
       end
       "#{wire_text(actor.name)} recovered"
@@ -4849,8 +4849,7 @@ module TyranorCheats
       return "That character isn't available in this game." unless actor
       if collection == 'skills'
         data = defined?($data_skills) ? $data_skills : nil
-        current = actor.respond_to?(:skills) ? actor.skills : []
-        ids = current.map { |skill| skill.respond_to?(:id) ? skill.id.to_i : skill.to_i }
+        ids = actor_skill_ids(actor)
         return "" unless data
         out = []
         (1...data.length).each do |id|
@@ -4861,8 +4860,7 @@ module TyranorCheats
         return out.join("\n")
       elsif collection == 'states'
         data = defined?($data_states) ? $data_states : nil
-        current = actor.respond_to?(:states) ? actor.states : []
-        ids = current.map { |state| state.respond_to?(:id) ? state.id.to_i : state.to_i }
+        ids = actor_state_ids(actor)
         return "" unless data
         out = []
         (1...data.length).each do |id|
@@ -4877,9 +4875,40 @@ module TyranorCheats
       "Couldn't read character data: #{e.class}: #{e.message}"
     end
 
+    def actor_database_collection_ids(actor, collection)
+      data = collection == 'skills' ? (defined?($data_skills) ? $data_skills : nil) : (defined?($data_states) ? $data_states : nil)
+      current = collection == 'skills' ? (actor.respond_to?(:skills) ? actor.skills : []) : (actor.respond_to?(:states) ? actor.states : [])
+      return [] unless current.respond_to?(:map)
+      current.map do |entry|
+        if entry.is_a?(Numeric)
+          entry.to_i
+        else
+          database_id = nil
+          if data && data.respond_to?(:each_with_index)
+            data.each_with_index do |candidate, index|
+              if candidate.equal?(entry)
+                database_id = index
+                break
+              end
+            end
+          end
+          if database_id && database_id > 0
+            database_id
+          elsif entry.respond_to?(:id)
+            entry.id.to_i
+          else
+            nil
+          end
+        end
+      end.compact.uniq
+    rescue Exception
+      []
+    end
+
     def actor_state_ids(actor)
-      current = actor.respond_to?(:states) ? actor.states : []
-      current.map { |state| state.respond_to?(:id) ? state.id.to_i : state.to_i }
+      raw = actor_raw_state_ids(actor)
+      return raw if raw
+      actor_database_collection_ids(actor, 'states')
     rescue Exception
       []
     end
@@ -4893,10 +4922,25 @@ module TyranorCheats
     end
 
     def actor_skill_ids(actor)
-      current = actor.respond_to?(:skills) ? actor.skills : []
-      current.map { |skill| skill.respond_to?(:id) ? skill.id.to_i : skill.to_i }
+      actor_database_collection_ids(actor, 'skills')
     rescue Exception
       []
+    end
+
+    def actor_raw_skill_ids(actor)
+      skills = actor.instance_variable_get(:@skills) rescue nil
+      return nil unless skills.is_a?(Array) && skills.all? { |entry| entry.is_a?(Numeric) }
+      skills.map { |entry| entry.to_i }.uniq
+    rescue Exception
+      nil
+    end
+
+    def actor_collection_database_object_id(collection, item_id)
+      data = collection == 'skills' ? (defined?($data_skills) ? $data_skills : nil) : (defined?($data_states) ? $data_states : nil)
+      item = data && data[item_id.to_i] rescue nil
+      item && item.respond_to?(:id) ? item.id.to_i : 'unavailable'
+    rescue Exception
+      'unavailable'
     end
 
     def force_actor_skill_membership(actor, skill_id, enabled)
@@ -5029,6 +5073,7 @@ module TyranorCheats
       if collection == 'skills'
         return NOPE unless actor.respond_to?(:learn_skill) && actor.respond_to?(:forget_skill)
         before = actor_skill_ids(actor)
+        raw_before = actor_raw_skill_ids(actor)
         enabled ? actor.learn_skill(item_id) : actor.forget_skill(item_id)
         actor.refresh if actor.respond_to?(:refresh)
         after = actor_skill_ids(actor)
@@ -5036,15 +5081,19 @@ module TyranorCheats
         forced = false
         unless applied == enabled
           forced = force_actor_skill_membership(actor, item_id, enabled)
+          actor.refresh if forced && actor.respond_to?(:refresh)
           after = actor_skill_ids(actor)
-          applied = forced ? enabled : after.include?(item_id)
+          applied = after.include?(item_id)
         end
-        AnyPlayLog.write("actor skill change engine=#{engine} actor=#{actor_id.to_i} skill=#{item_id} action=#{enabled ? 'learn' : 'forget'} forced=#{forced ? 1 : 0} before=#{before.join(',')} after=#{after.join(',')} applied=#{applied ? 1 : 0}") rescue nil
+        raw_after = actor_raw_skill_ids(actor)
+        stored_present = raw_after ? (raw_after.include?(item_id) ? 1 : 0) : 'unavailable'
+        AnyPlayLog.write("actor skill change engine=#{engine} actor=#{actor_id.to_i} skill=#{item_id} db_object_id=#{actor_collection_database_object_id('skills', item_id)} action=#{enabled ? 'learn' : 'forget'} forced=#{forced ? 1 : 0} visible_before=#{before.join(',')} visible_after=#{after.join(',')} raw_before=#{raw_before ? raw_before.join(',') : 'unavailable'} raw_after=#{raw_after ? raw_after.join(',') : 'unavailable'} visible_present=#{after.include?(item_id) ? 1 : 0} stored_present=#{stored_present} applied=#{applied ? 1 : 0}") rescue nil
         return "Couldn't learn skill #{item_id}; the game did not keep it." if enabled && !applied
         return "Couldn't forget skill #{item_id}; the game may be restoring it automatically." if !enabled && applied
       elsif collection == 'states'
         return NOPE unless actor.respond_to?(:add_state) && actor.respond_to?(:remove_state)
         before = actor_state_ids(actor)
+        effective_before = actor_database_collection_ids(actor, 'states')
         raw_before = actor_raw_state_ids(actor)
         method_name = enabled ? :add_state : :remove_state
         method_arity = actor.method(method_name).arity
@@ -5052,15 +5101,18 @@ module TyranorCheats
         clear_actor_state_conflicts(actor, item_id) if enabled && actor_state_ids(actor).include?(item_id)
         actor.refresh if actor.respond_to?(:refresh)
         after = actor_state_ids(actor)
-        applied = after.include?(item_id)
+        raw_after = actor_raw_state_ids(actor)
+        applied = raw_after ? raw_after.include?(item_id) : after.include?(item_id)
         forced = false
         unless applied == enabled
           forced = force_actor_state_membership(actor, item_id, enabled)
+          actor.refresh if forced && actor.respond_to?(:refresh)
           after = actor_state_ids(actor)
-          applied = forced ? enabled : after.include?(item_id)
+          raw_after = actor_raw_state_ids(actor)
+          applied = raw_after ? raw_after.include?(item_id) : after.include?(item_id)
         end
-        raw_after = actor_raw_state_ids(actor)
-        AnyPlayLog.write("actor state change engine=#{engine} actor=#{actor_id.to_i} state=#{item_id} action=#{enabled ? 'add' : 'remove'} method_arity=#{method_arity} force=#{force ? 1 : 0} raw_forced=#{forced ? 1 : 0} before=#{before.join(',')} after=#{after.join(',')} raw_before=#{raw_before ? raw_before.join(',') : 'unavailable'} raw_after=#{raw_after ? raw_after.join(',') : 'unavailable'} applied=#{applied ? 1 : 0}") rescue nil
+        effective_after = actor_database_collection_ids(actor, 'states')
+        AnyPlayLog.write("actor state change engine=#{engine} actor=#{actor_id.to_i} state=#{item_id} db_object_id=#{actor_collection_database_object_id('states', item_id)} action=#{enabled ? 'add' : 'remove'} method_arity=#{method_arity} force=#{force ? 1 : 0} raw_forced=#{forced ? 1 : 0} active_before=#{before.join(',')} active_after=#{after.join(',')} effective_before=#{effective_before.join(',')} effective_after=#{effective_after.join(',')} raw_before=#{raw_before ? raw_before.join(',') : 'unavailable'} raw_after=#{raw_after ? raw_after.join(',') : 'unavailable'} raw_present=#{raw_after ? (raw_after.include?(item_id) ? 1 : 0) : 'unavailable'} applied=#{applied ? 1 : 0}") rescue nil
         return "Couldn't add state #{item_id}; the game did not keep it." if enabled && !applied
         return "Couldn't remove state #{item_id}; the game may be applying it automatically." if !enabled && applied
       else
