@@ -4824,6 +4824,14 @@ module TyranorCheats
       []
     end
 
+    def actor_raw_state_ids(actor)
+      states = actor.instance_variable_get(:@states) rescue nil
+      return nil unless states.is_a?(Array) && states.all? { |entry| entry.is_a?(Numeric) }
+      states.map { |entry| entry.to_i }
+    rescue Exception
+      nil
+    end
+
     def actor_skill_ids(actor)
       current = actor.respond_to?(:skills) ? actor.skills : []
       current.map { |skill| skill.respond_to?(:id) ? skill.id.to_i : skill.to_i }
@@ -4841,7 +4849,79 @@ module TyranorCheats
       else
         skills.delete(skill_id)
       end
-      actor_skill_ids(actor).include?(skill_id) == enabled
+      skills.include?(skill_id) == enabled
+    rescue Exception
+      false
+    end
+
+    def force_actor_state_membership(actor, state_id, enabled)
+      states = actor.instance_variable_get(:@states) rescue nil
+      return false unless states.is_a?(Array) && states.all? { |entry| entry.is_a?(Numeric) }
+      state_id = state_id.to_i
+      return false if state_id <= 0
+      data = defined?($data_states) ? $data_states : nil
+      state = data && data[state_id] rescue nil
+      turn_store = actor.instance_variable_get(:@states_turn) rescue nil
+      unless turn_store.is_a?(Hash)
+        turn_store = actor.instance_variable_get(:@state_turns) rescue nil
+      end
+
+      if enabled
+        minus_ids = state && state.respond_to?(:minus_state_set) ? (state.minus_state_set || []).map { |id| id.to_i } : []
+        removed_zero_hp_state = false
+        states.delete_if do |current_id|
+          next false if current_id.to_i == state_id
+          current = data && data[current_id.to_i] rescue nil
+          blocks_new = current && current.respond_to?(:minus_state_set) &&
+            (current.minus_state_set || []).map { |id| id.to_i }.include?(state_id) &&
+            !minus_ids.include?(current_id.to_i)
+          remove_current = minus_ids.include?(current_id.to_i) || blocks_new
+          if remove_current
+            removed_zero_hp_state = true if current && current.respond_to?(:zero_hp) && current.zero_hp
+            turn_store.delete(current_id.to_i) if turn_store.is_a?(Hash)
+          end
+          remove_current
+        end
+        states << state_id unless states.include?(state_id)
+        states.sort! do |left_id, right_id|
+          left = data && data[left_id.to_i] rescue nil
+          right = data && data[right_id.to_i] rescue nil
+          if left && right && left.respond_to?(:rating) && right.respond_to?(:rating) && left.rating.to_i != right.rating.to_i
+            right.rating.to_i <=> left.rating.to_i
+          elsif left && right && left.respond_to?(:restriction) && right.respond_to?(:restriction) && left.restriction.to_i != right.restriction.to_i
+            right.restriction.to_i <=> left.restriction.to_i
+          else
+            left_id.to_i <=> right_id.to_i
+          end
+        end
+        if state && state.respond_to?(:zero_hp) && state.zero_hp && actor.instance_variable_defined?(:@hp)
+          actor.instance_variable_set(:@hp, 0)
+        elsif removed_zero_hp_state && actor.instance_variable_defined?(:@hp) && actor.instance_variable_get(:@hp).to_i <= 0
+          another_zero_hp_state = states.any? do |current_id|
+            current = data && data[current_id.to_i] rescue nil
+            current && current.respond_to?(:zero_hp) && current.zero_hp
+          end
+          actor.instance_variable_set(:@hp, 1) unless another_zero_hp_state
+        end
+        if turn_store.is_a?(Hash)
+          turns = engine == :xp ? -1 : (state && state.respond_to?(:max_turns) ? state.max_turns.to_i : 0)
+          turns = state.hold_turn.to_i if turns <= 0 && state && state.respond_to?(:hold_turn)
+          turns = 999 if turns <= 0
+          turn_store[state_id] = turns
+        end
+      else
+        states.delete(state_id)
+        turn_store.delete(state_id) if turn_store.is_a?(Hash)
+        if state && state.respond_to?(:zero_hp) && state.zero_hp && actor.instance_variable_defined?(:@hp) &&
+           actor.instance_variable_get(:@hp).to_i <= 0
+          another_zero_hp_state = states.any? do |current_id|
+            current = data && data[current_id.to_i] rescue nil
+            current && current.respond_to?(:zero_hp) && current.zero_hp
+          end
+          actor.instance_variable_set(:@hp, 1) unless another_zero_hp_state
+        end
+      end
+      actor_raw_state_ids(actor).include?(state_id) == enabled
     rescue Exception
       false
     end
@@ -4896,9 +4976,8 @@ module TyranorCheats
         forced = false
         unless applied == enabled
           forced = force_actor_skill_membership(actor, item_id, enabled)
-          actor.refresh if forced && actor.respond_to?(:refresh)
           after = actor_skill_ids(actor)
-          applied = after.include?(item_id)
+          applied = forced ? enabled : after.include?(item_id)
         end
         AnyPlayLog.write("actor skill change engine=#{engine} actor=#{actor_id.to_i} skill=#{item_id} action=#{enabled ? 'learn' : 'forget'} forced=#{forced ? 1 : 0} before=#{before.join(',')} after=#{after.join(',')} applied=#{applied ? 1 : 0}") rescue nil
         return "Couldn't learn skill #{item_id}; the game did not keep it." if enabled && !applied
@@ -4906,13 +4985,22 @@ module TyranorCheats
       elsif collection == 'states'
         return NOPE unless actor.respond_to?(:add_state) && actor.respond_to?(:remove_state)
         before = actor_state_ids(actor)
+        raw_before = actor_raw_state_ids(actor)
         method_name = enabled ? :add_state : :remove_state
+        method_arity = actor.method(method_name).arity
         force = change_actor_state(actor, method_name, item_id)
         clear_actor_state_conflicts(actor, item_id) if enabled && actor_state_ids(actor).include?(item_id)
         actor.refresh if actor.respond_to?(:refresh)
         after = actor_state_ids(actor)
         applied = after.include?(item_id)
-        AnyPlayLog.write("actor state change engine=#{engine} actor=#{actor_id.to_i} state=#{item_id} action=#{enabled ? 'add' : 'remove'} force=#{force ? 1 : 0} before=#{before.join(',')} after=#{after.join(',')} applied=#{applied ? 1 : 0}") rescue nil
+        forced = false
+        unless applied == enabled
+          forced = force_actor_state_membership(actor, item_id, enabled)
+          after = actor_state_ids(actor)
+          applied = forced ? enabled : after.include?(item_id)
+        end
+        raw_after = actor_raw_state_ids(actor)
+        AnyPlayLog.write("actor state change engine=#{engine} actor=#{actor_id.to_i} state=#{item_id} action=#{enabled ? 'add' : 'remove'} method_arity=#{method_arity} force=#{force ? 1 : 0} raw_forced=#{forced ? 1 : 0} before=#{before.join(',')} after=#{after.join(',')} raw_before=#{raw_before ? raw_before.join(',') : 'unavailable'} raw_after=#{raw_after ? raw_after.join(',') : 'unavailable'} applied=#{applied ? 1 : 0}") rescue nil
         return "Couldn't add state #{item_id}; the game did not keep it." if enabled && !applied
         return "Couldn't remove state #{item_id}; the game may be applying it automatically." if !enabled && applied
       else
