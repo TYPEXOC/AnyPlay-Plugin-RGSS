@@ -344,10 +344,38 @@ class TyranorRgssCheatPanel(
                         "isEgg" to entry.isEgg,
                         "status" to entry.status,
                         "heldItem" to entry.heldItem,
+                        "nickname" to entry.nickname,
+                        "eggSteps" to entry.eggSteps,
                     )
                 }) }
+                "listPokemonStorage" -> cheats.listPokemonStorage(argInt(a, 0)) { box -> done(box?.let {
+                    mapOf("boxIndex" to it.boxIndex, "boxCount" to it.boxCount, "name" to it.name,
+                        "pokemon" to it.pokemon.map { entry -> mapOf("index" to entry.index,
+                            "name" to entry.name, "level" to entry.level, "hp" to entry.hp,
+                            "mhp" to entry.maxHp, "isEgg" to entry.isEgg, "heldItem" to entry.heldItem) })
+                }) }
+                "listPokemonProgress" -> cheats.listPokemonProgress { progress -> done(mapOf(
+                    "hasPokedex" to progress.hasPokedex,
+                    "badges" to progress.badges.map { mapOf("index" to it.index, "name" to it.name, "obtained" to it.obtained) },
+                    "dexes" to progress.dexes.map { mapOf("index" to it.index, "name" to it.name, "unlocked" to it.unlocked) },
+                )) }
                 "setPokemonValue" -> cheats.setPokemonValue(
                     argInt(a, 0), argString(a, 1), argString(a, 2),
+                ) { completeMessage(it, done) }
+                "setPokemonNickname" -> cheats.setPokemonNickname(
+                    argInt(a, 0), argString(a, 1),
+                ) { completeMessage(it, done) }
+                "movePokemonToStorage" -> cheats.movePokemonToStorage(
+                    argInt(a, 0), argInt(a, 1),
+                ) { completeMessage(it, done) }
+                "withdrawPokemonFromStorage" -> cheats.withdrawPokemonFromStorage(
+                    argInt(a, 0), argInt(a, 1),
+                ) { completeMessage(it, done) }
+                "releasePokemon" -> cheats.releasePokemon(
+                    argInt(a, 0), argInt(a, 1),
+                ) { completeMessage(it, done) }
+                "setPokemonProgress" -> cheats.setPokemonProgress(
+                    argString(a, 0), argInt(a, 1), argBoolean(a, 2),
                 ) { completeMessage(it, done) }
                 "recoverPokemon" -> cheats.recoverPokemon(argInt(a, 0)) { completeMessage(it, done) }
                 "listPokemonMoves" -> cheats.listPokemonMoves(argInt(a, 0)) { moves -> done(moves.map { move ->

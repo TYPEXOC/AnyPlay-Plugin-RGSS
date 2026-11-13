@@ -119,6 +119,33 @@ class TyranorCheatController(
         val status: String = "",
         val heldItem: String = "",
         val happiness: Int? = null,
+        val nickname: String = "",
+        val eggSteps: Int? = null,
+    )
+
+    data class PokemonStorageEntry(
+        val index: Int,
+        val name: String,
+        val level: Int,
+        val hp: Int,
+        val maxHp: Int,
+        val isEgg: Boolean,
+        val heldItem: String = "",
+    )
+
+    data class PokemonStorageBox(
+        val boxIndex: Int,
+        val boxCount: Int,
+        val name: String,
+        val pokemon: List<PokemonStorageEntry>,
+    )
+
+    data class PokemonBadge(val index: Int, val name: String, val obtained: Boolean)
+    data class PokemonDex(val index: Int, val name: String, val unlocked: Boolean)
+    data class PokemonProgress(
+        val hasPokedex: Boolean?,
+        val badges: List<PokemonBadge>,
+        val dexes: List<PokemonDex>,
     )
 
     data class PokemonMoveEntry(
@@ -608,18 +635,78 @@ class TyranorCheatController(
         send("list\tpokemon", 30_000L) { raw ->
             val out = mutableListOf<PokemonEntry>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 11)
+                val p = line.split('\t', limit = 13)
                 if (p.size < 10 || p[0] != "P") return@forEach
                 val index = p[1].toIntOrNull() ?: return@forEach
                 out.add(PokemonEntry(index, p[2], p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0,
-                    p[5].toIntOrNull() ?: 0, p[6].toIntOrNull() ?: 0, p[7] == "1", p[8], p[9], p.getOrNull(10)?.toIntOrNull()))
+                    p[5].toIntOrNull() ?: 0, p[6].toIntOrNull() ?: 0, p[7] == "1", p[8], p[9],
+                    p.getOrNull(10)?.toIntOrNull(), p.getOrNull(11).orEmpty(), p.getOrNull(12)?.toIntOrNull()))
             }
             onResult(out)
         }
     }
 
+    fun listPokemonStorage(box: Int, onResult: (PokemonStorageBox?) -> Unit) {
+        send("list\tpokemon_storage\t$box", 30_000L) { raw ->
+            var header: List<String>? = null
+            val pokemon = mutableListOf<PokemonStorageEntry>()
+            raw.lineSequence().forEach { line ->
+                val p = line.split('\t', limit = 8)
+                when {
+                    p.size >= 4 && p[0] == "H" -> header = p
+                    p.size >= 7 && p[0] == "P" -> {
+                        val index = p[1].toIntOrNull() ?: return@forEach
+                        pokemon.add(PokemonStorageEntry(index, p[2], p[3].toIntOrNull() ?: 0,
+                            p[4].toIntOrNull() ?: 0, p[5].toIntOrNull() ?: 0, p[6] == "1", p.getOrNull(7).orEmpty()))
+                    }
+                }
+            }
+            val h = header
+            onResult(if (h == null) null else PokemonStorageBox(
+                h[1].toIntOrNull() ?: 0, h[2].toIntOrNull() ?: 0, h[3], pokemon,
+            ))
+        }
+    }
+
+    fun listPokemonProgress(onResult: (PokemonProgress) -> Unit) {
+        send("list\tpokemon_progress", 30_000L) { raw ->
+            var hasPokedex: Boolean? = null
+            val badges = mutableListOf<PokemonBadge>()
+            val dexes = mutableListOf<PokemonDex>()
+            raw.lineSequence().forEach { line ->
+                val p = line.split('\t', limit = 4)
+                when {
+                    p.size == 2 && p[0] == "H" -> hasPokedex = p[1] == "1"
+                    p.size == 4 && p[0] == "B" -> p[1].toIntOrNull()?.let { badges.add(PokemonBadge(it, p[2], p[3] == "1")) }
+                    p.size == 4 && p[0] == "D" -> p[1].toIntOrNull()?.let { dexes.add(PokemonDex(it, p[2], p[3] == "1")) }
+                }
+            }
+            onResult(PokemonProgress(hasPokedex, badges, dexes))
+        }
+    }
+
     fun setPokemonValue(index: Int, field: String, value: String, onResult: (String) -> Unit) {
         send("pokemon_value\t$index\t$field\t${clean(value)}", onResult)
+    }
+
+    fun setPokemonNickname(index: Int, nickname: String, onResult: (String) -> Unit) {
+        send("pokemon_nickname\t$index\t${clean(nickname)}", onResult)
+    }
+
+    fun movePokemonToStorage(partyIndex: Int, box: Int, onResult: (String) -> Unit) {
+        send("pokemon_storage_move\t$partyIndex\t$box", onResult)
+    }
+
+    fun withdrawPokemonFromStorage(box: Int, slot: Int, onResult: (String) -> Unit) {
+        send("pokemon_storage_withdraw\t$box\t$slot", onResult)
+    }
+
+    fun releasePokemon(box: Int, slot: Int, onResult: (String) -> Unit) {
+        send("pokemon_storage_release\t$box\t$slot", onResult)
+    }
+
+    fun setPokemonProgress(kind: String, index: Int, obtained: Boolean, onResult: (String) -> Unit) {
+        send("pokemon_progress\t${clean(kind)}\t$index\t${if (obtained) 1 else 0}", onResult)
     }
 
     fun recoverPokemon(index: Int, onResult: (String) -> Unit) {

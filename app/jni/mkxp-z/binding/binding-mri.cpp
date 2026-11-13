@@ -3484,6 +3484,39 @@ module TyranorCheats
       false
     end
 
+    def pokemon_storage
+      return nil unless ess? && defined?($PokemonStorage) && $PokemonStorage
+      $PokemonStorage
+    rescue Exception
+      nil
+    end
+
+    def pokemon_storage_supported?
+      storage = pokemon_storage
+      return false unless storage && !in_battle? && trainer && trainer.respond_to?(:party) &&
+        trainer.party.is_a?(Array)
+      [:maxBoxes, :maxPokemon, :[], :pbMove, :pbDelete].all? { |name| storage.respond_to?(name) }
+    rescue Exception
+      false
+    end
+
+    def pokemon_badges_supported?
+      return false unless ess? && !in_battle? && trainer && trainer.respond_to?(:badges)
+      trainer.badges.respond_to?(:length) && trainer.badges.respond_to?(:[]=)
+    rescue Exception
+      false
+    end
+
+    def pokemon_dex_supported?
+      return false unless ess? && !in_battle? && trainer &&
+        trainer.respond_to?(:has_pokedex) && trainer.respond_to?(:has_pokedex=) && trainer.respond_to?(:pokedex)
+      dex = trainer.pokedex
+      dex && [:unlocked?, :unlock, :lock].all? { |name| dex.respond_to?(name) } &&
+        defined?(Settings) && Settings.respond_to?(:pokedex_names)
+    rescue Exception
+      false
+    end
+
     def pokemon_move_class
       return Pokemon::Move if defined?(Pokemon::Move)
       return PokeBattle_Move if defined?(PokeBattle_Move)
@@ -3740,6 +3773,11 @@ module TyranorCheats
       when 'pokemon_move_pp' then set_pokemon_move_pp(a, b)
       when 'pokemon_trait' then set_pokemon_trait(a, b)
       when 'pokemon_order' then set_pokemon_order(a, b)
+      when 'pokemon_storage_move' then move_pokemon_to_storage(a, b)
+      when 'pokemon_storage_withdraw' then withdraw_pokemon_from_storage(a, b)
+      when 'pokemon_storage_release' then release_pokemon_from_storage(a, b)
+      when 'pokemon_progress' then set_pokemon_progress(a, b)
+      when 'pokemon_nickname' then set_pokemon_nickname(a, b)
       when 'pokemon_status' then set_pokemon_status(a, b)
       when 'pokemon_item' then set_pokemon_item(a, b)
       when 'actor_value' then set_actor_value(a, b)
@@ -4318,6 +4356,8 @@ module TyranorCheats
       return list_coins if kind == 'coins'
       return list_maps if kind == 'maps'
       return list_pokemon if kind == 'pokemon'
+      return list_pokemon_storage(arg) if kind == 'pokemon_storage'
+      return list_pokemon_progress if kind == 'pokemon_progress'
       return list_pokemon_moves(arg) if kind == 'pokemon_moves'
       return list_pokemon_traits(arg) if kind == 'pokemon_traits'
       return list_pokemon_move_candidates if kind == 'pokemon_move_candidates'
@@ -4525,6 +4565,7 @@ module TyranorCheats
       out << "F\tbattleEscape" if toggle_supported?('escape')
       out << "F\tsaveSlots" if save_slots_supported?
       out << "F\tpokemonParty" if ess? && trainer
+      out << "F\tpokemonStorage" if pokemon_storage_supported?
       if ess? && bag && (bag.respond_to?(:remove) || bag.respond_to?(:pbDeleteItem)) &&
           (bag.respond_to?(:quantity) || bag.respond_to?(:pbQuantity)) &&
           (bag.respond_to?(:add) || bag.respond_to?(:pbStoreItem))
@@ -4533,6 +4574,8 @@ module TyranorCheats
       out << "F\tpokemonObtain" if pokemon_obtain_supported?
       out << "F\tpokemonPartyOrder" if ess? && !in_battle? && trainer && trainer.respond_to?(:party) &&
         trainer.party.is_a?(Array) && trainer.party.length > 1
+      out << "F\tpokemonBadges" if pokemon_badges_supported?
+      out << "F\tpokemonDex" if pokemon_dex_supported?
       if ess? && $game_switches && $game_variables &&
           (!system_runtime_keys('switch', essentials_system_names(system_database, :switches)).empty? ||
            !system_runtime_keys('variable', essentials_system_names(system_database, :variables)).empty?)
@@ -4549,6 +4592,10 @@ module TyranorCheats
                         nil
                       end
       out << "F\tpokemonLevel" if ess? && class_method?(pokemon_class, :level=)
+      out << "F\tpokemonNickname" if ess? && class_method?(pokemon_class, :name) && class_method?(pokemon_class, :name=)
+      out << "F\tpokemonEggSteps" if ess? &&
+        ((class_method?(pokemon_class, :steps_to_hatch) && class_method?(pokemon_class, :steps_to_hatch=)) ||
+         (class_method?(pokemon_class, :eggsteps) && class_method?(pokemon_class, :eggsteps=)))
       out << "F\tpokemonHappiness" if ess? && class_method?(pokemon_class, :happiness) && class_method?(pokemon_class, :happiness=)
       out << "F\tpokemonHp" if ess? && class_method?(pokemon_class, :hp=) && class_method?(pokemon_class, :totalhp)
       out << "F\tpokemonExp" if ess? && class_method?(pokemon_class, :exp=)
@@ -4636,11 +4683,191 @@ module TyranorCheats
         status = pokemon.respond_to?(:status) ? pokemon_status_key(pokemon.status) : ""
         item = wire_text(pokemon_item_name(pokemon))
         happiness = pokemon.respond_to?(:happiness) ? pokemon.happiness.to_i : ''
-        out << "P\t#{index}\t#{name}\t#{level}\t#{hp}\t#{maximum}\t#{exp}\t#{egg ? 1 : 0}\t#{status}\t#{item}\t#{happiness}"
+        nickname = pokemon.respond_to?(:name) ? wire_text(pokemon.name) : ""
+        egg_steps = if egg && pokemon.respond_to?(:steps_to_hatch)
+                      pokemon.steps_to_hatch.to_i
+                    elsif egg && pokemon.respond_to?(:eggsteps)
+                      pokemon.eggsteps.to_i
+                    else
+                      ''
+                    end
+        out << "P\t#{index}\t#{name}\t#{level}\t#{hp}\t#{maximum}\t#{exp}\t#{egg ? 1 : 0}\t#{status}\t#{item}\t#{happiness}\t#{nickname}\t#{egg_steps}"
       end
       out.join("\n")
     rescue Exception => e
       "Couldn't read party Pokemon: #{e.class}: #{e.message}"
+    end
+
+    def pokemon_storage_get(storage, box, slot)
+      storage[box, slot]
+    rescue ArgumentError, TypeError
+      box_data = storage[box]
+      box_data && box_data[slot]
+    end
+
+    def pokemon_storage_box_name(storage, box)
+      data = storage[box] rescue nil
+      name = data.name.to_s if data && data.respond_to?(:name)
+      name = "Box #{box + 1}" if name.to_s.empty?
+      name
+    rescue Exception
+      "Box #{box + 1}"
+    end
+
+    def list_pokemon_storage(box_text = "")
+      return NOPE unless pokemon_storage_supported?
+      storage = pokemon_storage
+      box_count = storage.maxBoxes.to_i
+      return "No storage boxes are available." if box_count <= 0
+      current = storage.respond_to?(:currentBox) ? storage.currentBox.to_i : 0
+      requested = box_text.to_s =~ /\A-?\d+\z/ ? box_text.to_i : -1
+      box = requested < 0 ? current : requested
+      box = [[box, 0].max, box_count - 1].min
+      capacity = [[storage.maxPokemon(box).to_i, 0].max, 100].min
+      out = ["H\t#{box}\t#{box_count}\t#{wire_text(pokemon_storage_box_name(storage, box))}"]
+      capacity.times do |slot|
+        pokemon = pokemon_storage_get(storage, box, slot)
+        next unless pokemon
+        egg = pokemon.respond_to?(:egg?) && pokemon.egg?
+        name = wire_text(pokemon_display_name(pokemon))
+        level = pokemon.respond_to?(:level) ? pokemon.level.to_i : 0
+        hp = pokemon.respond_to?(:hp) ? pokemon.hp.to_i : 0
+        maximum = pokemon.respond_to?(:totalhp) ? pokemon.totalhp.to_i : hp
+        item = wire_text(pokemon_item_name(pokemon))
+        out << "P\t#{slot}\t#{name}\t#{level}\t#{hp}\t#{maximum}\t#{egg ? 1 : 0}\t#{item}"
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read Pokémon storage: #{e.class}: #{e.message}"
+    end
+
+    def list_pokemon_progress
+      return NOPE unless ess? && !in_battle? && trainer
+      out = []
+      if pokemon_dex_supported?
+        out << "H\t#{trainer.has_pokedex ? 1 : 0}"
+        Settings.pokedex_names.each_with_index do |entry, index|
+          name = entry.is_a?(Array) ? entry[0] : entry
+          unlocked = trainer.pokedex.unlocked?(index)
+          out << "D\t#{index}\t#{wire_text(name)}\t#{unlocked ? 1 : 0}"
+        end
+      end
+      if pokemon_badges_supported?
+        trainer.badges.each_with_index do |value, index|
+          out << "B\t#{index}\t#{wire_text("Badge #{index + 1}")}\t#{value ? 1 : 0}"
+        end
+      end
+      out.join("\n")
+    rescue Exception => e
+      "Couldn't read Pokémon progress: #{e.class}: #{e.message}"
+    end
+
+    def move_pokemon_to_storage(party_index_text, box_text)
+      return NOPE unless pokemon_storage_supported?
+      return "Couldn't edit storage during battle." if in_battle?
+      return "Choose a valid party Pokémon." unless party_index_text.to_s =~ /\A\d+\z/
+      return "Choose a valid storage box." unless box_text.to_s =~ /\A\d+\z/
+      storage = pokemon_storage
+      party = trainer.party
+      index = party_index_text.to_i
+      box = box_text.to_i
+      pokemon = party[index]
+      return "That Pokémon isn't in the party." unless pokemon
+      return "Choose a valid storage box." unless box < storage.maxBoxes.to_i
+      able_count = party.compact.count do |entry|
+        !(entry.respond_to?(:egg?) && entry.egg?) && entry.respond_to?(:hp) && entry.hp.to_i > 0
+      end
+      if able_count <= 1 && !(pokemon.respond_to?(:egg?) && pokemon.egg?) && pokemon.respond_to?(:hp) && pokemon.hp.to_i > 0
+        return "Couldn't store your last able Pokémon."
+      end
+      return "Couldn't store this Pokémon while it holds mail." if pokemon.respond_to?(:mail) && pokemon.mail
+      free = if storage.respond_to?(:pbFirstFreePos)
+               storage.pbFirstFreePos(box).to_i
+             else
+               (0...storage.maxPokemon(box).to_i).find { |slot| pokemon_storage_get(storage, box, slot).nil? } || -1
+             end
+      return "That storage box is full." if free < 0
+      return "Couldn't move Pokémon to storage." if storage.pbMove(box, free, -1, index) == false
+      "#{wire_text(pokemon_display_name(pokemon))} moved to #{wire_text(pokemon_storage_box_name(storage, box))}."
+    rescue Exception => e
+      "Couldn't move Pokémon to storage: #{e.class}: #{e.message}"
+    end
+
+    def withdraw_pokemon_from_storage(box_text, slot_text)
+      return NOPE unless pokemon_storage_supported?
+      return "Couldn't edit storage during battle." if in_battle?
+      return "Choose a valid storage box and slot." unless box_text.to_s =~ /\A\d+\z/ && slot_text.to_s =~ /\A\d+\z/
+      storage = pokemon_storage
+      box = box_text.to_i
+      slot = slot_text.to_i
+      return "Choose a valid storage box." unless box < storage.maxBoxes.to_i
+      pokemon = pokemon_storage_get(storage, box, slot)
+      return "Couldn't find a Pokémon in that storage slot." unless pokemon
+      maximum = storage.maxPokemon(-1).to_i
+      maximum = Settings::MAX_PARTY_SIZE.to_i if maximum <= 0 && defined?(Settings::MAX_PARTY_SIZE)
+      maximum = 6 if maximum <= 0
+      return "Your party is full." if trainer.party.compact.length >= maximum
+      return "Couldn't withdraw Pokémon from storage." if storage.pbMove(-1, -1, box, slot) == false
+      "#{wire_text(pokemon_display_name(pokemon))} moved to your party."
+    rescue Exception => e
+      "Couldn't withdraw Pokémon from storage: #{e.class}: #{e.message}"
+    end
+
+    def release_pokemon_from_storage(box_text, slot_text)
+      return NOPE unless pokemon_storage_supported?
+      return "Couldn't edit storage during battle." if in_battle?
+      return "Choose a valid storage box and slot." unless box_text.to_s =~ /\A-?\d+\z/ && slot_text.to_s =~ /\A\d+\z/
+      storage = pokemon_storage
+      box = box_text.to_i
+      slot = slot_text.to_i
+      return "Choose a valid storage box." if box < -1
+      return "Choose a valid storage box." if box >= storage.maxBoxes.to_i
+      pokemon = pokemon_storage_get(storage, box, slot)
+      return "Couldn't find a Pokémon in that slot." unless pokemon
+      return "Couldn't release an egg." if pokemon.respond_to?(:egg?) && pokemon.egg?
+      return "Couldn't release a Pokémon that still holds mail." if pokemon.respond_to?(:mail) && pokemon.mail
+      if box == -1 && pokemon.respond_to?(:hp) && pokemon.hp.to_i > 0
+        able_count = trainer.party.compact.count do |entry|
+          !(entry.respond_to?(:egg?) && entry.egg?) && entry.respond_to?(:hp) && entry.hp.to_i > 0
+        end
+        return "Couldn't release your last able Pokémon." if able_count <= 1
+      end
+      name = wire_text(pokemon_display_name(pokemon))
+      storage.pbDelete(box, slot)
+      "#{name} released."
+    rescue Exception => e
+      "Couldn't release Pokémon: #{e.class}: #{e.message}"
+    end
+
+    def set_pokemon_progress(kind, payload)
+      return NOPE unless ess? && !in_battle? && trainer
+      index_text, value_text = payload.to_s.split("\t", 2)
+      return "Choose a valid value." unless value_text == "0" || value_text == "1"
+      enabled = value_text == "1"
+      case kind.to_s
+      when "badgesAll"
+        return NOPE unless pokemon_badges_supported?
+        trainer.badges.length.times { |index| trainer.badges[index] = enabled }
+        enabled ? "All badges obtained." : "All badges removed."
+      when "badge"
+        return NOPE unless pokemon_badges_supported?
+        return "Choose a valid badge." unless index_text.to_s =~ /\A\d+\z/ && index_text.to_i < trainer.badges.length
+        trainer.badges[index_text.to_i] = enabled
+        "Badge #{index_text.to_i + 1} updated."
+      when "pokedex"
+        return NOPE unless pokemon_dex_supported?
+        trainer.has_pokedex = enabled
+        enabled ? "Pokédex obtained." : "Pokédex removed."
+      when "regionalDex"
+        return NOPE unless pokemon_dex_supported?
+        return "Choose a valid Pokédex." unless index_text.to_s =~ /\A\d+\z/ && index_text.to_i < Settings.pokedex_names.length
+        enabled ? trainer.pokedex.unlock(index_text.to_i) : trainer.pokedex.lock(index_text.to_i)
+        "Regional Pokédex updated."
+      else
+        NOPE
+      end
+    rescue Exception => e
+      "Couldn't update Pokémon progress: #{e.class}: #{e.message}"
     end
 
     POKEMON_STATUSES = [
@@ -4951,8 +5178,16 @@ module TyranorCheats
       return "Enter a whole number." unless raw.to_s =~ /\A\d+\z/
       pokemon = pokes[index]
       return "That Pokemon isn't in the current party." unless pokemon
-      return "Egg data can't be edited here." if pokemon.respond_to?(:egg?) && pokemon.egg?
       value = raw.to_i
+      if field == 'eggSteps'
+        return "Couldn't edit hatch steps for a non-egg." unless pokemon.respond_to?(:egg?) && pokemon.egg?
+        setter = pokemon.respond_to?(:steps_to_hatch=) ? :steps_to_hatch= : (pokemon.respond_to?(:eggsteps=) ? :eggsteps= : nil)
+        return NOPE unless setter
+        value = [[value, 1].max, 999999].min
+        pokemon.send(setter, value)
+        return "#{wire_text(pokemon_display_name(pokemon))} hatch steps set to #{value}"
+      end
+      return "Egg data can't be edited here." if pokemon.respond_to?(:egg?) && pokemon.egg?
       case field
       when 'level'
         return NOPE unless pokemon.respond_to?(:level=)
@@ -5003,6 +5238,25 @@ module TyranorCheats
       "#{wire_text(pokemon_display_name(pokemon))} #{field} set to #{value}"
     rescue Exception => e
       "Couldn't change Pokemon: #{e.class}: #{e.message}"
+    end
+
+    def set_pokemon_nickname(index_text, nickname)
+      pokemon, error = pokemon_at(index_text)
+      return error if error
+      return NOPE unless pokemon.respond_to?(:name=)
+      name = nickname.to_s.strip
+      maximum = if defined?(Pokemon::MAX_NAME_SIZE)
+                  Pokemon::MAX_NAME_SIZE.to_i
+                elsif defined?(PokeBattle_Pokemon::MAX_POKEMON_NAME_SIZE)
+                  PokeBattle_Pokemon::MAX_POKEMON_NAME_SIZE.to_i
+                else
+                  32
+                end
+      return "Couldn't set nickname; maximum length is #{maximum} characters." if name.length > maximum
+      pokemon.name = name
+      "#{wire_text(pokemon_display_name(pokemon))} nickname updated."
+    rescue Exception => e
+      "Couldn't change Pokémon nickname: #{e.class}: #{e.message}"
     end
 
     def recover_pokemon(index_text)

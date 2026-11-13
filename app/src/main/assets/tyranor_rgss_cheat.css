@@ -277,3 +277,4 @@ html[data-theme="dark"] .tm-system-kind-trigger{background:#171b19;color:#eef3f0
 .tm-equip-action{height:auto;min-height:36px;font-size:11px;line-height:1.2;white-space:normal;overflow-wrap:anywhere}
 .tm-equip-option>.tm-equip-action{font-size:11px}
 .tm-actor-class-picker .tm-system-kind-menu{position:fixed;top:auto;right:auto;z-index:50}
+.tm-pokemon-box-nav{min-height:38px}.tm-pokemon-box-nav>.tm-grow{text-align:center}.tm-pokemon-box-row{flex-wrap:wrap;min-width:0}.tm-pokemon-box-row>.tm-name{flex:1 1 100%;font-weight:650}.tm-pokemon-box-row>.tm-pokemon-actions{flex:1 1 100%;justify-content:flex-end}

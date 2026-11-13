@@ -107,7 +107,17 @@
       "已预约传送": "Warp queued", "保存完成": "Save complete", "读取完成": "Load complete", "存档已删除": "Save deleted", "已恢复默认": "Defaults restored",
       "当前未启用虚拟按键": "Virtual controls are disabled", "RGSS 修改器桥未连接": "RGSS cheat bridge is unavailable",
       "当前类别": "Category", "物品数据库": "Item database", "地图列表不可用": "Map list unavailable", "操作失败": "Operation failed",
-      "已有数据": "Existing data", "空": "Empty", "全开": "All on", "全关": "All off"
+      "已有数据": "Existing data", "空": "Empty", "全开": "All on", "全关": "All off",
+      "进度": "Progress", "PC 盒子": "PC boxes", "上一盒": "Previous box", "下一盒": "Next box", "存入当前盒子": "Deposit into this box",
+      "从队伍选择宝可梦即可存入当前盒子": "Choose a Pokémon from your party to deposit it here", "已选择队伍中的宝可梦": "Party Pokémon selected",
+      "存入 PC": "Deposit", "宝可梦已存入 PC": "Pokémon deposited", "取出到队伍": "Withdraw to party", "宝可梦已取出到队伍": "Pokémon moved to party",
+      "释放": "Release", "宝可梦已释放": "Pokémon released", "确定释放这只宝可梦吗？此操作无法撤销。": "Release this Pokémon? This cannot be undone.",
+      "这个盒子是空的": "This box is empty", "无法读取 PC 盒子": "Couldn't read PC storage", "徽章与图鉴": "Badges and Pokédex",
+      "徽章": "Badge", "获得全部徽章": "Obtain all badges", "移除全部徽章": "Remove all badges", "徽章已更新": "Badges updated",
+      "拥有图鉴": "Own the Pokédex", "当前游戏没有公开徽章或图鉴接口": "This game exposes no badge or Pokédex controls",
+      "进度已更新": "Progress updated", "修改昵称": "Edit nickname", "昵称已修改": "Nickname updated", "留空或输入原物种名称可清除昵称": "Leave blank or enter the species name to clear the nickname",
+      "剩余孵化步数": "Steps until hatch", "快速孵化": "Quick hatch", "蛋只能调整孵化进度": "Eggs can only have their hatch progress changed",
+      "蛋只需再走一步即可孵化": "This egg will hatch after one more step"
     },
     ja: {
       "Tyranor RGSS 修改器": "Tyranor RGSS 改造パネル",
@@ -211,7 +221,17 @@
       "已预约传送": "移動を予約しました", "保存完成": "保存しました", "读取完成": "読み込みました", "存档已删除": "セーブを削除しました", "已恢复默认": "初期設定に戻しました",
       "当前未启用虚拟按键": "仮想ボタンは無効です", "RGSS 修改器桥未连接": "RGSS 改造ブリッジに接続できません",
       "当前类别": "種類", "地图列表不可用": "マップ一覧を利用できません", "已有数据": "データあり", "空": "空",
-      "全开": "すべてオン", "全关": "すべてオフ"
+      "全开": "すべてオン", "全关": "すべてオフ",
+      "进度": "進行状況", "PC 盒子": "PC ボックス", "上一盒": "前のボックス", "下一盒": "次のボックス", "存入当前盒子": "このボックスに預ける",
+      "从队伍选择宝可梦即可存入当前盒子": "パーティからポケモンを選ぶとここに預けられます", "已选择队伍中的宝可梦": "パーティのポケモンを選択中",
+      "存入 PC": "預ける", "宝可梦已存入 PC": "ポケモンを預けました", "取出到队伍": "パーティに引き出す", "宝可梦已取出到队伍": "ポケモンをパーティに移しました",
+      "释放": "逃がす", "宝可梦已释放": "ポケモンを逃がしました", "确定释放这只宝可梦吗？此操作无法撤销。": "このポケモンを逃がしますか？元に戻せません。",
+      "这个盒子是空的": "このボックスは空です", "无法读取 PC 盒子": "PC ボックスを読み取れません", "徽章与图鉴": "バッジと図鑑",
+      "徽章": "バッジ", "获得全部徽章": "すべてのバッジを入手", "移除全部徽章": "すべてのバッジを削除", "徽章已更新": "バッジを更新しました",
+      "拥有图鉴": "図鑑を所持", "当前游戏没有公开徽章或图鉴接口": "このゲームはバッジまたは図鑑の操作に対応していません",
+      "进度已更新": "進行状況を更新しました", "修改昵称": "ニックネームを変更", "昵称已修改": "ニックネームを変更しました", "留空或输入原物种名称可清除昵称": "空欄または種族名を入力するとニックネームを解除します",
+      "剩余孵化步数": "孵化までの歩数", "快速孵化": "すぐに孵化", "蛋只能调整孵化进度": "タマゴは孵化までの歩数のみ変更できます",
+      "蛋只需再走一步即可孵化": "あと 1 歩で孵化します"
     }
   };
 
