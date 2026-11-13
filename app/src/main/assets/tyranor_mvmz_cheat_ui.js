@@ -13,7 +13,7 @@
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
   var goldCommitPending = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", equipItemId: null, quickSection: "角色与资源", inBattle: false, itemKind: "item", systemKind: "switch", mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", equipItemId: null, quickSection: "角色与资源", inBattle: false, itemKind: "item", itemEntries: [], selectedItemId: null, systemKind: "switch", mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -198,10 +198,13 @@
     }, 0);
   }
   function renderItems(content) {
-    var kinds = '<select class="tm-select" id="tm-item-kind" data-action="item-kind"><option value="item">物品</option><option value="weapon">武器</option><option value="armor">护甲</option></select>';
-    var tools = '<div class="tm-row">' + kinds + textInput("tm-item-query", "", "search", 'placeholder="搜索名称"') + button("搜索", "render-items", "primary") + '</div>';
-    var header = '<div class="tm-lock-list-header tm-item-lock-header"><span>锁定</span><span>物品</span><span>数量</span><span></span></div>';
-    content.innerHTML = card("物品数据库", tools + header + '<div id="tm-item-list" class="tm-list"><div class="tm-note">加载中…</div></div>', "tm-fill-card");
+    var kinds = '<select class="tm-select" id="tm-item-kind" data-action="item-kind"><option value="item">' + escapeHtml(translated("物品")) + '</option><option value="weapon">' + escapeHtml(translated("武器")) + '</option><option value="armor">' + escapeHtml(translated("护甲")) + '</option></select>';
+    var tools = '<div class="tm-row">' + kinds + textInput("tm-item-query", "", "search", 'placeholder="' + escapeHtml(translated("搜索名称")) + '"') + button(translated("搜索"), "render-items", "primary") + '</div>';
+    var header = '<div class="tm-lock-list-header tm-item-lock-header"><span>' + escapeHtml(translated("锁定")) + '</span><span>' + escapeHtml(translated("物品")) + '</span><span>' + escapeHtml(translated("数量")) + '</span><span>' + escapeHtml(translated("选择")) + '</span></div>';
+    content.innerHTML = '<div class="tm-grid tm-item-layout">' +
+      card(translated("物品数据库"), tools + header + '<div id="tm-item-list" class="tm-list"><div class="tm-note">' + escapeHtml(translated("加载中…")) + '</div></div>', "tm-item-roster") +
+      '<section class="tm-card tm-item-detail" id="tm-item-detail"></section>' +
+      '</div>';
     root.querySelector("#tm-item-kind").value = context.itemKind;
     loadItems();
   }
@@ -209,10 +212,31 @@
     context.itemKind = inputValue("tm-item-kind") || context.itemKind;
     var result = mod.listDatabase(context.itemKind, inputValue("tm-item-query"), 0, 200);
     var list = root.querySelector("#tm-item-list");
-    list.innerHTML = result.values.length ? result.values.map(function (item) {
-      return '<div class="tm-item tm-lock-row tm-item-lock-row"><label class="tm-lock-cell"><input class="tm-lock-checkbox" type="checkbox" data-action="lock-item" data-id="' + escapeHtml(item.id) + '" ' + (item.locked ? "checked" : "") + '></label><span class="tm-name" title="' + escapeHtml(item.description) + '">#' + item.id + ' ' + escapeHtml(item.name) + '</span>' +
-        textInput("tm-count-" + item.id, item.count, "number", 'min="0"') + button("应用", "set-item", "", 'data-id="' + item.id + '"') + '</div>';
-    }).join("") : '<div class="tm-note">没有匹配项目</div>';
+    context.itemEntries = result.values || [];
+    if (!context.itemEntries.some(function (item) { return Number(item.id) === Number(context.selectedItemId); })) {
+      context.selectedItemId = context.itemEntries.length ? Number(context.itemEntries[0].id) : null;
+    }
+    list.innerHTML = context.itemEntries.length ? context.itemEntries.map(function (item) {
+      var selected = Number(item.id) === Number(context.selectedItemId);
+      return '<div class="tm-item tm-lock-row tm-item-lock-row' + (selected ? ' selected' : '') + '"><label class="tm-lock-cell" aria-label="' + escapeHtml(translated("锁定") + " #" + item.id + " " + item.name) + '"><input class="tm-lock-checkbox" type="checkbox" data-action="lock-item" data-id="' + escapeHtml(item.id) + '" ' + (item.locked ? "checked" : "") + '></label><span class="tm-name" title="' + escapeHtml(item.name) + '">#' + item.id + ' ' + escapeHtml(item.name) + '</span>' +
+        '<span class="tm-badge tm-item-count">' + escapeHtml(item.count) + '</span>' + button(translated(selected ? "已选择" : "选择"), "select-item", selected ? "primary" : "", 'data-id="' + escapeHtml(item.id) + '"') + '</div>';
+    }).join("") : '<div class="tm-note">' + escapeHtml(translated("没有匹配项目")) + '</div>';
+    renderItemDetail();
+  }
+  function renderItemDetail() {
+    var detail = root && root.querySelector("#tm-item-detail");
+    if (!detail) return;
+    var item = (context.itemEntries || []).filter(function (entry) { return Number(entry.id) === Number(context.selectedItemId); })[0];
+    if (!item) {
+      detail.innerHTML = '<h3>' + escapeHtml(translated("物品详情")) + '</h3><div class="tm-note">' + escapeHtml(translated("请选择物品查看详情")) + '</div>';
+      return;
+    }
+    var description = String(item.description || "").trim() || "—";
+    detail.innerHTML = '<div class="tm-item-detail-heading"><h3>' + escapeHtml(translated("物品详情")) + '</h3><span class="tm-badge">#' + escapeHtml(item.id) + '</span></div>' +
+      '<div class="tm-item-detail-info"><div class="tm-item-detail-name"><span>' + escapeHtml(translated("名称:")) + '</span><strong>' + escapeHtml(item.name || "—") + '</strong></div>' +
+      '<div class="tm-item-detail-description"><span>' + escapeHtml(translated("描述:")) + '</span><p>' + escapeHtml(description) + '</p></div></div>' +
+      '<section class="tm-item-quantity-card"><h4>' + escapeHtml(translated("数量操作")) + '</h4><div class="tm-row"><label>' + escapeHtml(translated("当前数量")) + '<span class="tm-badge">' + escapeHtml(item.count) + '</span></label>' +
+      textInput("tm-detail-count", item.count, "number", 'min="0" inputmode="numeric"') + button(translated("应用"), "set-item", "primary", 'data-id="' + escapeHtml(item.id) + '"') + '</div></section>';
   }
   function renderActors(content) {
     var actors = mod.listActors();
@@ -808,8 +832,22 @@
         .then(function (result) { if (result === undefined) node.checked = !itemLocked; });
     }
     if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); render(); });
-    if (action === "item-kind" || action === "render-items") return loadItems();
-    if (action === "set-item") return run(function () { mod.setItemCount(context.itemKind, node.dataset.id, inputValue("tm-count-" + node.dataset.id)); }, function () { toast("数量已修改"); loadItems(); });
+    if (action === "item-kind") { context.selectedItemId = null; return loadItems(); }
+    if (action === "render-items") return loadItems();
+    if (action === "select-item") {
+      context.selectedItemId = Number(node.dataset.id);
+      root.querySelectorAll("#tm-item-list .tm-item-lock-row").forEach(function (itemRow) {
+        var selected = Number(itemRow.querySelector("[data-action='select-item']").dataset.id) === context.selectedItemId;
+        itemRow.classList.toggle("selected", selected);
+        var selectButton = itemRow.querySelector("[data-action='select-item']");
+        if (selectButton) {
+          selectButton.textContent = translated(selected ? "已选择" : "选择");
+          selectButton.classList.toggle("primary", selected);
+        }
+      });
+      return renderItemDetail();
+    }
+    if (action === "set-item") return run(function () { return mod.setItemCount(context.itemKind, node.dataset.id, inputValue("tm-detail-count")); }, function () { toast("数量已修改"); loadItems(); });
     if (action === "actor-select") {
       context.actorId = Number(node.dataset.id || node.value);
       context.skillQuery = "";
