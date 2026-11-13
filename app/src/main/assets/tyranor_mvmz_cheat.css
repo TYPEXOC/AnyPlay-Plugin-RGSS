@@ -59,8 +59,8 @@ html[data-theme="dark"] #tyranor-mod-root{color:#eef3f0}html[data-theme="dark"] 
 .tm-map-grid .tm-map-tree-guide.tm-guide-continuing{border-left-color:#748079}
 .tm-map-grid .tm-map-tree-branch{flex:0 0 16px;width:16px;white-space:pre}
 .tm-map-grid .tm-map-tree-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tm-map-grid .tm-map-tree-list{gap:2px;padding:3px}
-.tm-map-grid .tm-map-tree-list>.tm-item{gap:5px;min-height:30px;margin:0;padding:3px 5px;border-radius:7px}
+.tm-map-grid .tm-map-tree-list{gap:4px;padding:3px}
+.tm-map-grid .tm-map-tree-list>.tm-item{gap:5px;min-height:30px;margin:0;padding:3px 5px;border:1px solid #e0e5e2;border-radius:7px}
 .tm-map-grid .tm-map-tree-prefix{white-space:nowrap;font-size:10px}
 .tm-map-grid .tm-map-tree-guide{flex-basis:5px;width:5px}
 .tm-map-grid .tm-map-tree-branch{flex-basis:12px;width:12px;margin-right:3px;font-size:10px}
@@ -75,7 +75,7 @@ html[data-theme="dark"] .tm-map-dropdown{background:#202522}
 .tm-badge.tm-on{background:var(--tm-primary,#237765);color:var(--tm-on-primary,#fff)}
 .tm-map-grid .tm-sep{height:1px;background:#e0e5e2;margin:10px 0;flex:0 0 auto}
 .tm-minimap{width:100%;image-rendering:pixelated;border:1px solid #e0e5e2;border-radius:10px;touch-action:manipulation}
-html[data-theme="dark"] .tm-map-grid .tm-sep{background:#343c37}html[data-theme="dark"] .tm-minimap{border-color:#343c37}html[data-theme="dark"] .tm-map-grid .tm-map-tree-prefix{color:#aab4ae}html[data-theme="dark"] .tm-map-grid .tm-map-tree-guide.tm-guide-continuing{border-left-color:#aab4ae}
+html[data-theme="dark"] .tm-map-grid .tm-map-tree-list>.tm-item{border-color:#343c37}html[data-theme="dark"] .tm-map-grid .tm-sep{background:#343c37}html[data-theme="dark"] .tm-minimap{border-color:#343c37}html[data-theme="dark"] .tm-map-grid .tm-map-tree-prefix{color:#aab4ae}html[data-theme="dark"] .tm-map-grid .tm-map-tree-guide.tm-guide-continuing{border-left-color:#aab4ae}
 /* 迷你地图对话框：独立覆盖层 + 图例，点遮罩或 × 关闭 */
 .tm-modal{position:absolute;inset:0;z-index:20;background:#0009;display:flex;align-items:center;justify-content:center;padding:16px}
 .tm-modal-box{width:min(92vw,560px);max-height:88%;display:flex;flex-direction:column;background:#fff;border-radius:16px;padding:12px;box-shadow:0 10px 36px #000b}
