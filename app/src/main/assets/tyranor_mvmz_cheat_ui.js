@@ -102,8 +102,8 @@
         speedControls += card("游戏倍速", '<div class="tm-row"><input class="tm-input" id="tm-game-speed" type="number" min="1" max="9" step="1" value="' + escapeHtml(state.gameSpeedMultiplier || 1) + '">' + button("设置", "set-game-speed", "primary") + '</div>');
         if (speedControls) speedControls = '<div class="tm-grid tm-speed-controls">' + speedControls + '</div>';
       }
-      if (selectedGroup.id === "角色与资源") toggles += gold;
-      sectionBody = card(selectedGroup.label, toggles);
+      var sectionContent = selectedGroup.id === "角色与资源" ? gold + toggles : toggles;
+      sectionBody = card(selectedGroup.label, sectionContent);
       sectionBody += speedControls;
     } else {
       sectionBody = card(selectedGroup.label, '<div class="tm-note">当前没有可用的快捷功能</div>');
