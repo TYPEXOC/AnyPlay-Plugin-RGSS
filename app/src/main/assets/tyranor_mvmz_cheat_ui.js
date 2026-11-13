@@ -13,7 +13,7 @@
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
   var activeTab = "quick";
   var goldCommitPending = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -203,19 +203,24 @@
     }, 0);
   }
   function renderItems(content) {
-    var kinds = '<select class="tm-select" id="tm-item-kind" data-action="item-kind"><option value="item">' + escapeHtml(translated("物品")) + '</option><option value="weapon">' + escapeHtml(translated("武器")) + '</option><option value="armor">' + escapeHtml(translated("护甲")) + '</option></select>';
-    var tools = '<div class="tm-row">' + kinds + textInput("tm-item-query", "", "search", 'placeholder="' + escapeHtml(translated("搜索名称")) + '"') + button(translated("搜索"), "render-items", "primary") + '</div>';
+    var itemKinds = [["item", "物品"], ["weapon", "武器"], ["armor", "护甲"]];
+    var selectedKind = itemKinds.filter(function (entry) { return entry[0] === context.itemKind; })[0] || itemKinds[0];
+    var kindOptions = itemKinds.map(function (entry) {
+      return '<button type="button" class="tm-system-kind-option' + (context.itemKind === entry[0] ? ' active' : '') + '" role="option" aria-selected="' + (context.itemKind === entry[0] ? 'true' : 'false') + '" data-action="select-item-kind" data-kind="' + entry[0] + '">' + escapeHtml(translated(entry[1])) + '</button>';
+    }).join("");
+    var kinds = '<div class="tm-system-kind-picker tm-item-kind-picker"><button type="button" class="tm-system-kind-trigger" data-action="toggle-item-kind" aria-haspopup="listbox" aria-expanded="' + (context.itemKindExpanded ? 'true' : 'false') + '"><span>' + escapeHtml(translated(selectedKind[1])) + '</span><span class="tm-system-kind-arrow" aria-hidden="true">▾</span></button>' +
+      (context.itemKindExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + kindOptions + '</div>' : '') + '</div>';
+    var tools = '<div class="tm-row">' + kinds + textInput("tm-item-query", context.itemQuery, "search", 'placeholder="' + escapeHtml(translated("搜索名称")) + '"') + button(translated("搜索"), "render-items", "primary") + '</div>';
     var header = '<div class="tm-lock-list-header tm-item-lock-header"><span>' + escapeHtml(translated("锁定")) + '</span><span>' + escapeHtml(translated("物品")) + '</span><span>' + escapeHtml(translated("数量")) + '</span></div>';
     content.innerHTML = '<div class="tm-grid tm-item-layout">' +
       card(translated("物品数据库"), tools + header + '<div id="tm-item-list" class="tm-list"><div class="tm-note">' + escapeHtml(translated("加载中…")) + '</div></div>', "tm-item-roster") +
       '<section class="tm-card tm-item-detail" id="tm-item-detail"></section>' +
       '</div>';
-    root.querySelector("#tm-item-kind").value = context.itemKind;
     loadItems();
   }
   function loadItems() {
-    context.itemKind = inputValue("tm-item-kind") || context.itemKind;
-    var result = mod.listDatabase(context.itemKind, inputValue("tm-item-query"), 0, 200);
+    context.itemQuery = inputValue("tm-item-query");
+    var result = mod.listDatabase(context.itemKind, context.itemQuery, 0, 200);
     var list = root.querySelector("#tm-item-list");
     context.itemEntries = (result.values || []).filter(function (item) { return !isDashPlaceholder(item.name); });
     if (!context.itemEntries.some(function (item) { return Number(item.id) === Number(context.selectedItemId); })) {
@@ -295,16 +300,19 @@
     if (context.actorSection === "stats") {
       var classData = mod.actorClasses(actor.id) || { currentId: 0, classes: [] };
       var classOptions = classData.classes || [];
-      var currentClassExists = classOptions.some(function (entry) { return Number(entry.id) === Number(classData.currentId); });
-      var classSelect = classOptions.map(function (entry) {
-        return '<option value="' + Number(entry.id) + '" ' + (Number(entry.id) === Number(classData.currentId) ? 'selected' : '') + '>' + escapeHtml(entry.name) + '</option>';
+      var currentClass = classOptions.filter(function (entry) { return Number(entry.id) === Number(classData.currentId); })[0];
+      var classOptionsHtml = classOptions.map(function (entry) {
+        var selected = Number(entry.id) === Number(classData.currentId);
+        return '<button type="button" class="tm-system-kind-option' + (selected ? ' active' : '') + '" role="option" aria-selected="' + (selected ? 'true' : 'false') + '" data-action="select-actor-class" data-id="' + Number(entry.id) + '">' + escapeHtml(entry.name) + '</button>';
       }).join("");
-      if (!currentClassExists) classSelect = '<option value="" selected>' + escapeHtml(translated("选择职业")) + '</option>' + classSelect;
+      var classPicker = '<div class="tm-system-kind-picker tm-actor-class-picker"><button type="button" id="tm-actor-class" class="tm-system-kind-trigger" data-action="toggle-actor-class" aria-haspopup="listbox" aria-expanded="' + (context.actorClassExpanded ? 'true' : 'false') + '" aria-label="' + escapeHtml(translated("职业")) + '"><span>' + escapeHtml(currentClass ? currentClass.name : translated("选择职业")) + '</span><span class="tm-system-kind-arrow" aria-hidden="true">▾</span></button>' +
+        (context.actorClassExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + classOptionsHtml + '</div>' : '') + '</div>';
       var classRow = classOptions.length
-        ? '<div class="tm-item tm-actor-class-row"><span class="tm-name">' + escapeHtml(translated("职业")) + '</span><select id="tm-actor-class" class="tm-select" data-action="actor-class" aria-label="' + escapeHtml(translated("职业")) + '">' + classSelect + '</select></div>'
+        ? '<div class="tm-item tm-actor-class-row"><span class="tm-name">' + escapeHtml(translated("职业")) + '</span>' + classPicker + '</div>'
         : '<div class="tm-note">' + escapeHtml(translated("当前游戏没有职业列表")) + '</div>';
+      var statLabels = { level: "等级", hp: "HP", mp: "MP", mhp: "最大 HP", mmp: "最大 MP", atk: "攻击", def: "防御", mat: "魔攻", mdf: "魔防", agi: "敏捷", luk: "幸运" };
       var stats = ["level","hp","mp","mhp","mmp","atk","def","mat","mdf","agi","luk"].map(function (key) {
-      return '<div class="tm-item"><span class="tm-name">' + key.toUpperCase() + '</span>' + textInput("tm-stat-" + key, actor[key], "number", 'style="width:94px"') + button("设置", "set-stat", "", 'data-key="' + key + '"') + '</div>';
+      return '<div class="tm-item"><span class="tm-name">' + escapeHtml(translated(statLabels[key] || key.toUpperCase())) + '</span>' + textInput("tm-stat-" + key, actor[key], "number", 'style="width:94px"') + button("设置", "set-stat", "", 'data-key="' + key + '"') + '</div>';
       }).join("");
       section.innerHTML = card(translated("属性"), classRow + '<div class="tm-list">' + stats + '</div>');
     } else if (context.actorSection === "skills") {
@@ -404,7 +412,7 @@
     }).join("");
     var kind = '<div class="tm-system-kind-picker"><button type="button" class="tm-system-kind-trigger" data-action="toggle-system-kind" aria-haspopup="listbox" aria-expanded="' + (context.systemKindExpanded ? 'true' : 'false') + '"><span>' + escapeHtml(selectedKind) + '</span><span class="tm-system-kind-arrow" aria-hidden="true">▾</span></button>' +
       (context.systemKindExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + options + '</div>' : '') + '</div>';
-    var header = '<div class="tm-lock-list-header tm-system-lock-header"><span>锁定</span><span>名称</span><span>当前值</span><span></span></div>';
+    var header = '<div class="tm-lock-list-header tm-system-lock-header"><span>锁定</span><span>名称</span><span>当前值</span></div>';
     content.innerHTML = card("开关与变量", '<div class="tm-row">' + kind + textInput("tm-system-query", context.systemQuery, "search", 'placeholder="名称或 ID"') + '</div>' + header + '<div id="tm-system-list" class="tm-list"></div>', "tm-fill-card", hideEmptyToggle("toggle-hide-empty-system", context.hideEmptySystemEntries));
     loadSystem();
   }
@@ -421,8 +429,8 @@
       var switchOn = isSwitch && systemSwitchOn(item.value);
       var control = context.systemKind === "switch" ?
         '<label class="tm-system-switch"><span class="tm-system-switch-state">' + escapeHtml(translated(switchOn ? "开" : "关")) + '</span><input class="tm-switch tm-system-switch-input" id="tm-system-' + item.id + '" type="checkbox" data-action="set-system-switch" data-id="' + item.id + '" data-current-value="' + (switchOn ? "1" : "0") + '" ' + (switchOn ? "checked" : "") + '></label>' :
-        '<input class="tm-input tm-system-value" id="tm-system-' + item.id + '" type="text" value="' + escapeHtml(typeof item.value === "object" ? JSON.stringify(item.value) : item.value) + '" aria-label="' + escapeHtml(name) + '">';
-      return '<div class="tm-item tm-lock-row tm-system-lock-row' + (isSwitch ? ' tm-system-switch-row' : '') + '"><label class="tm-lock-cell"><input class="tm-lock-checkbox" type="checkbox" data-action="lock-system" data-kind="' + context.systemKind + '" data-id="' + item.id + '" ' + (item.locked ? "checked" : "") + '></label><span class="tm-name" title="#' + item.id + ' ' + escapeHtml(name) + '">#' + item.id + ' ' + escapeHtml(name) + '</span>' + control + (isSwitch ? '' : button("设置", "set-system", "", 'data-id="' + item.id + '"')) + '</div>';
+        '<input class="tm-input tm-system-value" id="tm-system-' + item.id + '" type="text" data-action="set-system" data-id="' + item.id + '" value="' + escapeHtml(typeof item.value === "object" ? JSON.stringify(item.value) : item.value) + '" aria-label="' + escapeHtml(name) + '">';
+      return '<div class="tm-item tm-lock-row tm-system-lock-row' + (isSwitch ? ' tm-system-switch-row' : '') + '"><label class="tm-lock-cell"><input class="tm-lock-checkbox" type="checkbox" data-action="lock-system" data-kind="' + context.systemKind + '" data-id="' + item.id + '" ' + (item.locked ? "checked" : "") + '></label><span class="tm-name" title="#' + item.id + ' ' + escapeHtml(name) + '">#' + item.id + ' ' + escapeHtml(name) + '</span>' + control + '</div>';
     }).join("") || '<div class="tm-note">没有匹配项目</div>';
   }
   function renderMap(content) {
@@ -435,7 +443,7 @@
     var mapPicker = '<button class="tm-btn tm-map-picker" data-action="toggle-map-list" title="' + escapeHtml(currentMapLabel) + '"><span class="tm-map-picker-label">' + escapeHtml(currentMapLabel) + '</span><span class="tm-map-picker-arrow" aria-hidden="true">▾</span></button>';
     var browseRow = '<div class="tm-map-picker-row">' + mapPicker + '</div><div class="tm-row">' + textInput("tm-browse-query", "", "search", 'placeholder="搜索"') + button("搜索", "render-browse", "primary") + '</div>';
     var mapControls = '<div class="tm-row tm-map-teleport-row">' + textInput("tm-map-id", pos && pos.mapId, "number", 'placeholder="地图 ID"') + textInput("tm-map-x", pos && pos.x, "number", 'placeholder="X"') + textInput("tm-map-y", pos && pos.y, "number", 'placeholder="Y"') + button("传送", "teleport", "primary") + '</div>'
-      + '<div class="tm-map-action-buttons">' + button("迷你地图", "show-minimap") + button("独立开关全开", "map-selfswitches", "", 'data-enabled="1"') + button("独立开关全关", "map-selfswitches", "", 'data-enabled="0"') + '</div>';
+      + '<div class="tm-map-action-buttons">' + button("迷你地图", "show-minimap") + button("事件开关全开", "map-selfswitches", "", 'data-enabled="1"') + button("事件开关全关", "map-selfswitches", "", 'data-enabled="0"') + '</div>';
     var teleportCard = card("地图操作", mapControls);
     var eventCard = card("事件详情", '<div class="tm-card-body" id="tm-event-panel">' + eventPanelHtml() + '</div>');
     content.innerHTML = '<div class="tm-grid tm-map-grid">'
@@ -589,7 +597,7 @@
     var pages = (detail.pages || []).map(function (page) {
       return '<div class="tm-event-page">'
         + '<div class="tm-event-page-head"><strong>事件页 ' + (Number(page.index) + 1) + '</strong><span>指令数 ' + page.commandCount + ' · 条件数 ' + page.validCount + '</span>'
-        + '<div class="tm-event-page-actions">' + button(translated("条件") + " (" + (page.conditions || []).length + ")", "show-event-conditions", "", 'data-page="' + page.index + '"') + button("事件解释器", "show-event-interpreter", "", 'data-page="' + page.index + '"') + '</div></div>'
+        + '<div class="tm-event-page-actions">' + button(translated("开关") + " (" + (page.conditions || []).length + ")", "show-event-conditions", "", 'data-page="' + page.index + '"') + button("事件解释器", "show-event-interpreter", "", 'data-page="' + page.index + '"') + '</div></div>'
         + '</div>';
     }).join("") || '<div class="tm-note">事件没有可显示的页面</div>';
     var description = String(detail.description || "").trim();
@@ -839,7 +847,16 @@
         .then(function (result) { if (result === undefined) node.checked = !itemLocked; });
     }
     if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); render(); });
-    if (action === "item-kind") { context.selectedItemId = null; return loadItems(); }
+    if (action === "toggle-item-kind") {
+      context.itemKindExpanded = !context.itemKindExpanded;
+      return renderItems(root.querySelector(".tm-content"));
+    }
+    if (action === "select-item-kind") {
+      context.itemKind = node.dataset.kind === "weapon" || node.dataset.kind === "armor" ? node.dataset.kind : "item";
+      context.itemKindExpanded = false;
+      context.selectedItemId = null;
+      return renderItems(root.querySelector(".tm-content"));
+    }
     if (action === "render-items") return loadItems();
     if (action === "select-item") {
       context.selectedItemId = Number(node.dataset.id);
@@ -887,9 +904,14 @@
       return renderActorSection();
     }
     if (action === "recover-actor") return run(function () { mod.recoverActor(context.actorId); }, function () { toast("角色已恢复"); renderActorBody(); });
-    if (action === "actor-class") {
-      var classId = Number(node.value);
+    if (action === "toggle-actor-class") {
+      context.actorClassExpanded = !context.actorClassExpanded;
+      return renderActorSection();
+    }
+    if (action === "actor-class" || action === "select-actor-class") {
+      var classId = Number(action === "actor-class" ? node.value : node.dataset.id);
       if (!(classId > 0)) return renderActorSection();
+      context.actorClassExpanded = false;
       return run(function () { return mod.setActorClass(context.actorId, classId); }, function () {
         toast(translated("职业已更换"));
         renderActorBody();
@@ -976,7 +998,7 @@
         loadEventsForMap(context.selectedMapId);
         loadBrowse();
         renderEventPanel();
-        toast(enabled ? "所选地图事件独立开关已全开" : "所选地图事件独立开关已全关");
+        toast(enabled ? "所选地图事件开关已全开" : "所选地图事件开关已全关");
       });
     }
     if (action === "toggle-event-condition") {
@@ -1066,6 +1088,20 @@
         if (systemMenu) systemMenu.remove();
         if (systemTrigger) systemTrigger.setAttribute("aria-expanded", "false");
       }
+      if (context.itemKindExpanded && !event.target.closest(".tm-item-kind-picker")) {
+        context.itemKindExpanded = false;
+        var itemMenu = root.querySelector(".tm-item-kind-picker .tm-system-kind-menu");
+        var itemTrigger = root.querySelector(".tm-item-kind-picker .tm-system-kind-trigger");
+        if (itemMenu) itemMenu.remove();
+        if (itemTrigger) itemTrigger.setAttribute("aria-expanded", "false");
+      }
+      if (context.actorClassExpanded && !event.target.closest(".tm-actor-class-picker")) {
+        context.actorClassExpanded = false;
+        var classMenu = root.querySelector(".tm-actor-class-picker .tm-system-kind-menu");
+        var classTrigger = root.querySelector(".tm-actor-class-picker .tm-system-kind-trigger");
+        if (classMenu) classMenu.remove();
+        if (classTrigger) classTrigger.setAttribute("aria-expanded", "false");
+      }
       var tab = event.target.closest("[data-tab]"); if (tab) { activeTab = tab.dataset.tab; render(); return; }
       var action = event.target.closest("[data-action]");
       if (action && action.type === "checkbox") return;
@@ -1086,6 +1122,9 @@
       if (event.target && event.target.id === "tm-gold" && event.key === "Enter") {
         event.preventDefault();
         applyGoldInput(event.target);
+        event.target.blur();
+      } else if (event.target && event.target.classList && event.target.classList.contains("tm-system-value") && event.key === "Enter") {
+        event.preventDefault();
         event.target.blur();
       }
     });
