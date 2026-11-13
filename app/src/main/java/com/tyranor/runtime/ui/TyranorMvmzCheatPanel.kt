@@ -450,6 +450,7 @@ class TyranorMvmzCheatPanel(
                         "name" to entry.name.ifBlank { if (kind == "switch") "开关 ${entry.id}" else "变量 ${entry.id}" },
                         "value" to if (kind == "switch") entry.value == "true" else parseSystemValue(entry.valueType, entry.value),
                         "locked" to entry.locked,
+                        "named" to entry.named,
                     )
                 })
             }

@@ -26,13 +26,13 @@
     return response ? response.value : null;
   }
 
-  function page(values, query, offset, limit, nameOf, idOf) {
+  function page(values, query, offset, limit, nameOf, idOf, include) {
     query = String(query || "").toLowerCase();
     offset = Math.max(0, Number(offset) || 0);
     limit = Math.max(1, Math.min(300, Number(limit) || 100));
     var filtered = values.filter(function (value) {
-      return !query || String(nameOf(value) || "").toLowerCase().indexOf(query) >= 0 ||
-        String(idOf(value)).toLowerCase().indexOf(query) >= 0;
+      return (!include || include(value)) && (!query || String(nameOf(value) || "").toLowerCase().indexOf(query) >= 0 ||
+        String(idOf(value)).toLowerCase().indexOf(query) >= 0);
     });
     return { total: filtered.length, values: filtered.slice(offset, offset + limit) };
   }
@@ -69,15 +69,17 @@
     actorEquips: function (id) { return invoke("actorEquips", [id]) || []; },
     equipCandidates: function (id, slot) { return invoke("equipCandidates", [id, slot]) || []; },
     changeEquip: function (id, slot, kind, itemId) { return invoke("changeEquip", [id, slot, kind, itemId]); },
-    listSwitches: function (query, offset, limit) {
+    listSwitches: function (query, offset, limit, includeUnnamed) {
       return page(invoke("listSystem", ["switch"]) || [], query, offset, limit,
-        function (entry) { return entry.name; }, function (entry) { return entry.id; });
+        function (entry) { return entry.name; }, function (entry) { return entry.id; },
+        function (entry) { return includeUnnamed || entry.named !== false; });
     },
     setSwitch: function (id, value) { return invoke("setSwitch", [id, !!value]); },
     setSystemLock: function (kind, id, locked) { return invoke("setSystemLock", [kind, id, !!locked]); },
-    listVariables: function (query, offset, limit) {
+    listVariables: function (query, offset, limit, includeUnnamed) {
       return page(invoke("listSystem", ["variable"]) || [], query, offset, limit,
-        function (entry) { return entry.name; }, function (entry) { return entry.id; });
+        function (entry) { return entry.name; }, function (entry) { return entry.id; },
+        function (entry) { return includeUnnamed || entry.named !== false; });
     },
     setVariable: function (id, value) { return invoke("setVariable", [id, value]); },
     listMaps: function (query, offset, limit) {

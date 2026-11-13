@@ -5093,11 +5093,12 @@ module TyranorCheats
         limit = names.length - 1
         1.upto(limit) do |id|
           name = wire_text(names[id])
-          name = (group == 0 ? "Switch #{id}" : "Variable #{id}") if name.empty?
+          named = !name.strip.empty?
+          name = (group == 0 ? "Switch #{id}" : "Variable #{id}") unless named
           if group == 0
             value = ($game_switches[id] ? "1" : "0")
             locked = @system_locks && @system_locks['switch'].has_key?(id)
-            out << "S\t#{id}\t#{value}\t#{name}\t#{locked ? 1 : 0}"
+            out << "S\t#{id}\t#{value}\t#{name}\t#{locked ? 1 : 0}\t#{named ? 1 : 0}"
           else
             value = $game_variables[id]
             if value.is_a?(Numeric)
@@ -5132,7 +5133,7 @@ module TyranorCheats
               text = "<#{value.class}>"
             end
             locked = @system_locks && @system_locks['variable'].has_key?(id)
-            out << "V\t#{id}\t#{type}\t#{text}\t#{name}\t#{locked ? 1 : 0}"
+            out << "V\t#{id}\t#{type}\t#{text}\t#{name}\t#{locked ? 1 : 0}\t#{named ? 1 : 0}"
           end
         end
       end

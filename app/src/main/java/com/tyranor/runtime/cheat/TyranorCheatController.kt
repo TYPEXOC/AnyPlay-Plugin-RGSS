@@ -78,7 +78,8 @@ class TyranorCheatController(
         val name: String,
         val valueType: String,
         val value: String,
-        val locked: Boolean = false
+        val locked: Boolean = false,
+        val named: Boolean = true
     )
 
     data class MapEntry(
@@ -657,15 +658,15 @@ class TyranorCheatController(
         send("list\tsystem", 30_000L) { raw ->
             val out = mutableListOf<SystemEntry>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 6)
+                val p = line.split('\t', limit = 7)
                 when {
                     p.size >= 4 && p[0] == "S" -> {
                         val id = p[1].toIntOrNull() ?: return@forEach
-                        out.add(SystemEntry("switch", id, p[3], "boolean", (p[2] == "1").toString(), p.getOrNull(4) == "1"))
+                        out.add(SystemEntry("switch", id, p[3], "boolean", (p[2] == "1").toString(), p.getOrNull(4) == "1", p.getOrNull(5) != "0"))
                     }
                     p.size >= 5 && p[0] == "V" -> {
                         val id = p[1].toIntOrNull() ?: return@forEach
-                        out.add(SystemEntry("variable", id, p[4], p[2], p[3], p.getOrNull(5) == "1"))
+                        out.add(SystemEntry("variable", id, p[4], p[2], p[3], p.getOrNull(5) == "1", p.getOrNull(6) != "0"))
                     }
                 }
             }
