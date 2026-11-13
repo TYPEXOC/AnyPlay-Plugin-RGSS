@@ -402,6 +402,27 @@
     context.eventAll = [];
     try { context.eventAll = mod.listEvents(Number(mapId) || 0).values || []; } catch (_) {}
   }
+  function eventConditionEntriesHtml(page) {
+    var conditions = page.conditions || [];
+    if (!conditions.length) return '<div class="tm-note">' + escapeHtml(translated("无条件")) + '</div>';
+    return '<div class="tm-event-condition-list tm-event-condition-dialog-list">' + conditions.map(function (condition) {
+      var label;
+      var current = condition.current === "true" ? translated("开") : condition.current === "false" ? translated("关") : condition.current;
+      var target = condition.target === "true" ? translated("开") : condition.target === "false" ? translated("关") : condition.target;
+      if (condition.type === "switch") label = translated("开关") + " " + condition.id + " · " + (condition.name || "") + " = " + target;
+      else if (condition.type === "variable") label = translated("变量") + " " + condition.id + " · " + (condition.name || "") + " " + target;
+      else if (condition.type === "self_switch") label = translated("独立开关") + " " + condition.id + " = " + target;
+      else if (condition.type === "item") label = translated("物品") + " " + condition.id + " · " + (condition.name || "") + " " + condition.target;
+      else if (condition.type === "actor") label = translated("角色") + " " + condition.id + " · " + (condition.name || "") + " " + translated(condition.current === "true" ? "在队伍中" : "不在队伍中");
+      else label = (condition.name || condition.type) + " " + condition.target;
+      var toggleable = condition.type === "switch" || condition.type === "self_switch";
+      var tag = toggleable ? "button" : "div";
+      var toggleAttrs = toggleable
+        ? ' type="button" data-action="toggle-event-condition" data-condition-type="' + condition.type + '" data-id="' + escapeHtml(condition.id) + '" data-enabled="' + (condition.current === "true" ? "0" : "1") + '" data-page="' + page.index + '"'
+        : "";
+      return '<' + tag + ' class="tm-badge ' + (condition.met ? "tm-on" : "tm-off") + (toggleable ? " tm-condition-toggle" : "") + '" title="当前: ' + escapeHtml(current) + '"' + toggleAttrs + '>' + escapeHtml(label) + ' · ' + escapeHtml(current) + '</' + tag + '>';
+    }).join("") + '</div>';
+  }
   function fillTeleport(mapId, x, y) {
     var mi = root.querySelector("#tm-map-id"), xi = root.querySelector("#tm-map-x"), yi = root.querySelector("#tm-map-y");
     if (mi && mapId != null) mi.value = mapId;
@@ -510,33 +531,10 @@
     if (!detail || detail.error) { context.selectedEventDetail = null; return '<div class="tm-note tm-event-empty">无法读取所选事件详情</div>'; }
     context.selectedEventDetail = detail;
     var pages = (detail.pages || []).map(function (page) {
-      var selfSwitchConditions = [];
-      var otherConditions = [];
-      (page.conditions || []).forEach(function (condition) {
-        var label;
-        var current = condition.current === "true" ? translated("开") : condition.current === "false" ? translated("关") : condition.current;
-        var target = condition.target === "true" ? translated("开") : condition.target === "false" ? translated("关") : condition.target;
-        if (condition.type === "switch") label = translated("开关") + " " + condition.id + " · " + (condition.name || "") + " = " + target;
-        else if (condition.type === "variable") label = translated("变量") + " " + condition.id + " · " + (condition.name || "") + " " + target;
-        else if (condition.type === "self_switch") label = translated("独立开关") + " " + condition.id + " = " + target;
-        else if (condition.type === "item") label = translated("物品") + " " + condition.id + " · " + (condition.name || "") + " " + condition.target;
-        else if (condition.type === "actor") label = translated("角色") + " " + condition.id + " · " + (condition.name || "") + " " + translated(condition.current === "true" ? "在队伍中" : "不在队伍中");
-        else label = (condition.name || condition.type) + " " + condition.target;
-        var toggleable = condition.type === "switch" || condition.type === "self_switch";
-        var tag = toggleable ? "button" : "span";
-        var toggleAttrs = toggleable
-          ? ' type="button" data-action="toggle-event-condition" data-condition-type="' + condition.type + '" data-id="' + escapeHtml(condition.id) + '" data-enabled="' + (condition.current === "true" ? "0" : "1") + '"'
-          : "";
-        var conditionTag = '<' + tag + ' class="tm-badge ' + (condition.met ? "tm-on" : "tm-off") + (toggleable ? " tm-condition-toggle" : "") + '" title="当前: ' + escapeHtml(current) + '"' + toggleAttrs + '>' + escapeHtml(label) + ' · ' + escapeHtml(current) + '</' + tag + '>';
-        if (condition.type === "self_switch") selfSwitchConditions.push(conditionTag);
-        else otherConditions.push(conditionTag);
-      });
-      var conditionSummary = otherConditions.join("");
-      if (!conditionSummary && !(page.conditions || []).length) conditionSummary = '<span class="tm-event-no-condition">无条件</span>';
       return '<div class="tm-event-page">'
         + '<div class="tm-event-page-head"><strong>事件页 ' + (Number(page.index) + 1) + '</strong><span>指令数 ' + page.commandCount + ' · 条件数 ' + page.validCount + '</span>'
-        + '<div class="tm-event-page-actions">' + selfSwitchConditions.join("") + button("事件解释器", "show-event-interpreter", "", 'data-page="' + page.index + '"') + '</div></div>'
-        + (conditionSummary ? '<div class="tm-event-condition-list">' + conditionSummary + '</div>' : '') + '</div>';
+        + '<div class="tm-event-page-actions">' + button(translated("条件") + " (" + (page.conditions || []).length + ")", "show-event-conditions", "", 'data-page="' + page.index + '"') + button("事件解释器", "show-event-interpreter", "", 'data-page="' + page.index + '"') + '</div></div>'
+        + '</div>';
     }).join("") || '<div class="tm-note">事件没有可显示的页面</div>';
     var description = String(detail.description || "").trim();
     return '<div class="tm-event-summary">'
@@ -673,6 +671,20 @@
       var list = modal.querySelector(".tm-interpreter-list");
       if (list) list.innerHTML = '<div class="tm-note">' + escapeHtml(String(error && error.message || error)) + '</div>';
     }
+  }
+  function showEventConditionsDialog(pageIndex) {
+    var detail = context.selectedEventDetail;
+    if (!detail) return;
+    var page = (detail.pages || []).filter(function (entry) { return Number(entry.index) === Number(pageIndex); })[0];
+    if (!page) return;
+    var modal = document.createElement("div");
+    modal.className = "tm-modal";
+    modal.innerHTML = '<div class="tm-modal-box tm-conditions-modal">'
+      + '<div class="tm-modal-head"><strong>' + escapeHtml(translated("事件条件")) + '</strong><span class="tm-interpreter-page">事件页 ' + (Number(page.index) + 1) + '</span>' + button("×", "close-conditions", "") + '</div>'
+      + '<div class="tm-modal-body">' + eventConditionEntriesHtml(page) + '</div>'
+      + '<div class="tm-modal-hint">' + escapeHtml(translated("点击开关或独立开关条件可单独切换")) + '</div></div>';
+    modal.addEventListener("click", function (event) { if (event.target === modal) modal.remove(); });
+    root.appendChild(modal);
   }
   function renderBattle(content) {
     var snapshot = mod.battleSnapshot();
@@ -892,16 +904,25 @@
       var conditionEnabled = node.dataset.enabled === "1";
       var conditionId = node.dataset.id;
       var conditionType = node.dataset.conditionType;
+      var conditionPageIndex = node.dataset.page;
       return run(function () {
         if (conditionType === "self_switch") return mod.setEventSelfSwitch(context.eventId, conditionId, conditionEnabled, context.selectedMapId);
         return mod.setSwitch(conditionId, conditionEnabled);
       }, function () {
         renderEventPanel();
+        var conditionsModal = root.querySelector(".tm-conditions-modal");
+        if (conditionsModal) {
+          var conditionsOverlay = conditionsModal.parentNode;
+          if (conditionsOverlay && conditionsOverlay.parentNode) conditionsOverlay.parentNode.removeChild(conditionsOverlay);
+          showEventConditionsDialog(conditionPageIndex);
+        }
         toast("事件条件开关已更新");
       });
     }
     if (action === "show-minimap") return showMinimapDialog();
     if (action === "close-minimap") { var modal = root.querySelector(".tm-modal"); if (modal) modal.remove(); return; }
+    if (action === "show-event-conditions") return showEventConditionsDialog(node.dataset.page);
+    if (action === "close-conditions") { var conditions = root.querySelector(".tm-conditions-modal"); var overlay = conditions && conditions.parentNode; if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); return; }
     if (action === "show-event-interpreter") return showEventInterpreterDialog(node.dataset.page);
     if (action === "close-interpreter") { var interpreter = root.querySelector(".tm-modal"); if (interpreter) interpreter.remove(); return; }
     if (action === "teleport") return run(function () { return mod.teleport(inputValue("tm-map-id"), inputValue("tm-map-x"), inputValue("tm-map-y"), 2, 0); }, function () { toast("已预约传送"); close(); });
