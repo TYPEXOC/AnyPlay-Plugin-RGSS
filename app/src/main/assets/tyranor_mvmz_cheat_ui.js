@@ -2,7 +2,25 @@
   "use strict";
   if (window.TyranorModUI || !window.TyranorMod) return;
   var mod = window.TyranorMod;
+  var context;
+  function isPokemonProfile() {
+    return !!(context && context.capabilities && context.capabilities.engine === "essentials");
+  }
+  function profileText(value) {
+    if (!isPokemonProfile()) return value;
+    var labels = {
+      "角色与资源": "队伍与资源", "探索": "探索与对话",
+      "金币": "金钱", "金币：": "金钱：", "当前金币": "当前金钱",
+      "金币已修改": "金钱已修改", "金币已拉满": "金钱已拉满",
+      "物品不减": "背包物品不减", "无遇敌": "关闭野生遭遇",
+      "技能不消耗": "招式 PP 不减", "全体恢复": "恢复全队宝可梦",
+      "队伍已恢复": "宝可梦队伍已恢复", "角色已恢复": "宝可梦已恢复",
+      "我方": "我方宝可梦", "敌方": "对手宝可梦"
+    };
+    return labels[value] || value;
+  }
   function translated(value) {
+    value = profileText(value);
     return window.TyranorCheatTranslate ? window.TyranorCheatTranslate(value) : value;
   }
   var root = null;
@@ -14,7 +32,7 @@
   var activeTab = "quick";
   var goldCommitPending = null;
   var pendingEquipScroll = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, pokemonMoveCandidates: [], pokemonIndex: 0, pokemonMoveSlot: 0, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false, capabilityRetryCount: 0, capabilityRetryTimer: null, profileInitialized: false };
+  context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, pokemonMoveCandidates: [], pokemonIndex: 0, pokemonMoveSlot: 0, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false, capabilityRetryCount: 0, capabilityRetryTimer: null, profileInitialized: false };
   var capabilityGeneration = 0;
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["pokemon", "宝可梦"], ["system", "系统"],
@@ -76,15 +94,15 @@
   }
   function card(title, body, cls, headerControl) {
     var heading = headerControl
-      ? '<div class="tm-card-heading"><h3>' + escapeHtml(title) + '</h3>' + headerControl + '</div>'
-      : '<h3>' + escapeHtml(title) + '</h3>';
+      ? '<div class="tm-card-heading"><h3>' + escapeHtml(translated(title)) + '</h3>' + headerControl + '</div>'
+      : '<h3>' + escapeHtml(translated(title)) + '</h3>';
     return '<section class="tm-card' + (cls ? " " + cls : "") + '">' + heading + body + '</section>';
   }
   function hideEmptyToggle(action, isChecked) {
     return '<label class="tm-hide-empty-toggle"><input class="tm-switch" type="checkbox" data-action="' + action + '" ' + (isChecked ? "checked" : "") + '><span>' + escapeHtml(translated("隐藏空选项")) + '</span></label>';
   }
-  function row(label, control) { return '<div class="tm-row"><label>' + escapeHtml(label) + '</label>' + control + '</div>'; }
-  function button(text, action, extra, data) { return '<button class="tm-btn ' + (extra || "") + '" data-action="' + action + '" ' + (data || "") + '>' + escapeHtml(text) + '</button>'; }
+  function row(label, control) { return '<div class="tm-row"><label>' + escapeHtml(translated(label)) + '</label>' + control + '</div>'; }
+  function button(text, action, extra, data) { return '<button class="tm-btn ' + (extra || "") + '" data-action="' + action + '" ' + (data || "") + '>' + escapeHtml(translated(text)) + '</button>'; }
   function textInput(id, value, type, attrs) { return '<input class="tm-input" id="' + id + '" type="' + (type || "text") + '" value="' + escapeHtml(value == null ? "" : value) + '" ' + (attrs || "") + '>'; }
   function fitGoldInput(input) {
     if (!input) return;
@@ -126,7 +144,7 @@
         input.value = String(value);
         fitGoldInput(input);
       }
-      toast("金币已修改");
+      toast(translated("金币已修改"));
     }).then(function () {
       if (goldCommitPending === value) goldCommitPending = null;
     });
@@ -139,19 +157,35 @@
   function visibleTabs() {
     return tabs.filter(function (tab) {
       if (tab[0] === "pokemon") return !!(context.capabilities && context.capabilities.features && context.capabilities.features.indexOf("pokemonParty") >= 0);
-      if (tab[0] === "actors" && context.capabilities && context.capabilities.engine === "essentials") return false;
       return true;
     });
+  }
+  function tabLabel(tab) {
+    if (!isPokemonProfile()) return translated(tab[1]);
+    var labels = {
+      quick: "快捷作弊", items: hasPokemonFeature("itemBag") ? "背包" : "背包（当前游戏不可用）",
+      actors: "角色（当前游戏不可用）", pokemon: "宝可梦", system: "开关/变量",
+      map: "地图/事件", battle: "战斗", save: hasPokemonFeature("saveSlots") ? "存档" : "存档（当前游戏不可用）",
+      keys: "按键", about: "说明"
+    };
+    return translated(labels[tab[0]] || tab[1]);
+  }
+  function tabUnavailable(tab) {
+    if (!isPokemonProfile()) return false;
+    return tab[0] === "actors" || (tab[0] === "items" && !hasPokemonFeature("itemBag")) ||
+      (tab[0] === "save" && !hasPokemonFeature("saveSlots"));
   }
   function renderTabs() {
     var tabBar = root && root.querySelector(".tm-tabs");
     if (!tabBar) return;
     var title = root.querySelector(".tm-head strong");
-    if (title) title.textContent = translated(context.capabilities && context.capabilities.engine === "essentials" ? "宝可梦修改器" : "RPG Maker RGSS 修改器");
+    if (title) title.textContent = translated(isPokemonProfile() ? "宝可梦修改器" : "RPG Maker RGSS 修改器");
     var available = visibleTabs();
-    if (context.capabilities && !available.some(function (tab) { return tab[0] === activeTab; })) activeTab = "quick";
+    if (context.capabilities && (!available.some(function (tab) { return tab[0] === activeTab; }) || available.some(function (tab) { return tab[0] === activeTab && tabUnavailable(tab); }))) activeTab = "quick";
     tabBar.innerHTML = available.map(function (tab) {
-      return '<button class="tm-tab' + (tab[0] === activeTab ? ' active' : '') + '" data-tab="' + tab[0] + '">' + escapeHtml(translated(tab[1])) + '</button>';
+      var unavailable = tabUnavailable(tab);
+      var title = unavailable ? ' title="' + escapeHtml(translated("此功能对当前宝可梦游戏不可用")) + '"' : "";
+      return '<button class="tm-tab' + (tab[0] === activeTab ? ' active' : '') + (unavailable ? ' unavailable' : '') + '" data-tab="' + tab[0] + '"' + (unavailable ? ' disabled aria-disabled="true"' : '') + title + '>' + escapeHtml(tabLabel(tab)) + '</button>';
     }).join("");
   }
   function render() {
@@ -161,7 +195,7 @@
     renderTabs();
     var content = root.querySelector(".tm-content");
     root.querySelectorAll(".tm-tab").forEach(function (node) { node.classList.toggle("active", node.dataset.tab === activeTab); });
-    if (!ready) { content.innerHTML = '<div class="tm-note">请先进入游戏存档或开始新游戏，修改器正在等待 RPG Maker 运行时就绪。</div>'; return; }
+    if (!ready) { content.innerHTML = '<div class="tm-note">' + escapeHtml(translated("请先进入游戏存档或开始新游戏，修改器正在等待游戏运行时就绪。")) + '</div>'; return; }
     if (activeTab === "quick") renderQuick(content);
     else if (activeTab === "items") renderItems(content);
     else if (activeTab === "actors") renderActors(content);
@@ -182,16 +216,16 @@
         var capability = entry[0] === "godMode" ? "invincible" : entry[0] === "alwaysCrit" ? "crit" : entry[0];
         return !supported || supported.indexOf(capability) >= 0;
       });
-      return { id: group[0], label: group[0], entries: entries };
+      return { id: group[0], label: translated(group[0]), entries: entries };
     }).filter(function (group) { return group.entries.length > 0 || group.id === "探索"; });
     if (!groups.length) groups.push({ id: "队伍", label: "队伍", entries: [] });
     var sections = groups;
     if (!sections.some(function (section) { return section.id === context.quickSection; })) context.quickSection = sections[0].id;
     var selectedGroup = groups.filter(function (group) { return group.id === context.quickSection; })[0];
     var cachedGold = context.gold == null ? "…" : context.gold;
-    var gold = '<div class="tm-row tm-gold-row"><label>金币：<span id="tm-gold-current">' + cachedGold + '</span></label>' +
+    var gold = '<div class="tm-row tm-gold-row"><label>' + escapeHtml(translated(isPokemonProfile() ? "金钱：" : "金币：")) + '<span id="tm-gold-current">' + cachedGold + '</span></label>' +
       textInput("tm-gold", cachedGold, "number", 'min="0"') +
-      button("拉满", "max-gold") + '</div>';
+      button(translated("拉满"), "max-gold") + '</div>';
     var sectionBody;
     if (selectedGroup) {
       var toggles = selectedGroup.entries.map(function (entry) {
@@ -241,7 +275,7 @@
   }
   function scheduleCapabilityRetry() {
     var shouldRetry = !context.capabilities || (context.capabilities.engine === "essentials" &&
-      context.capabilities.features.indexOf("pokemonParty") < 0);
+      (context.capabilities.features.indexOf("pokemonParty") < 0 || context.capabilities.features.indexOf("itemBag") < 0));
     if (!root || !shouldRetry || context.capabilityRetryTimer || context.capabilityRetryCount >= 12) return;
     context.capabilityRetryCount++;
     context.capabilityRetryTimer = setTimeout(function () {
@@ -280,21 +314,29 @@
     }, 0);
   }
   function itemKindOptionsMarkup() {
-    var itemKinds = [["item", "物品"], ["weapon", "武器"], ["armor", "护甲"]];
+    var itemKinds = availableItemKinds();
     return itemKinds.map(function (entry) {
       var selected = context.itemKind === entry[0];
       return '<button type="button" class="tm-system-kind-option' + (selected ? ' active' : '') + '" role="option" aria-selected="' + (selected ? 'true' : 'false') + '" data-action="select-item-kind" data-kind="' + entry[0] + '">' + escapeHtml(translated(entry[1])) + '</button>';
     }).join("");
   }
+  function availableItemKinds() {
+    return isPokemonProfile() ? [["item", "背包物品"]] : [["item", "物品"], ["weapon", "武器"], ["armor", "护甲"]];
+  }
   function renderItems(content) {
-    var itemKinds = [["item", "物品"], ["weapon", "武器"], ["armor", "护甲"]];
+    if (isPokemonProfile() && !hasPokemonFeature("itemBag")) {
+      content.innerHTML = '<div class="tm-note">' + escapeHtml(translated("背包功能对当前游戏不可用")) + '</div>';
+      return;
+    }
+    var itemKinds = availableItemKinds();
+    if (!itemKinds.some(function (entry) { return entry[0] === context.itemKind; })) context.itemKind = itemKinds[0][0];
     var selectedKind = itemKinds.filter(function (entry) { return entry[0] === context.itemKind; })[0] || itemKinds[0];
     var kinds = '<div class="tm-system-kind-picker tm-item-kind-picker"><button type="button" class="tm-system-kind-trigger" data-action="toggle-item-kind" aria-haspopup="listbox" aria-expanded="' + (context.itemKindExpanded ? 'true' : 'false') + '"><span>' + escapeHtml(translated(selectedKind[1])) + '</span><span class="tm-system-kind-arrow" aria-hidden="true">▾</span></button>' +
       (context.itemKindExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + itemKindOptionsMarkup() + '</div>' : '') + '</div>';
-    var tools = '<div class="tm-row">' + kinds + textInput("tm-item-query", context.itemQuery, "search", 'placeholder="' + escapeHtml(translated("搜索名称")) + '"') + button(translated("搜索"), "render-items", "primary") + '</div>';
-    var header = '<div class="tm-lock-list-header tm-item-lock-header"><span>' + escapeHtml(translated("锁定")) + '</span><span>' + escapeHtml(translated("物品")) + '</span><span>' + escapeHtml(translated("数量")) + '</span></div>';
+    var tools = '<div class="tm-row">' + kinds + textInput("tm-item-query", context.itemQuery, "search", 'placeholder="' + escapeHtml(translated(isPokemonProfile() ? "搜索背包物品" : "搜索名称")) + '"') + button(translated("搜索"), "render-items", "primary") + '</div>';
+    var header = '<div class="tm-lock-list-header tm-item-lock-header"><span>' + escapeHtml(translated("锁定")) + '</span><span>' + escapeHtml(translated(isPokemonProfile() ? "背包物品" : "物品")) + '</span><span>' + escapeHtml(translated("数量")) + '</span></div>';
     content.innerHTML = '<div class="tm-grid tm-item-layout">' +
-      card(translated("物品数据库"), tools + header + '<div id="tm-item-list" class="tm-list"><div class="tm-note">' + escapeHtml(translated("加载中…")) + '</div></div>', "tm-item-roster") +
+      card(translated(isPokemonProfile() ? "背包物品" : "物品数据库"), tools + header + '<div id="tm-item-list" class="tm-list"><div class="tm-note">' + escapeHtml(translated("加载中…")) + '</div></div>', "tm-item-roster") +
       '<section class="tm-card tm-item-detail" id="tm-item-detail"></section>' +
       '</div>';
     loadItems();
@@ -330,6 +372,10 @@
       '<div class="tm-item-quantity-control">' + textInput("tm-detail-count", item.count, "number", 'min="0" inputmode="numeric" aria-label="' + escapeHtml(translated("数量操作")) + '"') + button(translated("应用"), "set-item", "primary", 'data-id="' + escapeHtml(item.id) + '"') + '</div></section>';
   }
   function renderActors(content) {
+    if (isPokemonProfile()) {
+      content.innerHTML = '<div class="tm-note">' + escapeHtml(translated("角色、职业、武器和护甲属于 RPG Maker 功能，对当前宝可梦游戏不可用。请使用宝可梦页修改队伍、招式和携带物品。")) + '</div>';
+      return;
+    }
     var actors = mod.listActors();
     if (!actors.length) { content.innerHTML = '<div class="tm-note">当前游戏没有角色</div>'; return; }
     context.actorEntries = actors;
@@ -1053,6 +1099,10 @@
     ensureCapabilities();
   }
   function renderSave(content) {
+    if (isPokemonProfile() && !hasPokemonFeature("saveSlots")) {
+      content.innerHTML = '<div class="tm-note">' + escapeHtml(translated("存档管理对当前游戏不可用")) + '</div>';
+      return;
+    }
     content.innerHTML = card("存档管理", '<div id="tm-save-list" class="tm-list"><div class="tm-note">读取中…</div></div>');
     run(function () { return mod.listSaveSlots(); }, function (slots) {
       root.querySelector("#tm-save-list").innerHTML = slots.map(function (slot) {
@@ -1061,6 +1111,10 @@
     });
   }
   function renderAbout(content) {
+    if (isPokemonProfile()) {
+      content.innerHTML = card("宝可梦修改器", '<p>版本 ' + escapeHtml(mod.version) + '</p><p>' + escapeHtml(translated("本面板按当前游戏公开的宝可梦能力显示功能。宝可梦队伍、背包和游戏数据通过对应接口修改。")) + '</p><p>' + escapeHtml(translated("角色属性、职业、武器和护甲等 RPG Maker 功能对当前游戏不可用。重要修改前建议先保存游戏。")) + '</p>');
+      return;
+    }
     content.innerHTML = card("Tyranor 修改器", '<p>版本 ' + escapeHtml(mod.version) + '</p><p>修改器只操作当前 RGSS 游戏的运行时对象。部分深度定制脚本可能覆盖标准引擎 API；遇到异常时可在单游戏设置中关闭修改器。</p><p>事件加速和对话快进可能跳过演出或等待，建议先保存游戏。</p>');
   }
   function inputBridge() {
@@ -1095,13 +1149,13 @@
     if (action === "set-game-speed") return run(function () { return mod.setGameSpeed(inputValue("tm-game-speed")); }, function () { toast("游戏倍速已设置"); renderQuick(root.querySelector(".tm-content"), false); });
     if (action === "set-exp-multiplier") return run(function () { return mod.setRewardMultiplier("expMultiplier", inputValue("tm-exp-multiplier")); }, function () { toast("经验倍率已设置"); renderBattle(root.querySelector(".tm-content")); });
     if (action === "set-drop-multiplier") return run(function () { return mod.setRewardMultiplier("dropMultiplier", inputValue("tm-drop-multiplier")); }, function () { toast("掉落倍率已设置"); renderBattle(root.querySelector(".tm-content")); });
-    if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () { toast("金币已拉满"); render(); });
+    if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () { toast(translated("金币已拉满")); render(); });
     if (action === "lock-item") {
       var itemLocked = node.checked;
       return run(function () { return mod.setItemLock(context.itemKind, node.dataset.id, itemLocked); }, function () { toast(itemLocked ? "物品已锁定" : "已取消锁定"); })
         .then(function (result) { if (result === undefined) node.checked = !itemLocked; });
     }
-    if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); render(); });
+    if (action === "recover-party") return run(mod.recoverParty, function () { toast(translated("队伍已恢复")); render(); });
     if (action === "toggle-item-kind") {
       context.itemKindExpanded = !context.itemKindExpanded;
       var picker = root.querySelector(".tm-item-kind-picker");

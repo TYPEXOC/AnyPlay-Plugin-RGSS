@@ -4201,6 +4201,10 @@ module TyranorCheats
       out << "F\tbattleEscape" if toggle_supported?('escape')
       out << "F\tsaveSlots" if save_slots_supported?
       out << "F\tpokemonParty" if ess? && trainer && trainer.respond_to?(:party)
+      if ess? && bag && (bag.respond_to?(:add) || bag.respond_to?(:pbStoreItem)) &&
+          (bag.respond_to?(:quantity) || bag.respond_to?(:pbQuantity))
+        out << "F\titemBag"
+      end
       party_pokemon = pokes
       pokemon_class = if party_pokemon.first
                         party_pokemon.first.class
