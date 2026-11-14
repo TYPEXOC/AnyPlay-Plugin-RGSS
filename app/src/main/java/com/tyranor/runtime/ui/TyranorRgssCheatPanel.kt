@@ -30,6 +30,7 @@ class TyranorRgssCheatPanel(
     private val activity: Activity,
     private val parent: FrameLayout,
     private val controller: TyranorCheatController,
+    private val initialCheatEngine: String,
     private val primaryColor: Int,
     private val onPrimaryColor: Int,
     private val darkMode: Boolean,
@@ -55,7 +56,7 @@ class TyranorRgssCheatPanel(
             settings.allowFileAccess = true
             settings.allowContentAccess = false
             settings.setSupportZoom(false)
-            addJavascriptInterface(RgssCheatApi(activity, controller), CHEAT_BRIDGE)
+            addJavascriptInterface(RgssCheatApi(activity, controller, initialCheatEngine), CHEAT_BRIDGE)
             addJavascriptInterface(RgssInputApi(activity), INPUT_BRIDGE)
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -179,7 +180,11 @@ class TyranorRgssCheatPanel(
     private inner class RgssCheatApi(
         private val host: Activity,
         private val cheats: TyranorCheatController,
+        private val initialCheatEngine: String,
     ) {
+        @JavascriptInterface
+        fun launchEngine(): String = initialCheatEngine
+
         @JavascriptInterface
         fun uiLanguageTag(): String = host.intent
             ?.getStringExtra("com.tyranor.runtime.extra.UI_LANGUAGE_TAG")

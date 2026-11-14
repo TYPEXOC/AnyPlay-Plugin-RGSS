@@ -5337,13 +5337,13 @@ module TyranorCheats
       end
       allowed = POKEMON_STATUSES.find { |entry| entry[0].to_s == status }
       return "That status isn't supported." unless allowed
-      status_value = if gd?
-                       status.to_sym
-                     elsif defined?(PBStatuses) && PBStatuses.const_defined?(status.to_sym)
-                       PBStatuses.const_get(status.to_sym)
-                     else
-                       return NOPE
-                     end
+      if gd?
+        status_value = status.to_sym
+      elsif defined?(PBStatuses) && PBStatuses.const_defined?(status.to_sym)
+        status_value = PBStatuses.const_get(status.to_sym)
+      else
+        return NOPE
+      end
       pokemon.status = status_value
       pokemon.statusCount = 0 if pokemon.respond_to?(:statusCount=)
       "#{wire_text(pokemon_display_name(pokemon))} status set to #{allowed[1]}"

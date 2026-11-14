@@ -131,6 +131,7 @@ public class MainActivity extends SDLActivity
     private ScheduledExecutorService mTranslationSync;
     private volatile long mLastTranslationFailureLogAt;
     private boolean mDiagnosticsExporting;
+    private String mLaunchDetectedCheatEngine = "unknown";
     private long mLaunchRequestedAtMillis;
     private long mLaunchRequestedAtElapsedRealtime;
 
@@ -992,8 +993,13 @@ public class MainActivity extends SDLActivity
         return 3;
     }
 
-    private static int resolveRubyRuntime(String requested, String gameFolder)
+    private int resolveRubyRuntime(String requested, String gameFolder)
     {
+        EssentialsRuntimeProbe.Result essentials = EssentialsRuntimeProbe.detect(new File(gameFolder));
+        int rgssVersion = detectRgssVersion(gameFolder);
+        mLaunchDetectedCheatEngine = essentials.rubyRuntime != EssentialsRuntimeProbe.UNKNOWN
+            ? "essentials" : cheatEngineForRgssVersion(rgssVersion);
+
         if ("187".equals(requested)) {
             Log.i(TAG, "Ruby runtime selection: explicit Ruby 1.8.7 override");
             return 187;
@@ -1007,19 +1013,25 @@ public class MainActivity extends SDLActivity
             return 313;
         }
 
-        EssentialsRuntimeProbe.Result essentials = EssentialsRuntimeProbe.detect(new File(gameFolder));
         if (essentials.rubyRuntime != EssentialsRuntimeProbe.UNKNOWN) {
             Log.i(TAG, "Ruby runtime auto selection: " + essentials.reason);
             return essentials.rubyRuntime;
         }
 
-        int rgssVersion = detectRgssVersion(gameFolder);
         int runtime = rgssVersion == 1 || rgssVersion == 2 ? 187
             : rgssVersion == 3 ? 193 : 313;
         Log.i(TAG, "Ruby runtime auto selection: " + essentials.reason
             + "; falling back to RGSS generation " + rgssVersion + " -> Ruby "
             + (runtime == 187 ? "1.8.7" : runtime == 193 ? "1.9.3" : "3.1.3"));
         return runtime;
+    }
+
+    private static String cheatEngineForRgssVersion(int rgssVersion)
+    {
+        if (rgssVersion == 1) return "xp";
+        if (rgssVersion == 2) return "vx";
+        if (rgssVersion == 3) return "ace";
+        return "unknown";
     }
 
     private static String shortHash(String value)
@@ -1273,6 +1285,7 @@ public class MainActivity extends SDLActivity
                 this,
                 mLayout,
                 mGameId == null ? GAME_FOLDER : mGameId,
+                mLaunchDetectedCheatEngine,
                 PAD_PROFILE_PATH,
                 mPadProfileUri == null ? null : Uri.parse(mPadProfileUri),
                 mPadEnabled,

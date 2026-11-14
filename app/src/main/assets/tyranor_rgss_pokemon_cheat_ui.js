@@ -13,7 +13,7 @@
   var pendingDepositIndex = null;
   var detectTimer = null;
   var engineDetectionTimer = null;
-  var detectedEngine = "unknown";
+  var detectedEngine = mod.launchEngine || "unknown";
   var featureAttempts = 0;
   var itemQuery = "";
   var itemOffset = 0;
@@ -813,5 +813,8 @@
   function toggle() { if (panel || probe || rpgUI.isOpen()) close(); else open(); }
   function isOpen() { return !!(panel || probe || rpgUI.isOpen()); }
   window.TyranorModUI = { open: open, close: close, toggle: toggle, isOpen: isOpen };
+  if (detectedEngine !== "unknown") {
+    setLauncherLabel(detectedEngine === "essentials" ? "打开宝可梦修改器" : "打开 RPG Maker 修改器");
+  }
   scheduleEngineDetection(0);
 })();

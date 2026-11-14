@@ -39,6 +39,13 @@
 
   var mod = {
     version: "1.5.1",
+    launchEngine: (function () {
+      try {
+        var bridge = window.TyranorCheatNative;
+        var engine = bridge && bridge.launchEngine ? String(bridge.launchEngine()) : "unknown";
+        return /^(xp|vx|ace|essentials)$/.test(engine) ? engine : "unknown";
+      } catch (_) { return "unknown"; }
+    })(),
     isReady: function () { return !!invoke("isReady"); },
     getState: function () { return invoke("getState") || {}; },
     listCapabilities: function () { return invoke("listCapabilities") || { engine: "unknown", toggles: [], values: [], features: [], actorValues: [] }; },
