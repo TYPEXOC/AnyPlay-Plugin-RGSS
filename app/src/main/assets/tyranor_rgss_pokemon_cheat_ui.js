@@ -14,6 +14,8 @@
   var detectTimer = null;
   var engineDetectionTimer = null;
   var detectedEngine = mod.launchEngine || "unknown";
+  var engineDetectionAttempts = 0;
+  var MAX_ENGINE_DETECTION_ATTEMPTS = 24;
   var featureAttempts = 0;
   var itemQuery = "";
   var itemOffset = 0;
@@ -752,12 +754,10 @@
   }
   function open() {
     if (panel || probe || rpgUI.isOpen()) return;
-    if (detectedEngine !== "unknown") {
-      if (detectedEngine === "essentials") openPokemon();
-      else rpgUI.open();
-      return;
-    }
-    openProbe();
+    if (detectedEngine !== "essentials") tryDetectRuntimeEngine();
+    if (detectedEngine === "essentials") openPokemon();
+    else if (detectedEngine === "unknown") openProbe();
+    else rpgUI.open();
     scheduleEngineDetection(0);
   }
   function openProbe() {
@@ -769,29 +769,38 @@
     probe.addEventListener("click", function (event) { if (event.target.closest("[data-action='close']")) close(true); event.stopPropagation(); });
   }
   function scheduleEngineDetection(delay) {
-    if (detectedEngine !== "unknown" || engineDetectionTimer) return;
+    if (detectedEngine === "essentials" || engineDetectionAttempts >= MAX_ENGINE_DETECTION_ATTEMPTS || engineDetectionTimer) return;
     engineDetectionTimer = setTimeout(detect, delay);
   }
   function detect() {
     engineDetectionTimer = null;
+    engineDetectionAttempts++;
+    tryDetectRuntimeEngine();
+    scheduleEngineDetection(8000);
+  }
+  function tryDetectRuntimeEngine() {
     try {
       if (mod.isReady()) {
         var loaded = mod.listCapabilities();
-        if (loaded && loaded.engine && loaded.engine !== "unknown") {
-          detectedEngine = loaded.engine;
-          caps = loaded;
-          setLauncherLabel(detectedEngine === "essentials" ? "打开宝可梦修改器" : "打开 RPG Maker 修改器");
-          if (probe) {
-            probe.remove();
-            probe = null;
-            if (detectedEngine === "essentials") openPokemon();
-            else rpgUI.open();
-          }
-          return;
-        }
+        if (loaded && loaded.engine === "essentials") applyRuntimeEngine(loaded);
       }
     } catch (error) { console.warn("RGSS cheat panel selection failed", error); }
-    scheduleEngineDetection(750);
+  }
+  function applyRuntimeEngine(loaded) {
+    if (!loaded || loaded.engine !== "essentials") return;
+    detectedEngine = "essentials";
+    caps = loaded;
+    setLauncherLabel("打开宝可梦修改器");
+    if (probe) {
+      probe.remove();
+      probe = null;
+      openPokemon();
+      return;
+    }
+    if (rpgUI.isOpen() && typeof rpgUI.closeForEngineSwitch === "function") {
+      rpgUI.closeForEngineSwitch();
+      openPokemon();
+    }
   }
   function setLauncherLabel(label) {
     var launcher = document.getElementById("tyranor-mod-launcher");
@@ -812,7 +821,13 @@
   }
   function toggle() { if (panel || probe || rpgUI.isOpen()) close(); else open(); }
   function isOpen() { return !!(panel || probe || rpgUI.isOpen()); }
-  window.TyranorModUI = { open: open, close: close, toggle: toggle, isOpen: isOpen };
+  window.TyranorModUI = {
+    open: open,
+    close: close,
+    toggle: toggle,
+    isOpen: isOpen,
+    onRuntimeEngineDetected: applyRuntimeEngine,
+  };
   if (detectedEngine !== "unknown") {
     setLauncherLabel(detectedEngine === "essentials" ? "打开宝可梦修改器" : "打开 RPG Maker 修改器");
   }

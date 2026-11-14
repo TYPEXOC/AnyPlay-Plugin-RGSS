@@ -132,6 +132,7 @@ public class MainActivity extends SDLActivity
     private volatile long mLastTranslationFailureLogAt;
     private boolean mDiagnosticsExporting;
     private String mLaunchDetectedCheatEngine = "unknown";
+    private String mLaunchEngineDetectionSummary = "Static game detection has not run";
     private long mLaunchRequestedAtMillis;
     private long mLaunchRequestedAtElapsedRealtime;
 
@@ -404,6 +405,7 @@ public class MainActivity extends SDLActivity
                     mLaunchRequestedAtMillis,
                     mLaunchRequestedAtElapsedRealtime
                 );
+                TynRuntimeDiagnostics.append(mSessionDir, mLaunchEngineDetectionSummary);
             } else {
                 TynRuntimeDiagnostics.append(mSessionDir,
                     "Re-reading game files and rebuilding the private mkxp configuration after storage access was granted");
@@ -538,6 +540,7 @@ public class MainActivity extends SDLActivity
                 mLaunchRequestedAtMillis,
                 mLaunchRequestedAtElapsedRealtime
             );
+            TynRuntimeDiagnostics.append(mSessionDir, mLaunchEngineDetectionSummary);
             TynRuntimeDiagnostics.append(mSessionDir,
                 "Standalone launch target: " + GAME_FOLDER + "; detected RGSS generation=" + rgssVersion
                     + "; selected Ruby=" + sRubyRuntime);
@@ -997,8 +1000,11 @@ public class MainActivity extends SDLActivity
     {
         EssentialsRuntimeProbe.Result essentials = EssentialsRuntimeProbe.detect(new File(gameFolder));
         int rgssVersion = detectRgssVersion(gameFolder);
-        mLaunchDetectedCheatEngine = essentials.rubyRuntime != EssentialsRuntimeProbe.UNKNOWN
+        mLaunchDetectedCheatEngine = essentials.essentialsDetected
             ? "essentials" : cheatEngineForRgssVersion(rgssVersion);
+        mLaunchEngineDetectionSummary = "Static cheat-panel detection: selected=" + mLaunchDetectedCheatEngine
+            + "; RGSS generation=" + rgssVersion + "; Essentials scan=" + essentials.reason;
+        Log.i(TAG, mLaunchEngineDetectionSummary);
 
         if ("187".equals(requested)) {
             Log.i(TAG, "Ruby runtime selection: explicit Ruby 1.8.7 override");

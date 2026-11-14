@@ -213,7 +213,13 @@
     setTimeout(function () {
       try {
         var loaded = mod.listCapabilities();
-        if (loaded && loaded.engine !== "unknown" && Array.isArray(loaded.toggles)) context.capabilities = loaded;
+        if (loaded && loaded.engine !== "unknown" && Array.isArray(loaded.toggles)) {
+          context.capabilities = loaded;
+          if (loaded.engine === "essentials" && window.TyranorModUI &&
+              typeof window.TyranorModUI.onRuntimeEngineDetected === "function") {
+            window.TyranorModUI.onRuntimeEngineDetected(loaded);
+          }
+        }
       } catch (error) {
         console.warn("RGSS cheat capability read failed", error);
       }
@@ -1215,6 +1221,11 @@
     try { if (window.TyranorCheatNative) window.TyranorCheatNative.onPanelClosed(restoreGameFocus !== false); } catch (_) {}
     return true;
   }
+  function closeForEngineSwitch() {
+    if (!root) return false;
+    root.remove(); root = null;
+    return true;
+  }
   function toggle() { if (root) close(); else open(); }
   function isOpen() { return !!root; }
   function installLauncher() {
@@ -1283,5 +1294,5 @@
     launcher.style.left = "";
     launcher.style.right = "10px";
   }
-  window.TyranorModUI = { open: open, close: close, toggle: toggle, isOpen: isOpen };
+  window.TyranorModUI = { open: open, close: close, closeForEngineSwitch: closeForEngineSwitch, toggle: toggle, isOpen: isOpen };
 })();

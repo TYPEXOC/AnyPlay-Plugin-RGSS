@@ -5,6 +5,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -21,6 +23,7 @@ final class EssentialsRuntimeProbe
     private static final int MAX_SCRIPT_FILE_BYTES = 40 * 1024 * 1024;
     private static final int MAX_INFLATED_SECTION_BYTES = 8 * 1024 * 1024;
     private static final long MAX_TOTAL_INFLATED_BYTES = 64L * 1024L * 1024L;
+    private static final int MAX_LOOSE_SCRIPT_FILES = 4096;
     private static final Pattern OLD_VERSION = Pattern.compile(
         "\\bESSENTIALS_VERSION\\s*=\\s*['\\\"]\\s*(\\d{1,2})(?:\\.\\d+)*",
         Pattern.CASE_INSENSITIVE);
@@ -30,15 +33,25 @@ final class EssentialsRuntimeProbe
     private static final Pattern MODULE_VERSION = Pattern.compile(
         "\\bmodule\\s+Essentials\\b(?s:.{0,4096}?)\\bVERSION\\s*=\\s*['\\\"]\\s*(\\d{1,2})(?:\\.\\d+)*",
         Pattern.CASE_INSENSITIVE);
+    private static final Pattern BATTLE_CLASS = Pattern.compile("\\b(?:class|module)\\s+Battle\\b");
+    private static final Pattern POKEMON_CLASS = Pattern.compile("\\b(?:class|module)\\s+Pokemon\\b");
+    private static final Pattern GAME_DATA_MODULE = Pattern.compile("\\b(?:class|module)\\s+GameData\\b");
 
     static final class Result
     {
         final int rubyRuntime;
+        final boolean essentialsDetected;
         final String reason;
 
         Result(int rubyRuntime, String reason)
         {
+            this(rubyRuntime, rubyRuntime != UNKNOWN, reason);
+        }
+
+        Result(int rubyRuntime, boolean essentialsDetected, String reason)
+        {
             this.rubyRuntime = rubyRuntime;
+            this.essentialsDetected = essentialsDetected;
             this.reason = reason;
         }
     }
@@ -55,69 +68,133 @@ final class EssentialsRuntimeProbe
         }
     }
 
+    private static final class ScanEvidence
+    {
+        int versionMajor;
+        boolean oldBattle;
+        boolean oldPokemon;
+        boolean bag;
+        boolean battle;
+        boolean pokemon;
+        boolean gameData;
+
+        boolean hasEssentialsMarkers()
+        {
+            return (oldBattle && bag && (oldPokemon || pokemon))
+                || (battle && pokemon && bag && gameData);
+        }
+    }
+
     private EssentialsRuntimeProbe() {}
 
     static Result detect(File gameFolder)
     {
         File scripts = findScriptsFile(gameFolder);
-        if (scripts == null) return new Result(UNKNOWN, "Data/Scripts.rxdata not found");
-
-        long length = scripts.length();
-        if (length <= 0 || length > MAX_SCRIPT_FILE_BYTES) {
-            return new Result(UNKNOWN, "Data/Scripts.rxdata size is outside the scan limit: " + length);
-        }
-
-        byte[] data = readFile(scripts, (int) length);
-        if (data == null) return new Result(UNKNOWN, "Data/Scripts.rxdata could not be read");
-
+        ScanEvidence evidence = new ScanEvidence();
         long totalInflated = 0;
         int streams = 0;
-        for (int offset = 0; offset + 2 < data.length;) {
-            if (!isZlibHeader(data, offset)) {
-                offset++;
-                continue;
-            }
+        String archiveNote;
+        if (scripts == null) {
+            archiveNote = "Data/Scripts.rxdata not found";
+        } else {
+            long length = scripts.length();
+            if (length <= 0 || length > MAX_SCRIPT_FILE_BYTES) {
+                archiveNote = "Data/Scripts.rxdata size is outside the scan limit: " + length;
+            } else {
+                byte[] data = readFile(scripts, (int) length);
+                if (data == null) {
+                    archiveNote = "Data/Scripts.rxdata could not be read";
+                } else {
+                    archiveNote = "Scanned Data/Scripts.rxdata";
+                    for (int offset = 0; offset + 2 < data.length;) {
+                        if (!isZlibHeader(data, offset)) {
+                            offset++;
+                            continue;
+                        }
 
-            InflatedSection section = inflateAt(data, offset);
-            if (section == null) {
-                offset++;
-                continue;
-            }
+                        InflatedSection section = inflateAt(data, offset);
+                        if (section == null) {
+                            offset++;
+                            continue;
+                        }
 
-            streams++;
-            totalInflated += section.bytes.length;
-            if (totalInflated > MAX_TOTAL_INFLATED_BYTES) {
-                return new Result(UNKNOWN, "Scripts.rxdata scan stopped at the decompression limit");
-            }
+                        streams++;
+                        totalInflated += section.bytes.length;
+                        if (totalInflated > MAX_TOTAL_INFLATED_BYTES) {
+                            archiveNote = "Scripts.rxdata scan stopped at the decompression limit";
+                            break;
+                        }
 
-            int major = findVersionMajor(section.bytes);
-            if (major > 0) {
-                int runtime = major <= 18 ? RUBY_187 : RUBY_313;
-                return new Result(runtime, "Pokémon Essentials " + major
-                    + " detected in Data/Scripts.rxdata; selected Ruby "
-                    + (runtime == RUBY_187 ? "1.8.7" : "3.1.3"));
+                        scanText(section.bytes, evidence);
+                        offset += Math.max(section.consumed, 1);
+                    }
+                }
             }
-
-            offset += Math.max(section.consumed, 1);
         }
 
-        return new Result(UNKNOWN, "Scanned " + streams
-            + " compressed script sections; no Essentials version was found");
+        int looseScripts = scanLooseScripts(findScriptsDirectory(gameFolder), evidence);
+        if (evidence.versionMajor > 0) {
+            int runtime = evidence.versionMajor <= 18 ? RUBY_187 : RUBY_313;
+            return new Result(runtime, true, "Pokémon Essentials " + evidence.versionMajor
+                + " detected in game scripts; selected Ruby "
+                + (runtime == RUBY_187 ? "1.8.7" : "3.1.3"));
+        }
+        if (evidence.hasEssentialsMarkers()) {
+            return new Result(UNKNOWN, true, "Pokémon Essentials API markers detected in game scripts"
+                + " (compressed sections=" + streams + ", loose scripts=" + looseScripts + ")");
+        }
+        return new Result(UNKNOWN, false, archiveNote + "; scanned compressed sections=" + streams
+            + ", loose scripts=" + looseScripts + "; no Essentials markers found");
+    }
+
+    private static int scanLooseScripts(File scriptsDirectory, ScanEvidence evidence)
+    {
+        if (scriptsDirectory == null || !scriptsDirectory.isDirectory()) return 0;
+        List<File> pending = new ArrayList<>();
+        pending.add(scriptsDirectory);
+        int filesScanned = 0;
+        int directoriesScanned = 0;
+        long totalBytes = 0;
+        while (!pending.isEmpty() && filesScanned < MAX_LOOSE_SCRIPT_FILES
+            && directoriesScanned < MAX_LOOSE_SCRIPT_FILES && totalBytes < MAX_TOTAL_INFLATED_BYTES) {
+            File directory = pending.remove(pending.size() - 1);
+            directoriesScanned++;
+            File[] entries = directory.listFiles();
+            if (entries == null) continue;
+            for (File entry : entries) {
+                if (entry.isDirectory()) {
+                    if (pending.size() + directoriesScanned < MAX_LOOSE_SCRIPT_FILES) pending.add(entry);
+                    continue;
+                }
+                if (!entry.isFile() || !entry.getName().toLowerCase(Locale.ROOT).endsWith(".rb")) continue;
+                long length = entry.length();
+                if (length <= 0 || length > MAX_SCRIPT_FILE_BYTES || totalBytes + length > MAX_TOTAL_INFLATED_BYTES) continue;
+                byte[] data = readFile(entry, (int) length);
+                filesScanned++;
+                if (data != null) {
+                    totalBytes += data.length;
+                    scanText(data, evidence);
+                }
+            }
+        }
+        return filesScanned;
+    }
+
+    private static void scanText(byte[] source, ScanEvidence evidence)
+    {
+        String text = new String(source, StandardCharsets.ISO_8859_1);
+        if (evidence.versionMajor == 0) evidence.versionMajor = findVersionMajor(source);
+        evidence.oldBattle |= text.contains("PokeBattle_Battle");
+        evidence.oldPokemon |= text.contains("PokeBattle_Pokemon");
+        evidence.bag |= text.contains("PokemonBag");
+        evidence.battle |= BATTLE_CLASS.matcher(text).find();
+        evidence.pokemon |= POKEMON_CLASS.matcher(text).find();
+        evidence.gameData |= GAME_DATA_MODULE.matcher(text).find();
     }
 
     private static File findScriptsFile(File gameFolder)
     {
-        if (gameFolder == null) return null;
-        File[] rootEntries = gameFolder.listFiles();
-        if (rootEntries == null) return null;
-
-        File dataFolder = null;
-        for (File entry : rootEntries) {
-            if (entry.isDirectory() && "data".equals(entry.getName().toLowerCase(Locale.ROOT))) {
-                dataFolder = entry;
-                break;
-            }
-        }
+        File dataFolder = findDataFolder(gameFolder);
         if (dataFolder == null) return null;
 
         File[] dataEntries = dataFolder.listFiles();
@@ -126,6 +203,29 @@ final class EssentialsRuntimeProbe
             if (entry.isFile() && "scripts.rxdata".equals(entry.getName().toLowerCase(Locale.ROOT))) {
                 return entry;
             }
+        }
+        return null;
+    }
+
+    private static File findScriptsDirectory(File gameFolder)
+    {
+        File dataFolder = findDataFolder(gameFolder);
+        if (dataFolder == null) return null;
+        File[] entries = dataFolder.listFiles();
+        if (entries == null) return null;
+        for (File entry : entries) {
+            if (entry.isDirectory() && "scripts".equals(entry.getName().toLowerCase(Locale.ROOT))) return entry;
+        }
+        return null;
+    }
+
+    private static File findDataFolder(File gameFolder)
+    {
+        if (gameFolder == null) return null;
+        File[] rootEntries = gameFolder.listFiles();
+        if (rootEntries == null) return null;
+        for (File entry : rootEntries) {
+            if (entry.isDirectory() && "data".equals(entry.getName().toLowerCase(Locale.ROOT))) return entry;
         }
         return null;
     }
