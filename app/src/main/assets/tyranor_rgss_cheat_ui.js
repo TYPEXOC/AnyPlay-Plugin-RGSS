@@ -676,16 +676,21 @@
       + '<span class="tm-lg"><i class="tm-map-legend-swatch tm-passable"></i>' + escapeHtml(translated("可通行")) + '</span>'
       + '<span class="tm-lg"><i class="tm-map-legend-swatch tm-event"></i>' + escapeHtml(translated("事件")) + '</span>'
       + '<span class="tm-lg"><i class="tm-map-legend-swatch tm-player"></i>' + escapeHtml(translated("你")) + '</span>'
+      + '<span class="tm-lg"><i class="tm-map-legend-swatch tm-movable"></i>' + escapeHtml(translated("敌人/可移动事件")) + '</span>'
+      + '<span class="tm-lg"><i class="tm-map-legend-swatch tm-item-event"></i>' + escapeHtml(translated("宝箱/道具事件")) + '</span>'
       + '<span class="tm-lg"><i class="tm-map-legend-swatch tm-teleport"></i>' + escapeHtml(translated("传送点")) + '</span></div>';
     var modal = document.createElement("div");
     modal.className = "tm-modal";
     modal.innerHTML = '<div class="tm-modal-box tm-minimap-modal-box">'
       + '<div class="tm-modal-head"><strong>' + escapeHtml(translated("迷你地图 #") + data.mapId + " · " + data.width + "×" + data.height) + '</strong>' + lg + button("×", "close-minimap", "") + '</div>'
       + '<div class="tm-modal-body tm-minimap-modal-body"><div class="tm-minimap-viewport"><canvas class="tm-minimap" id="tm-minimap-canvas"></canvas></div>'
-      + '<div class="tm-minimap-controls"><span>' + escapeHtml(translated("地图大小")) + '</span><span>' + escapeHtml(translated("缩小")) + '</span>'
-      + '<input id="tm-minimap-zoom" type="range" min="100" max="400" step="5" value="100" aria-label="' + escapeHtml(translated("地图大小")) + '">'
-      + '<span>' + escapeHtml(translated("放大")) + '</span><strong class="tm-minimap-zoom-value">100%</strong></div></div>'
-      + '<div class="tm-modal-hint">' + escapeHtml(translated("点击任一格查看传送和事件解释器选项；点击遮罩或 × 关闭")) + '</div>'
+      + '<div class="tm-minimap-controls"><div class="tm-minimap-action-card"><span class="tm-minimap-selection" id="tm-minimap-selection">' + escapeHtml(translated("点击地图选择格子")) + '</span>'
+      + '<div class="tm-minimap-actions">' + button(translated("传送"), "minimap-cell-teleport", "primary", 'disabled')
+      + button(translated("事件解释器"), "minimap-cell-event-interpreter", "", 'disabled') + '</div></div>'
+      + '<div class="tm-minimap-zoom-card"><div class="tm-minimap-control-head"><span>' + escapeHtml(translated("地图大小")) + '</span><strong class="tm-minimap-zoom-value">100%</strong></div>'
+      + '<div class="tm-minimap-slider-row"><span>' + escapeHtml(translated("缩小")) + '</span><input id="tm-minimap-zoom" type="range" min="100" max="400" step="5" value="100" aria-label="' + escapeHtml(translated("地图大小")) + '">'
+      + '<span>' + escapeHtml(translated("放大")) + '</span></div></div></div>'
+      + '<div class="tm-modal-hint">' + escapeHtml(translated("点击格子选中坐标；再用下方按钮传送或查看事件；按住拖动地图可平移；点击遮罩或 × 关闭")) + '</div>'
       + '</div>';
     modal.classList.add("tm-minimap-modal");
     modal.addEventListener("click", function (e) { if (e.target === modal) closeMinimapModal(modal); });
@@ -697,7 +702,21 @@
       slider: modal.querySelector("#tm-minimap-zoom"),
       zoomValue: modal.querySelector(".tm-minimap-zoom-value"),
       data: data,
-      onCell: function (x, y, events) { showMinimapCellActions(data, x, y, events); }
+      onCell: function (x, y, events) {
+        context.minimapSelection = { mapId: Number(data.mapId) || context.currentMapId, x: x, y: y, events: events || [] };
+        var selectionLabel = modal.querySelector("#tm-minimap-selection");
+        var actions = modal.querySelectorAll(".tm-minimap-actions [data-action]");
+        if (selectionLabel) selectionLabel.textContent = translated("已选格") + " (" + x + ", " + y + ")";
+        if (actions[0]) actions[0].disabled = false;
+        if (actions[1]) actions[1].disabled = false;
+      },
+      onClear: function () {
+        context.minimapSelection = null;
+        var selectionLabel = modal.querySelector("#tm-minimap-selection");
+        var actions = modal.querySelectorAll(".tm-minimap-actions [data-action]");
+        if (selectionLabel) selectionLabel.textContent = translated("点击地图选择格子");
+        Array.prototype.forEach.call(actions, function (action) { action.disabled = true; });
+      }
     });
   }
   function closeMinimapModal(modal) {
@@ -706,31 +725,18 @@
     modal.remove();
     renderEventPanel();
   }
-  function showMinimapCellActions(data, x, y, events) {
-    context.minimapSelection = { mapId: Number(data.mapId) || context.currentMapId, x: x, y: y, events: events || [] };
-    var old = root.querySelector(".tm-map-cell-modal");
-    if (old) old.remove();
-    var eventLabels = (events || []).map(function (entry) { return "#" + entry.id; }).join(" · ");
-    var dialog = document.createElement("div");
-    dialog.className = "tm-modal tm-map-cell-modal";
-    dialog.innerHTML = '<div class="tm-modal-box tm-map-cell-modal-box">'
-      + '<div class="tm-modal-head"><strong>' + escapeHtml(translated("地图格") + " (" + x + ", " + y + ")") + '</strong>' + button("×", "close-cell-actions", "") + '</div>'
-      + '<div class="tm-map-cell-details">' + (eventLabels ? escapeHtml(translated("事件") + ": " + eventLabels) : '<span class="tm-note">' + escapeHtml(translated("该格没有事件")) + '</span>') + '</div>'
-      + '<div class="tm-map-cell-actions">' + button("传送", "minimap-cell-teleport", "primary")
-      + button("事件解释器", "minimap-cell-event-interpreter", "", events && events.length ? "" : "disabled") + '</div></div>';
-    dialog.addEventListener("click", function (event) { if (event.target === dialog) dialog.remove(); });
-    root.appendChild(dialog);
-  }
   function showMinimapEventInterpreterPicker(eventId) {
     var selection = context.minimapSelection;
-    if (!selection || !selection.events.length) return;
+    if (!selection) return;
+    if (!selection.events.length) { toast(translated("该格没有事件")); return; }
     var candidates = selection.events;
     if (eventId != null) candidates = candidates.filter(function (entry) { return Number(entry.id) === Number(eventId); });
-    if (eventId == null && candidates.length > 1) {
+    if (eventId == null && candidates.length === 1) eventId = candidates[0].id;
+    if (eventId == null) {
       var eventRows = candidates.map(function (entry) {
         var known = (context.eventAll || []).filter(function (value) { return Number(value.id) === Number(entry.id); })[0];
         return '<div class="tm-item"><span class="tm-name">#' + entry.id + ' ' + escapeHtml(known && known.name || "") + '</span>'
-          + button("选择", "minimap-pick-event", "", 'data-id="' + entry.id + '"') + '</div>';
+          + button("事件解释器", "minimap-pick-event", "", 'data-id="' + entry.id + '"') + '</div>';
       }).join("");
       var chooser = document.createElement("div");
       chooser.className = "tm-modal tm-map-cell-modal";
@@ -750,6 +756,7 @@
     context.selectedMapId = selection.mapId;
     context.selectedEventDetail = detail;
     context.mapListExpanded = false;
+    if (detail.pages.length === 1) return showEventInterpreterDialog(detail.pages[0].index);
     var pageRows = detail.pages.map(function (page) {
       return '<div class="tm-item"><span class="tm-name">' + escapeHtml(translated("事件页") + " " + (Number(page.index) + 1))
         + ' · ' + escapeHtml(translated("指令数") + " " + page.commandCount) + '</span>'
@@ -1126,11 +1133,37 @@
     if (action === "minimap-cell-teleport") {
       var selection = context.minimapSelection;
       if (!selection) return;
-      return run(function () { return mod.teleport(selection.mapId, selection.x, selection.y, 2, 0); }, function () { toast("已预约传送"); close(); });
+      var minimap = node.closest(".tm-minimap-modal");
+      return run(function () { return mod.teleport(selection.mapId, selection.x, selection.y, 2, 0); }, function () {
+        toast("已预约传送");
+        window.setTimeout(function () {
+          if (!minimap || !minimap.parentNode || !minimap._miniMapRenderer) return;
+          try {
+            var updated = mod.minimapData();
+            if (!updated || !minimap._miniMapRenderer.updateData(updated)) return;
+            var updatedMapId = Number(updated.mapId) || selection.mapId;
+            if (updatedMapId !== selection.mapId) {
+              var viewport = minimap.querySelector(".tm-minimap-viewport");
+              if (viewport) { viewport.scrollLeft = 0; viewport.scrollTop = 0; }
+            }
+            var heading = minimap.querySelector(".tm-modal-head > strong");
+            if (heading) heading.textContent = translated("迷你地图 #") + updatedMapId + " · " + updated.width + "×" + updated.height;
+            if (context.minimapSelection && context.minimapSelection.x === selection.x && context.minimapSelection.y === selection.y) {
+              if (selection.x < Number(updated.width) && selection.y < Number(updated.height)) {
+                context.minimapSelection = {
+                  mapId: updatedMapId,
+                  x: selection.x,
+                  y: selection.y,
+                  events: (updated.events || []).filter(function (entry) { return Number(entry.x) === selection.x && Number(entry.y) === selection.y; })
+                };
+              } else context.minimapSelection = null;
+            }
+            context.currentMapId = updatedMapId;
+          } catch (_) {}
+        }, 350);
+      });
     }
     if (action === "minimap-cell-event-interpreter") {
-      var cellOverlay = node.closest(".tm-map-cell-modal"); if (cellOverlay) cellOverlay.remove();
-      closeMinimapModal(root.querySelector(".tm-minimap-modal"));
       return showMinimapEventInterpreterPicker();
     }
     if (action === "minimap-pick-event") {

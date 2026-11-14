@@ -6,7 +6,7 @@
   <title>RGSS 迷你地图预览</title>
   <link rel="stylesheet" href="../app/src/main/assets/tyranor_rgss_cheat.css">
   <style>
-    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; font: 14px/1.45 system-ui, sans-serif; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; font: 14px/1.45 system-ui, sans-serif; background: #f3f5f3; }
     #preview-root { position: fixed; inset: 0; z-index: 1; background: #0009; color: #17211d; display: flex; align-items: center; justify-content: center; }
     #preview-root * { box-sizing: border-box; }
     .preview-panel { position: relative; width: min(94vw, 820px); height: min(90vh, 720px); display: flex; flex-direction: column; overflow: hidden; border-radius: 18px; background: #f3f5f3; box-shadow: 0 12px 42px #000b; }
@@ -14,35 +14,45 @@
     .preview-head strong { flex: 1; font-size: 18px; }
     .preview-page { flex: 1; padding: 16px; color: #53605a; }
     .preview-card { min-height: 150px; padding: 16px; border: 1px solid #e0e5e2; border-radius: 14px; background: #fff; }
+    .preview-toolbar { position: fixed; top: 12px; right: 12px; z-index: 2147483647; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #dce2de; border-radius: 12px; background: #fff; color: #53605a; box-shadow: 0 4px 16px #0003; font-size: 12px; }
+    .preview-toolbar label { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .preview-toolbar select { min-height: 30px; border: 1px solid #cbd5cf; border-radius: 7px; background: #fff; color: #17211d; padding: 3px 7px; font: inherit; }
+    .preview-toolbar input[type="color"] { width: 34px; height: 30px; padding: 2px; border: 1px solid #cbd5cf; border-radius: 7px; background: #fff; cursor: pointer; }
+    html[data-theme="dark"], html[data-theme="dark"] body { color-scheme: dark; background: #101411; }
+    html[data-theme="dark"] #preview-root { background: #000a; color: #eef3f0; }
+    html[data-theme="dark"] .preview-panel { background: #171a18; }
+    html[data-theme="dark"] .preview-head { background: #202522; border-bottom-color: #343c37; }
+    html[data-theme="dark"] .preview-page { color: #c9d2cc; }
+    html[data-theme="dark"] .preview-card { background: #202522; border-color: #343c37; }
+    html[data-theme="dark"] .preview-toolbar { background: #202522; border-color: #343c37; color: #c9d2cc; }
+    html[data-theme="dark"] .preview-toolbar select, html[data-theme="dark"] .preview-toolbar input[type="color"] { background: #171b19; border-color: #4a554f; color: #eef3f0; }
     .tm-minimap-modal-box { width: min(94vw, 760px); height: min(84vh, 680px); max-height: 88%; }
     .tm-minimap-modal-body { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; }
-    .tm-minimap-viewport { display: flex; flex: 1 1 auto; min-height: 0; overflow: auto; border-radius: 9px; background: #0b2a52; }
-    .tm-minimap-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; margin-top: 8px; color: #53605a; font-size: 12px; }
-    .tm-minimap-controls input[type="range"] { flex: 0 1 170px; width: 170px; min-width: 90px; margin: 0; accent-color: #18b978; touch-action: pan-x; }
-    .tm-minimap-zoom-value { flex: 0 0 42px; text-align: right; font-variant-numeric: tabular-nums; }
+    .tm-minimap-viewport { display: flex; flex: 1 1 auto; min-height: 0; overflow: auto; border-radius: 9px; background: var(--tm-map-viewport, #e7ece9); cursor: grab; touch-action: none; }
+    .tm-minimap { flex: 0 0 auto; margin: auto; }
+    .tm-minimap-viewport.tm-map-dragging, .tm-minimap-viewport.tm-map-dragging .tm-minimap { cursor: grabbing; }
     .tm-map-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px 9px; flex: 0 1 auto; max-width: 72%; }
     .tm-map-legend .tm-lg { gap: 4px; font-size: 11px; white-space: nowrap; }
     .tm-map-legend-swatch { display: inline-block; flex: 0 0 11px; width: 11px; height: 11px; border-radius: 2px; }
-    .tm-map-legend-swatch.tm-blocked { background: #102c58; }
-    .tm-map-legend-swatch.tm-passable { background: #0788b1; }
-    .tm-map-legend-swatch.tm-event { border-radius: 50%; background: #f4f6f7; border: 1px solid #63727e; }
-    .tm-map-legend-swatch.tm-player { background: #17c34a; }
-    .tm-map-legend-swatch.tm-teleport { border-radius: 50%; background: #f4f6f7; border: 2px solid #d946ef; }
-    .tm-map-cell-modal-box { width: min(92vw, 420px); height: auto; max-height: 82%; gap: 8px; }
-    .tm-map-cell-details { padding: 4px 2px; color: #53605a; font-size: 13px; overflow-wrap: anywhere; }
-    .tm-map-cell-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-    .tm-map-cell-actions .tm-btn { flex: 1 1 130px; }
+    .tm-map-legend-swatch.tm-blocked { background: var(--tm-map-blocked, #4f5952); }
+    .tm-map-legend-swatch.tm-passable { background: var(--tm-map-passable, #cbd5ce); border: 1px solid #b9c4bc; }
+    .tm-map-legend-swatch.tm-event { border-radius: 4px; background: var(--tm-map-event-fill, #3578ba); border: 1px solid var(--tm-map-event-stroke, #b9c4bc); }
+    .tm-map-legend-swatch.tm-player { background: var(--tm-map-player, #18b978); border: 1px solid var(--tm-map-player-stroke, #fff); border-radius: 4px; }
+    .tm-map-legend-swatch.tm-teleport { border-radius: 4px; background: var(--tm-map-teleport, #8655b6); border: 1px solid #fff; }
+    .tm-map-legend-swatch.tm-movable { width: 11px; height: 11px; margin: 0; transform: none; border-radius: 4px; background: var(--tm-map-movable, #dd862b); border: 1px solid #fff; }
+    .tm-map-legend-swatch.tm-item-event { border-radius: 4px; background: var(--tm-map-item-change, #c85b67); border: 1px solid #fff; }
     .tm-map-event-picker { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow: auto; }
     .tm-map-event-picker .tm-item { gap: 8px; }
     .tm-map-event-picker .tm-name { min-width: 0; overflow-wrap: anywhere; }
     .tm-btn:disabled { opacity: .45; cursor: not-allowed; }
     @media (max-width: 620px) {
+      .preview-toolbar { left: 8px; right: 8px; justify-content: center; }
       .tm-modal { padding: 8px; }
       .tm-minimap-modal-box { width: 96vw; height: 88vh; padding: 9px; }
       .tm-modal-head { flex-wrap: wrap; }
       .tm-map-legend { order: 3; max-width: 100%; justify-content: flex-start; }
-      .tm-minimap-controls { gap: 5px; }
-      .tm-minimap-controls input[type="range"] { min-width: 60px; }
+      .tm-minimap-slider-row { gap: 7px; }
+      .tm-minimap-slider-row>span { font-size: 11px; }
     }
   </style>
 </head>
@@ -53,10 +63,30 @@
       <div class="preview-page"><div class="preview-card"><strong>地图操作</strong><p>这是叠在修改器面板上的小地图效果预览。</p><button class="tm-btn" type="button" id="reopen-map">重新打开迷你地图</button></div></div>
     </section>
   </main>
+  <aside class="preview-toolbar" aria-label="预览外观">
+    <label for="preview-theme">模式<select id="preview-theme"><option value="light">日间</option><option value="dark">夜间</option></select></label>
+    <label for="preview-accent">强调色<input id="preview-accent" type="color" value="#18b978" aria-label="强调色"></label>
+  </aside>
   <script src="../app/src/main/assets/tyranor_rgss_minimap.js"></script>
   <script>
     (function () {
       "use strict";
+      var themePicker = document.getElementById("preview-theme");
+      var accentPicker = document.getElementById("preview-accent");
+      function applyPreviewTheme() {
+        var documentRoot = document.documentElement;
+        documentRoot.dataset.theme = themePicker.value;
+        var accent = accentPicker.value;
+        var red = parseInt(accent.slice(1, 3), 16);
+        var green = parseInt(accent.slice(3, 5), 16);
+        var blue = parseInt(accent.slice(5, 7), 16);
+        var brightness = (red * 0.299 + green * 0.587 + blue * 0.114) / 255;
+        documentRoot.style.setProperty("--tm-primary", accent);
+        documentRoot.style.setProperty("--tm-on-primary", brightness > 0.66 ? "#17211d" : "#ffffff");
+      }
+      themePicker.addEventListener("change", applyPreviewTheme);
+      accentPicker.addEventListener("input", applyPreviewTheme);
+      applyPreviewTheme();
       var root = document.getElementById("preview-root");
       var width = 34;
       var height = 22;
@@ -77,8 +107,8 @@
       for (var y = 0; y < height; y++) { tiles[y][0] = "0"; tiles[y][width - 1] = "0"; }
       var events = [
         { id: 1, x: 4, y: 12 }, { id: 2, x: 7, y: 12 }, { id: 3, x: 10, y: 12 },
-        { id: 4, x: 13, y: 12 }, { id: 5, x: 20, y: 12 }, { id: 6, x: 25, y: 12 },
-        { id: 7, x: 29, y: 12 }, { id: 8, x: 3, y: 9 }, { id: 9, x: 9, y: 7 },
+        { id: 4, x: 13, y: 12 }, { id: 5, x: 20, y: 12, isItemChange: true }, { id: 6, x: 25, y: 12 },
+        { id: 7, x: 29, y: 12 }, { id: 8, x: 3, y: 9, isItemChange: true }, { id: 9, x: 9, y: 7, isMovable: true },
         { id: 10, x: 16, y: 5, isTeleport: true }, { id: 11, x: 22, y: 5 },
         { id: 12, x: 28, y: 5, isTeleport: true }, { id: 13, x: 6, y: 16 },
         { id: 14, x: 17, y: 20, isTeleport: true }, { id: 15, x: 30, y: 16 },
@@ -90,33 +120,46 @@
         player: { x: 16, y: 15 }, events: events
       };
       var mapModal = null;
+      var selectedCell = null;
       function button(label, action, extra, attrs) {
         return '<button type="button" class="tm-btn ' + (extra || "") + '" data-action="' + action + '" ' + (attrs || "") + '>' + label + '</button>';
       }
       function showMap() {
         if (mapModal) return;
+        selectedCell = null;
         var legend = '<div class="tm-map-legend">' +
           '<span class="tm-lg"><i class="tm-map-legend-swatch tm-blocked"></i>无法通行</span>' +
           '<span class="tm-lg"><i class="tm-map-legend-swatch tm-passable"></i>可通行</span>' +
           '<span class="tm-lg"><i class="tm-map-legend-swatch tm-event"></i>事件</span>' +
           '<span class="tm-lg"><i class="tm-map-legend-swatch tm-player"></i>你</span>' +
+          '<span class="tm-lg"><i class="tm-map-legend-swatch tm-movable"></i>敌人/可移动事件</span>' +
+          '<span class="tm-lg"><i class="tm-map-legend-swatch tm-item-event"></i>宝箱/道具事件</span>' +
           '<span class="tm-lg"><i class="tm-map-legend-swatch tm-teleport"></i>传送点</span></div>';
         mapModal = document.createElement("div");
         mapModal.className = "tm-modal tm-minimap-modal";
         mapModal.innerHTML = '<div class="tm-modal-box tm-minimap-modal-box">' +
           '<div class="tm-modal-head"><strong>迷你地图 #2 · 34×22</strong>' + legend + button("×", "close-map") + '</div>' +
           '<div class="tm-modal-body tm-minimap-modal-body"><div class="tm-minimap-viewport"><canvas class="tm-minimap"></canvas></div>' +
-          '<div class="tm-minimap-controls"><span>地图大小</span><span>缩小</span><input type="range" min="100" max="400" step="5" value="100" aria-label="地图大小">' +
-          '<span>放大</span><strong class="tm-minimap-zoom-value">100%</strong></div></div>' +
-          '<div class="tm-modal-hint">点击任一格查看传送和事件解释器选项；点击遮罩或 × 关闭</div></div>';
+          '<div class="tm-minimap-controls"><div class="tm-minimap-action-card"><span class="tm-minimap-selection">点击地图选择格子</span><div class="tm-minimap-actions">' + button("传送", "preview-teleport", "primary", "disabled") +
+          button("事件解释器", "preview-interpreter", "", "disabled") + '</div></div>' +
+          '<div class="tm-minimap-zoom-card"><div class="tm-minimap-control-head"><span>地图大小</span><strong class="tm-minimap-zoom-value">100%</strong></div>' +
+          '<div class="tm-minimap-slider-row"><span>缩小</span><input type="range" min="100" max="400" step="5" value="100" aria-label="地图大小"><span>放大</span></div></div></div></div>' +
+          '<div class="tm-modal-hint">点击格子选中坐标；再用下方按钮传送或查看事件；按住拖动地图可平移；点击遮罩或 × 关闭</div></div>';
         mapModal.addEventListener("click", function (event) {
-          if (event.target === mapModal || event.target.closest('[data-action="close-map"]')) closeMap();
+          if (event.target === mapModal || event.target.closest('[data-action="close-map"]')) { closeMap(); return; }
+          var action = event.target.closest("[data-action]");
+          if (!action || !selectedCell) return;
+          if (action.dataset.action === "preview-teleport") {
+            window.alert("预览：传送到地图 2，坐标 " + selectedCell.x + ", " + selectedCell.y);
+          } else if (action.dataset.action === "preview-interpreter") {
+            showEventPicker(selectedCell.events);
+          }
         });
         root.appendChild(mapModal);
         mapModal._miniMapRenderer = window.TyranorMiniMap.mount({
           canvas: mapModal.querySelector("canvas"), viewport: mapModal.querySelector(".tm-minimap-viewport"),
           slider: mapModal.querySelector('input[type="range"]'), zoomValue: mapModal.querySelector(".tm-minimap-zoom-value"),
-          data: data, onCell: showCellActions
+          data: data, onCell: selectCell, onClear: clearCell
         });
       }
       function closeMap() {
@@ -124,10 +167,10 @@
         if (mapModal._miniMapRenderer) mapModal._miniMapRenderer.destroy();
         mapModal.remove(); mapModal = null;
       }
-      function showOverlay(title, body, className) {
+      function showOverlay(title, body, className, boxClass) {
         var overlay = document.createElement("div");
         overlay.className = "tm-modal " + (className || "");
-        overlay.innerHTML = '<div class="tm-modal-box tm-map-cell-modal-box"><div class="tm-modal-head"><strong>' + title + '</strong>' + button("×", "close-overlay") +
+        overlay.innerHTML = '<div class="tm-modal-box tm-map-cell-modal-box ' + (boxClass || "") + '"><div class="tm-modal-head"><strong>' + title + '</strong>' + button("×", "close-overlay") +
           '</div>' + body + '</div>';
         overlay.addEventListener("click", function (event) {
           if (event.target === overlay || event.target.closest('[data-action="close-overlay"]')) overlay.remove();
@@ -135,46 +178,38 @@
         root.appendChild(overlay);
         return overlay;
       }
-      function showCellActions(x, y, cellEvents) {
-        var eventNames = cellEvents.map(function (event) { return "#" + event.id; }).join(" · ");
-        var body = '<div class="tm-map-cell-details">' + (eventNames ? '事件：' + eventNames : '<span class="tm-note">该格没有事件</span>') + '</div>' +
-          '<div class="tm-map-cell-actions">' + button("传送", "preview-teleport", "primary") +
-          button("事件解释器", "preview-interpreter", "", cellEvents.length ? "" : "disabled") + '</div>';
-        var overlay = showOverlay("地图格 (" + x + ", " + y + ")", body, "tm-map-cell-modal");
-        overlay.addEventListener("click", function (event) {
-          var action = event.target.closest("[data-action]");
-          if (!action) return;
-          if (action.dataset.action === "preview-teleport") {
-            overlay.remove(); closeMap(); window.alert("预览：传送到地图 2，坐标 " + x + ", " + y);
-          } else if (action.dataset.action === "preview-interpreter") {
-            overlay.remove(); closeMap(); showEventPicker(cellEvents);
-          }
-        });
+      function selectCell(x, y, cellEvents) {
+        selectedCell = { x: x, y: y, events: cellEvents || [] };
+        var label = mapModal.querySelector(".tm-minimap-selection");
+        var actions = mapModal.querySelectorAll(".tm-minimap-actions [data-action]");
+        if (label) label.textContent = "已选格 (" + x + ", " + y + ")";
+        Array.prototype.forEach.call(actions, function (action) { action.disabled = false; });
+      }
+      function clearCell() {
+        selectedCell = null;
+        if (!mapModal) return;
+        var label = mapModal.querySelector(".tm-minimap-selection");
+        var actions = mapModal.querySelectorAll(".tm-minimap-actions [data-action]");
+        if (label) label.textContent = "点击地图选择格子";
+        Array.prototype.forEach.call(actions, function (action) { action.disabled = true; });
       }
       function showEventPicker(cellEvents) {
-        if (cellEvents.length > 1) {
-          var rows = cellEvents.map(function (event) {
-            return '<div class="tm-item"><span class="tm-name">事件 #' + event.id + '</span>' + button("选择", "pick-event", "", 'data-id="' + event.id + '"') + '</div>';
-          }).join("");
-          var chooser = showOverlay("选择事件", '<div class="tm-map-event-picker">' + rows + '</div>', "tm-map-cell-modal");
-          chooser.addEventListener("click", function (click) {
-            var action = click.target.closest('[data-action="pick-event"]');
-            if (!action) return;
-            chooser.remove(); showPages(cellEvents.filter(function (event) { return event.id === Number(action.dataset.id); })[0]);
-          });
+        if (!cellEvents || !cellEvents.length) {
+          showOverlay("事件解释器", '<div class="tm-note">该格没有事件</div>', "tm-map-cell-modal");
           return;
         }
-        showPages(cellEvents[0]);
-      }
-      function showPages(event) {
-        var pages = '<div class="tm-map-event-picker">' + [1, 2].map(function (page) {
-          return '<div class="tm-item"><span class="tm-name">事件页 ' + page + ' · 指令数 8</span>' + button("事件解释器", "show-page", "", 'data-page="' + page + '"') + '</div>';
-        }).join("") + '</div>';
-        var picker = showOverlay("事件解释器 · #" + event.id, pages, "tm-map-cell-modal");
-        picker.addEventListener("click", function (click) {
-          var action = click.target.closest('[data-action="show-page"]');
+        if (cellEvents.length === 1) {
+          showInterpreter(cellEvents[0], 1);
+          return;
+        }
+        var rows = cellEvents.map(function (event) {
+          return '<div class="tm-item"><span class="tm-name">事件 #' + event.id + '</span>' + button("事件解释器", "pick-event", "", 'data-id="' + event.id + '"') + '</div>';
+        }).join("");
+        var chooser = showOverlay("事件列表", '<div class="tm-map-event-picker">' + rows + '</div>', "tm-map-cell-modal");
+        chooser.addEventListener("click", function (click) {
+          var action = click.target.closest('[data-action="pick-event"]');
           if (!action) return;
-          picker.remove(); showInterpreter(event, action.dataset.page);
+          chooser.remove(); showInterpreter(cellEvents.filter(function (event) { return event.id === Number(action.dataset.id); })[0], 1);
         });
       }
       function showInterpreter(event, page) {
@@ -182,7 +217,7 @@
         var body = '<div class="tm-modal-body tm-map-event-picker">' + commands.map(function (command, index) {
           return '<div class="tm-item"><span class="tm-badge">' + (101 + index) + '</span><span class="tm-name">' + command + '</span><span class="tm-badge">#' + (index + 1) + '</span></div>';
         }).join("") + '</div><div class="tm-modal-hint">预览事件 #' + event.id + ' · 事件页 ' + page + '</div>';
-        showOverlay("事件解释器", body, "tm-interpreter-modal");
+        showOverlay("事件解释器", body, "", "tm-interpreter-modal");
       }
       root.addEventListener("click", function (event) {
         if (event.target.closest("#reopen-map")) showMap();

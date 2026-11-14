@@ -637,7 +637,14 @@ class TyranorRgssCheatPanel(
                             "rows" to miniMap.rows,
                             "player" to mapOf("x" to miniMap.playerX, "y" to miniMap.playerY),
                             "events" to miniMap.events.map {
-                                mapOf("id" to it.id, "x" to it.x, "y" to it.y, "isTeleport" to it.isTeleport)
+                                mapOf(
+                                    "id" to it.id,
+                                    "x" to it.x,
+                                    "y" to it.y,
+                                    "isTeleport" to it.isTeleport,
+                                    "isMovable" to it.isMovable,
+                                    "isItemChange" to it.isItemChange,
+                                )
                             },
                         ))
                     }

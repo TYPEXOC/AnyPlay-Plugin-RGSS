@@ -6890,8 +6890,8 @@ module TyranorCheats
           next unless event && event.respond_to?(:x) && event.respond_to?(:y)
           x = event.x.to_i; y = event.y.to_i
           next unless x >= 0 && y >= 0 && x < width && y < height
-          transfer = minimap_transfer_event?(event) ? 1 : 0
-          events << "E\t#{event_id.to_i}\t#{x}\t#{y}\t#{transfer}"
+          flags = minimap_event_flags(event)
+          events << "E\t#{event_id.to_i}\t#{x}\t#{y}\t#{flags[:teleport] ? 1 : 0}\t#{flags[:movable] ? 1 : 0}\t#{flags[:item_change] ? 1 : 0}"
         end
       end
       out = ["H\t#{width}\t#{height}\t#{px}\t#{py}"]
@@ -6902,18 +6902,27 @@ module TyranorCheats
       "Couldn't read map layout: #{e.class}: #{e.message}"
     end
 
-    def minimap_transfer_event?(event)
+    def minimap_event_flags(event)
       data = event.respond_to?(:event) ? (event.event rescue nil) : nil
       pages = data && data.respond_to?(:pages) ? (data.pages rescue nil) : nil
-      Array(pages).any? do |page|
+      codes = []
+      Array(pages).each do |page|
         commands = page && page.respond_to?(:list) ? (page.list rescue nil) : nil
-        Array(commands).any? do |command|
+        Array(commands).each do |command|
           code = command.respond_to?(:code) ? command.code : (command[0] rescue nil)
-          code.to_i == 201
+          begin
+            codes << code.to_i unless code.nil?
+          rescue Exception
+          end
         end
       end
+      {
+        :teleport => codes.include?(201),
+        :movable => codes.include?(202) || codes.include?(205) || codes.include?(301),
+        :item_change => codes.any? { |code| code >= 125 && code <= 128 }
+      }
     rescue Exception
-      false
+      { :teleport => false, :movable => false, :item_change => false }
     end
 
     def battle_enemies

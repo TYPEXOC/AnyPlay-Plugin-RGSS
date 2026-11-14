@@ -649,7 +649,7 @@
       closeLabel: "×", hint: tr("点击开关或独立开关条件可单独切换")
     });
   }
-  function showEventInterpreterDialog(pageIndex) {
+  function showEventInterpreterDialog(pageIndex, stack) {
     if (!selectedEventDetail) return;
     var detail = selectedEventDetail;
     var page = (detail.pages || []).filter(function (entry) { return Number(entry.index) === Number(pageIndex); })[0];
@@ -657,7 +657,7 @@
     var commands;
     try { commands = mod.eventInterpreter(detail.id, detail.mapId, page.index) || []; }
     catch (error) { return modal("事件解释器", '<div class="tm-note">' + esc(error.message || String(error)) + '</div>', {
-      boxClass: "tm-interpreter-modal", headerSuffix: '<span class="tm-interpreter-page">' + esc(tr("事件页 ") + (Number(page.index) + 1)) + '</span>', closeLabel: "×"
+      boxClass: "tm-interpreter-modal", headerSuffix: '<span class="tm-interpreter-page">' + esc(tr("事件页 ") + (Number(page.index) + 1)) + '</span>', closeLabel: "×", stack: !!stack
     }); }
     var rows = commands.map(function (command) {
       var indent = Math.max(0, Math.min(8, Number(command.indent) || 0));
@@ -669,7 +669,7 @@
     modal("事件解释器", rows, {
       boxClass: "tm-interpreter-modal", bodyClass: "tm-interpreter-list",
       headerSuffix: '<span class="tm-interpreter-page">' + esc(tr("事件页 ") + (Number(page.index) + 1)) + '</span>',
-      closeLabel: "×", hint: tr("点击指令可展开查看参数")
+      closeLabel: "×", hint: tr("点击指令可展开查看参数"), stack: !!stack
     });
   }
   function renderBattle(content) {
@@ -714,13 +714,18 @@
       '<span class="tm-lg"><i class="tm-map-legend-swatch tm-passable"></i>' + esc(tr("可通行")) + '</span>' +
       '<span class="tm-lg"><i class="tm-map-legend-swatch tm-event"></i>' + esc(tr("事件")) + '</span>' +
       '<span class="tm-lg"><i class="tm-map-legend-swatch tm-player"></i>' + esc(tr("你")) + '</span>' +
+      '<span class="tm-lg"><i class="tm-map-legend-swatch tm-movable"></i>' + esc(tr("敌人/可移动事件")) + '</span>' +
+      '<span class="tm-lg"><i class="tm-map-legend-swatch tm-item-event"></i>' + esc(tr("宝箱/道具事件")) + '</span>' +
       '<span class="tm-lg"><i class="tm-map-legend-swatch tm-teleport"></i>' + esc(tr("传送点")) + '</span></div>';
     var body = '<div class="tm-minimap-viewport"><canvas id="tm-pokemon-minimap" class="tm-minimap"></canvas></div>' +
-      '<div class="tm-minimap-controls"><span>' + esc(tr("地图大小")) + '</span><span>' + esc(tr("缩小")) + '</span>' +
-      '<input id="tm-pokemon-minimap-zoom" type="range" min="100" max="400" step="5" value="100" aria-label="' + esc(tr("地图大小")) + '">' +
-      '<span>' + esc(tr("放大")) + '</span><strong class="tm-minimap-zoom-value">100%</strong></div>';
+      '<div class="tm-minimap-controls"><div class="tm-minimap-action-card"><span class="tm-minimap-selection" id="tm-pokemon-minimap-selection">' + esc(tr("点击地图选择格子")) + '</span>' +
+      '<div class="tm-minimap-actions">' + button(tr("传送"), "minimap-cell-teleport", "primary", "disabled") +
+      button(tr("事件解释器"), "minimap-cell-event-interpreter", "", "disabled") + '</div></div>' +
+      '<div class="tm-minimap-zoom-card"><div class="tm-minimap-control-head"><span>' + esc(tr("地图大小")) + '</span><strong class="tm-minimap-zoom-value">100%</strong></div>' +
+      '<div class="tm-minimap-slider-row"><span>' + esc(tr("缩小")) + '</span><input id="tm-pokemon-minimap-zoom" type="range" min="100" max="400" step="5" value="100" aria-label="' + esc(tr("地图大小")) + '">' +
+      '<span>' + esc(tr("放大")) + '</span></div></div></div>';
     var dialog = modal(tr("迷你地图 #") + data.mapId + " · " + data.width + "×" + data.height, body, {
-      headerSuffix: legend, closeLabel: "×", hint: tr("点击任一格查看传送和事件解释器选项；点击遮罩或 × 关闭"),
+      headerSuffix: legend, closeLabel: "×", hint: tr("点击格子选中坐标；再用下方按钮传送或查看事件；按住拖动地图可平移；点击遮罩或 × 关闭"),
       boxClass: "tm-minimap-modal-box", bodyClass: "tm-minimap-modal-body",
       onClose: function () { renderEventPanel(); }
     });
@@ -732,34 +737,37 @@
       slider: dialog.querySelector("#tm-pokemon-minimap-zoom"),
       zoomValue: dialog.querySelector(".tm-minimap-zoom-value"),
       data: data,
-      onCell: function (x, y, events) { showMinimapCellActions(data, x, y, events); }
+      onCell: function (x, y, events) {
+        minimapSelection = { mapId: Number(data.mapId) || currentMapId, x: x, y: y, events: events || [] };
+        var selectionLabel = dialog.querySelector("#tm-pokemon-minimap-selection");
+        var actions = dialog.querySelectorAll(".tm-minimap-actions [data-action]");
+        if (selectionLabel) selectionLabel.textContent = tr("已选格") + " (" + x + ", " + y + ")";
+        if (actions[0]) actions[0].disabled = false;
+        if (actions[1]) actions[1].disabled = false;
+      },
+      onClear: function () {
+        minimapSelection = null;
+        var selectionLabel = dialog.querySelector("#tm-pokemon-minimap-selection");
+        var actions = dialog.querySelectorAll(".tm-minimap-actions [data-action]");
+        if (selectionLabel) selectionLabel.textContent = tr("点击地图选择格子");
+        Array.prototype.forEach.call(actions, function (action) { action.disabled = true; });
+      }
     });
-  }
-  function showMinimapCellActions(data, x, y, events) {
-    minimapSelection = { mapId: Number(data.mapId) || currentMapId, x: x, y: y, events: events || [] };
-    var eventLabels = minimapSelection.events.map(function (entry) { return "#" + entry.id; }).join(" · ");
-    var dialog = document.createElement("div");
-    dialog.className = "tm-modal tm-map-cell-modal";
-    dialog.innerHTML = '<div class="tm-modal-box tm-map-cell-modal-box"><div class="tm-modal-head"><strong>' + esc(tr("地图格") + " (" + x + ", " + y + ")") + '</strong>' +
-      button("×", "close-cell-actions") + '</div><div class="tm-map-cell-details">' +
-      (eventLabels ? esc(tr("事件") + ": " + eventLabels) : '<span class="tm-note">' + esc(tr("该格没有事件")) + '</span>') +
-      '</div><div class="tm-map-cell-actions">' + button("传送", "minimap-cell-teleport", "primary") +
-      button("事件解释器", "minimap-cell-event-interpreter", "", minimapSelection.events.length ? "" : "disabled") + '</div></div>';
-    dialog.addEventListener("click", function (event) { if (event.target === dialog) dialog.remove(); });
-    panel.appendChild(dialog);
   }
   function showMinimapEventInterpreterPicker(selectedId) {
     var selection = minimapSelection;
-    if (!selection || !selection.events.length) return;
+    if (!selection) return;
+    if (!selection.events.length) return toast(tr("该格没有事件"));
     var candidates = selection.events;
     if (selectedId != null) candidates = candidates.filter(function (entry) { return Number(entry.id) === Number(selectedId); });
-    if (selectedId == null && candidates.length > 1) {
+    if (selectedId == null && candidates.length === 1) selectedId = candidates[0].id;
+    if (selectedId == null) {
       var eventRows = candidates.map(function (entry) {
         var known = eventEntries.filter(function (value) { return Number(value.id) === Number(entry.id); })[0];
         return '<div class="tm-item"><span class="tm-name">#' + esc(entry.id) + ' ' + esc(known && known.name || "") + '</span>' +
-          button("选择", "minimap-pick-event", "", 'data-id="' + esc(entry.id) + '"') + '</div>';
+          button("事件解释器", "minimap-pick-event", "", 'data-id="' + esc(entry.id) + '"') + '</div>';
       }).join("");
-      modal("选择事件", '<div class="tm-map-event-picker">' + eventRows + '</div>', { closeLabel: "×" });
+      modal("选择事件", '<div class="tm-map-event-picker">' + eventRows + '</div>', { closeLabel: "×", stack: true });
       return;
     }
     if (!candidates.length) return;
@@ -771,11 +779,12 @@
     eventId = Number(selected.id);
     mapId = selection.mapId;
     selectedEventDetail = detail;
+    if (detail.pages.length === 1) return showEventInterpreterDialog(detail.pages[0].index, true);
     var pageRows = detail.pages.map(function (page) {
       return '<div class="tm-item"><span class="tm-name">' + esc(tr("事件页 ") + (Number(page.index) + 1) + " · " + tr("指令数 ") + page.commandCount) + '</span>' +
         button("事件解释器", "minimap-open-event-page", "", 'data-page="' + esc(page.index) + '"') + '</div>';
     }).join("");
-    modal(tr("事件解释器") + " · #" + detail.id + " " + (detail.name || ""), '<div class="tm-map-event-picker">' + pageRows + '</div>', { closeLabel: "×" });
+    modal(tr("事件解释器") + " · #" + detail.id + " " + (detail.name || ""), '<div class="tm-map-event-picker">' + pageRows + '</div>', { closeLabel: "×", stack: true });
   }
   function loadSystem() {
     var list = panel && panel.querySelector("#tm-system-list"); if (!list) return;
@@ -859,7 +868,7 @@
   }
   function modal(title, body, options) {
     options = options || {};
-    var old = panel.querySelector(".tm-pokemon-modal"); if (old) closeModal(old);
+    var old = panel.querySelector(".tm-pokemon-modal"); if (old && !options.stack) closeModal(old);
     var node = document.createElement("div"); node.className = "tm-modal tm-pokemon-modal";
     var closeLabel = options.closeLabel || "关闭";
     var suffix = options.headerSuffix || "";
@@ -1196,23 +1205,50 @@
       var selection = minimapSelection;
       if (!selection) return;
       var cellOverlay = node.closest(".tm-map-cell-modal"); if (cellOverlay) cellOverlay.remove();
+      var minimapDialog = node.closest(".tm-pokemon-modal");
       return run(function () { return mod.teleport(selection.mapId, selection.x, selection.y, 2, false); }, function () {
         mapId = selection.mapId; currentMapId = selection.mapId;
-        closeModal();
         toast(tr("传送完成"));
         renderMap(panel.querySelector(".tm-content"));
+        window.setTimeout(function () {
+          if (!minimapDialog || !minimapDialog.parentNode || !minimapDialog._miniMapRenderer) return;
+          try {
+            var updated = mod.minimapData();
+            if (!updated || !minimapDialog._miniMapRenderer.updateData(updated)) return;
+            var updatedMapId = Number(updated.mapId) || selection.mapId;
+            if (updatedMapId !== selection.mapId) {
+              var viewport = minimapDialog.querySelector(".tm-minimap-viewport");
+              if (viewport) { viewport.scrollLeft = 0; viewport.scrollTop = 0; }
+            }
+            var heading = minimapDialog.querySelector(".tm-modal-head > strong");
+            if (heading) heading.textContent = tr("迷你地图 #") + updatedMapId + " · " + updated.width + "×" + updated.height;
+            if (minimapSelection && minimapSelection.x === selection.x && minimapSelection.y === selection.y) {
+              if (selection.x < Number(updated.width) && selection.y < Number(updated.height)) {
+                minimapSelection = {
+                  mapId: updatedMapId,
+                  x: selection.x,
+                  y: selection.y,
+                  events: (updated.events || []).filter(function (entry) { return Number(entry.x) === selection.x && Number(entry.y) === selection.y; })
+                };
+              } else minimapSelection = null;
+            }
+            mapId = updatedMapId; currentMapId = updatedMapId;
+            renderMap(panel.querySelector(".tm-content"));
+          } catch (_) {}
+        }, 350);
       });
     }
     if (action === "minimap-cell-event-interpreter") {
-      var cellOverlay = node.closest(".tm-map-cell-modal"); if (cellOverlay) cellOverlay.remove();
-      closeModal();
       return showMinimapEventInterpreterPicker();
     }
     if (action === "minimap-pick-event") {
       var eventChooser = node.closest(".tm-pokemon-modal"); if (eventChooser) closeModal(eventChooser);
       return showMinimapEventInterpreterPicker(node.dataset.id);
     }
-    if (action === "minimap-open-event-page") return showEventInterpreterDialog(node.dataset.page);
+    if (action === "minimap-open-event-page") {
+      var eventPagePicker = node.closest(".tm-pokemon-modal"); if (eventPagePicker) closeModal(eventPagePicker);
+      return showEventInterpreterDialog(node.dataset.page, true);
+    }
     if (action === "show-event-conditions") return showEventConditionsDialog(node.dataset.page);
     if (action === "show-event-interpreter") return showEventInterpreterDialog(node.dataset.page);
     if (action === "close-conditions" || action === "close-interpreter") return closeModal(node);
