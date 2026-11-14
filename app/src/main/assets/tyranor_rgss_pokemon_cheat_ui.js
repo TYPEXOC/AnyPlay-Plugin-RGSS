@@ -12,7 +12,8 @@
   var storageBox = -1;
   var pendingDepositIndex = null;
   var detectTimer = null;
-  var detectAttempts = 0;
+  var engineDetectionTimer = null;
+  var detectedEngine = "unknown";
   var featureAttempts = 0;
   var itemQuery = "";
   var itemOffset = 0;
@@ -466,54 +467,6 @@
     });
     render();
   }
-  function openProbe() {
-    if (probe) return;
-    probe = document.createElement("div"); probe.id = "tyranor-mod-root";
-    probe.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>' + esc(tr("RGSS 游戏修改器")) +
-      '</strong><button class="tm-close" data-action="close" aria-label="' + esc(tr("关闭")) + '">×</button></div><main class="tm-content"><div class="tm-note">' +
-      esc(tr("正在识别当前游戏类型…")) + '</div></main></div>';
-    document.documentElement.appendChild(probe);
-    probe.addEventListener("click", function (event) { if (event.target.closest("[data-action='close']")) close(true); event.stopPropagation(); });
-  }
-  function detect() {
-    detectTimer = null;
-    try {
-      if (mod.isReady()) {
-        var loaded = mod.listCapabilities();
-        if (loaded && loaded.engine === "essentials") { caps = loaded; setLauncherLabel("打开宝可梦修改器"); if (probe) { probe.remove(); probe = null; } openPokemon(); return; }
-        if (loaded && loaded.engine && loaded.engine !== "unknown") { setLauncherLabel("打开 RPG Maker 修改器"); if (probe) { probe.remove(); probe = null; } rpgUI.open(); return; }
-      }
-    } catch (error) { console.warn("RGSS cheat panel selection failed", error); }
-    detectAttempts++;
-    if (detectAttempts < 12) detectTimer = setTimeout(detect, 600);
-    else { setLauncherLabel("打开 RPG Maker 修改器"); if (probe) { probe.remove(); probe = null; } rpgUI.open(); }
-  }
-  function setLauncherLabel(label) {
-    var launcher = document.getElementById("tyranor-mod-launcher");
-    if (launcher) launcher.setAttribute("aria-label", tr(label));
-  }
-  function open() {
-    if (panel || probe || rpgUI.isOpen()) return;
-    detectAttempts = 0; openProbe(); detectTimer = setTimeout(detect, 0);
-  }
-  function close(restoreFocus) {
-    if (detectTimer) clearTimeout(detectTimer); detectTimer = null; detectAttempts = 0;
-    if (probe) { probe.remove(); probe = null; notifyClosed(restoreFocus); return true; }
-    if (panel) return closePokemon(restoreFocus);
-    return rpgUI.close(restoreFocus);
-  }
-  function closePokemon(restoreFocus) {
-    if (!panel) return false;
-    if (detectTimer) clearTimeout(detectTimer); detectTimer = null;
-    panel.remove(); panel = null;
-    var modal = document.querySelector(".tm-pokemon-modal"); if (modal) modal.remove();
-    notifyClosed(restoreFocus); return true;
-  }
-  function notifyClosed(restoreFocus) {
-    try { if (window.TyranorCheatNative) window.TyranorCheatNative.onPanelClosed(restoreFocus !== false); } catch (_) {}
-  }
-  function toggle() { if (panel || probe || rpgUI.isOpen()) close(); else open(); }
-  function isOpen() { return !!(panel || probe || rpgUI.isOpen()); }
   function modal(title, body) {
     var old = panel.querySelector(".tm-pokemon-modal"); if (old) old.remove();
     var node = document.createElement("div"); node.className = "tm-modal tm-pokemon-modal";
@@ -799,32 +752,55 @@
   }
   function open() {
     if (panel || probe || rpgUI.isOpen()) return;
-    detectAttempts = 0; openProbe(); detect();
+    if (detectedEngine !== "unknown") {
+      if (detectedEngine === "essentials") openPokemon();
+      else rpgUI.open();
+      return;
+    }
+    openProbe();
+    scheduleEngineDetection(0);
   }
   function openProbe() {
+    if (probe) return;
     probe = document.createElement("div"); probe.id = "tyranor-mod-root";
     probe.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>' + esc(tr("RGSS 游戏修改器")) +
       '</strong><button class="tm-close" data-action="close" aria-label="' + esc(tr("关闭")) + '">×</button></div><main class="tm-content"><div class="tm-note">' + esc(tr("正在识别当前游戏类型…")) + '</div></main></div>';
     document.documentElement.appendChild(probe);
     probe.addEventListener("click", function (event) { if (event.target.closest("[data-action='close']")) close(true); event.stopPropagation(); });
   }
+  function scheduleEngineDetection(delay) {
+    if (detectedEngine !== "unknown" || engineDetectionTimer) return;
+    engineDetectionTimer = setTimeout(detect, delay);
+  }
   function detect() {
-    detectTimer = null;
+    engineDetectionTimer = null;
     try {
       if (mod.isReady()) {
         var loaded = mod.listCapabilities();
-        if (loaded && loaded.engine === "essentials") { caps = loaded; probe.remove(); probe = null; openPokemon(); return; }
-        if (loaded && loaded.engine && loaded.engine !== "unknown") { probe.remove(); probe = null; rpgUI.open(); return; }
+        if (loaded && loaded.engine && loaded.engine !== "unknown") {
+          detectedEngine = loaded.engine;
+          caps = loaded;
+          setLauncherLabel(detectedEngine === "essentials" ? "打开宝可梦修改器" : "打开 RPG Maker 修改器");
+          if (probe) {
+            probe.remove();
+            probe = null;
+            if (detectedEngine === "essentials") openPokemon();
+            else rpgUI.open();
+          }
+          return;
+        }
       }
     } catch (error) { console.warn("RGSS cheat panel selection failed", error); }
-    detectAttempts++;
-    if (detectAttempts < 12) detectTimer = setTimeout(detect, 600);
-    else { if (probe) { probe.remove(); probe = null; } rpgUI.open(); }
+    scheduleEngineDetection(750);
+  }
+  function setLauncherLabel(label) {
+    var launcher = document.getElementById("tyranor-mod-launcher");
+    if (launcher) launcher.setAttribute("aria-label", tr(label));
   }
   function close(restoreFocus) {
-    if (detectTimer) clearTimeout(detectTimer); detectTimer = null; detectAttempts = 0;
     if (probe) { probe.remove(); probe = null; notifyClosed(restoreFocus); return true; }
     if (panel) {
+      if (detectTimer) clearTimeout(detectTimer); detectTimer = null;
       panel.remove(); panel = null;
       var modalNode = document.querySelector(".tm-pokemon-modal"); if (modalNode) modalNode.remove();
       notifyClosed(restoreFocus); return true;
@@ -837,4 +813,5 @@
   function toggle() { if (panel || probe || rpgUI.isOpen()) close(); else open(); }
   function isOpen() { return !!(panel || probe || rpgUI.isOpen()); }
   window.TyranorModUI = { open: open, close: close, toggle: toggle, isOpen: isOpen };
+  scheduleEngineDetection(0);
 })();
