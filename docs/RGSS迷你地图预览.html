@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RGSS 迷你地图预览</title>
+  <link rel="stylesheet" href="../app/src/main/assets/tyranor_rgss_cheat.css">
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; font: 14px/1.45 system-ui, sans-serif; }
+    #preview-root { position: fixed; inset: 0; z-index: 1; background: #0009; color: #17211d; display: flex; align-items: center; justify-content: center; }
+    #preview-root * { box-sizing: border-box; }
+    .preview-panel { position: relative; width: min(94vw, 820px); height: min(90vh, 720px); display: flex; flex-direction: column; overflow: hidden; border-radius: 18px; background: #f3f5f3; box-shadow: 0 12px 42px #000b; }
+    .preview-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: white; border-bottom: 1px solid #dce2de; }
+    .preview-head strong { flex: 1; font-size: 18px; }
+    .preview-page { flex: 1; padding: 16px; color: #53605a; }
+    .preview-card { min-height: 150px; padding: 16px; border: 1px solid #e0e5e2; border-radius: 14px; background: #fff; }
+    .tm-minimap-modal-box { width: min(94vw, 760px); height: min(84vh, 680px); max-height: 88%; }
+    .tm-minimap-modal-body { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; }
+    .tm-minimap-viewport { display: flex; flex: 1 1 auto; min-height: 0; overflow: auto; border-radius: 9px; background: #0b2a52; }
+    .tm-minimap-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; margin-top: 8px; color: #53605a; font-size: 12px; }
+    .tm-minimap-controls input[type="range"] { flex: 0 1 170px; width: 170px; min-width: 90px; margin: 0; accent-color: #18b978; touch-action: pan-x; }
+    .tm-minimap-zoom-value { flex: 0 0 42px; text-align: right; font-variant-numeric: tabular-nums; }
+    .tm-map-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px 9px; flex: 0 1 auto; max-width: 72%; }
+    .tm-map-legend .tm-lg { gap: 4px; font-size: 11px; white-space: nowrap; }
+    .tm-map-legend-swatch { display: inline-block; flex: 0 0 11px; width: 11px; height: 11px; border-radius: 2px; }
+    .tm-map-legend-swatch.tm-blocked { background: #102c58; }
+    .tm-map-legend-swatch.tm-passable { background: #0788b1; }
+    .tm-map-legend-swatch.tm-event { border-radius: 50%; background: #f4f6f7; border: 1px solid #63727e; }
+    .tm-map-legend-swatch.tm-player { background: #17c34a; }
+    .tm-map-legend-swatch.tm-teleport { border-radius: 50%; background: #f4f6f7; border: 2px solid #d946ef; }
+    .tm-map-cell-modal-box { width: min(92vw, 420px); height: auto; max-height: 82%; gap: 8px; }
+    .tm-map-cell-details { padding: 4px 2px; color: #53605a; font-size: 13px; overflow-wrap: anywhere; }
+    .tm-map-cell-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .tm-map-cell-actions .tm-btn { flex: 1 1 130px; }
+    .tm-map-event-picker { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow: auto; }
+    .tm-map-event-picker .tm-item { gap: 8px; }
+    .tm-map-event-picker .tm-name { min-width: 0; overflow-wrap: anywhere; }
+    .tm-btn:disabled { opacity: .45; cursor: not-allowed; }
+    @media (max-width: 620px) {
+      .tm-modal { padding: 8px; }
+      .tm-minimap-modal-box { width: 96vw; height: 88vh; padding: 9px; }
+      .tm-modal-head { flex-wrap: wrap; }
+      .tm-map-legend { order: 3; max-width: 100%; justify-content: flex-start; }
+      .tm-minimap-controls { gap: 5px; }
+      .tm-minimap-controls input[type="range"] { min-width: 60px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="preview-root">
+    <section class="preview-panel">
+      <header class="preview-head"><strong>RPG Maker RGSS 修改器</strong><span>地图 / 事件</span></header>
+      <div class="preview-page"><div class="preview-card"><strong>地图操作</strong><p>这是叠在修改器面板上的小地图效果预览。</p><button class="tm-btn" type="button" id="reopen-map">重新打开迷你地图</button></div></div>
+    </section>
+  </main>
+  <script src="../app/src/main/assets/tyranor_rgss_minimap.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      var root = document.getElementById("preview-root");
+      var width = 34;
+      var height = 22;
+      var tiles = Array.from({ length: height }, function () { return Array(width).fill("0"); });
+      function passable(x1, y1, x2, y2) {
+        for (var y = y1; y <= y2; y++) for (var x = x1; x <= x2; x++) if (x >= 0 && y >= 0 && x < width && y < height) tiles[y][x] = "1";
+      }
+      function wall(x1, y1, x2, y2) {
+        for (var y = y1; y <= y2; y++) for (var x = x1; x <= x2; x++) if (x >= 0 && y >= 0 && x < width && y < height) tiles[y][x] = "0";
+      }
+      passable(4, 2, 31, 6); passable(1, 7, 32, 14); passable(3, 15, 31, 16);
+      passable(14, 16, 19, 21); passable(4, 3, 8, 8); passable(25, 3, 29, 8);
+      passable(2, 11, 5, 18); passable(28, 12, 31, 18); passable(7, 18, 13, 20);
+      passable(20, 18, 27, 20); passable(15, 20, 18, 21);
+      wall(8, 4, 10, 5); wall(14, 7, 16, 9); wall(22, 10, 24, 12);
+      wall(5, 13, 8, 14); wall(25, 5, 27, 6); wall(9, 18, 10, 19);
+      for (var x = 0; x < width; x++) { tiles[0][x] = "0"; tiles[height - 1][x] = "0"; }
+      for (var y = 0; y < height; y++) { tiles[y][0] = "0"; tiles[y][width - 1] = "0"; }
+      var events = [
+        { id: 1, x: 4, y: 12 }, { id: 2, x: 7, y: 12 }, { id: 3, x: 10, y: 12 },
+        { id: 4, x: 13, y: 12 }, { id: 5, x: 20, y: 12 }, { id: 6, x: 25, y: 12 },
+        { id: 7, x: 29, y: 12 }, { id: 8, x: 3, y: 9 }, { id: 9, x: 9, y: 7 },
+        { id: 10, x: 16, y: 5, isTeleport: true }, { id: 11, x: 22, y: 5 },
+        { id: 12, x: 28, y: 5, isTeleport: true }, { id: 13, x: 6, y: 16 },
+        { id: 14, x: 17, y: 20, isTeleport: true }, { id: 15, x: 30, y: 16 },
+        { id: 16, x: 19, y: 12 }, { id: 17, x: 19, y: 12 }
+      ];
+      var data = {
+        mapId: 2, width: width, height: height,
+        rows: tiles.map(function (row) { return row.join(""); }),
+        player: { x: 16, y: 15 }, events: events
+      };
+      var mapModal = null;
+      function button(label, action, extra, attrs) {
+        return '<button type="button" class="tm-btn ' + (extra || "") + '" data-action="' + action + '" ' + (attrs || "") + '>' + label + '</button>';
+      }
+      function showMap() {
+        if (mapModal) return;
+        var legend = '<div class="tm-map-legend">' +
+          '<span class="tm-lg"><i class="tm-map-legend-swatch tm-blocked"></i>无法通行</span>' +
+          '<span class="tm-lg"><i class="tm-map-legend-swatch tm-passable"></i>可通行</span>' +
+          '<span class="tm-lg"><i class="tm-map-legend-swatch tm-event"></i>事件</span>' +
+          '<span class="tm-lg"><i class="tm-map-legend-swatch tm-player"></i>你</span>' +
+          '<span class="tm-lg"><i class="tm-map-legend-swatch tm-teleport"></i>传送点</span></div>';
+        mapModal = document.createElement("div");
+        mapModal.className = "tm-modal tm-minimap-modal";
+        mapModal.innerHTML = '<div class="tm-modal-box tm-minimap-modal-box">' +
+          '<div class="tm-modal-head"><strong>迷你地图 #2 · 34×22</strong>' + legend + button("×", "close-map") + '</div>' +
+          '<div class="tm-modal-body tm-minimap-modal-body"><div class="tm-minimap-viewport"><canvas class="tm-minimap"></canvas></div>' +
+          '<div class="tm-minimap-controls"><span>地图大小</span><span>缩小</span><input type="range" min="100" max="400" step="5" value="100" aria-label="地图大小">' +
+          '<span>放大</span><strong class="tm-minimap-zoom-value">100%</strong></div></div>' +
+          '<div class="tm-modal-hint">点击任一格查看传送和事件解释器选项；点击遮罩或 × 关闭</div></div>';
+        mapModal.addEventListener("click", function (event) {
+          if (event.target === mapModal || event.target.closest('[data-action="close-map"]')) closeMap();
+        });
+        root.appendChild(mapModal);
+        mapModal._miniMapRenderer = window.TyranorMiniMap.mount({
+          canvas: mapModal.querySelector("canvas"), viewport: mapModal.querySelector(".tm-minimap-viewport"),
+          slider: mapModal.querySelector('input[type="range"]'), zoomValue: mapModal.querySelector(".tm-minimap-zoom-value"),
+          data: data, onCell: showCellActions
+        });
+      }
+      function closeMap() {
+        if (!mapModal) return;
+        if (mapModal._miniMapRenderer) mapModal._miniMapRenderer.destroy();
+        mapModal.remove(); mapModal = null;
+      }
+      function showOverlay(title, body, className) {
+        var overlay = document.createElement("div");
+        overlay.className = "tm-modal " + (className || "");
+        overlay.innerHTML = '<div class="tm-modal-box tm-map-cell-modal-box"><div class="tm-modal-head"><strong>' + title + '</strong>' + button("×", "close-overlay") +
+          '</div>' + body + '</div>';
+        overlay.addEventListener("click", function (event) {
+          if (event.target === overlay || event.target.closest('[data-action="close-overlay"]')) overlay.remove();
+        });
+        root.appendChild(overlay);
+        return overlay;
+      }
+      function showCellActions(x, y, cellEvents) {
+        var eventNames = cellEvents.map(function (event) { return "#" + event.id; }).join(" · ");
+        var body = '<div class="tm-map-cell-details">' + (eventNames ? '事件：' + eventNames : '<span class="tm-note">该格没有事件</span>') + '</div>' +
+          '<div class="tm-map-cell-actions">' + button("传送", "preview-teleport", "primary") +
+          button("事件解释器", "preview-interpreter", "", cellEvents.length ? "" : "disabled") + '</div>';
+        var overlay = showOverlay("地图格 (" + x + ", " + y + ")", body, "tm-map-cell-modal");
+        overlay.addEventListener("click", function (event) {
+          var action = event.target.closest("[data-action]");
+          if (!action) return;
+          if (action.dataset.action === "preview-teleport") {
+            overlay.remove(); closeMap(); window.alert("预览：传送到地图 2，坐标 " + x + ", " + y);
+          } else if (action.dataset.action === "preview-interpreter") {
+            overlay.remove(); closeMap(); showEventPicker(cellEvents);
+          }
+        });
+      }
+      function showEventPicker(cellEvents) {
+        if (cellEvents.length > 1) {
+          var rows = cellEvents.map(function (event) {
+            return '<div class="tm-item"><span class="tm-name">事件 #' + event.id + '</span>' + button("选择", "pick-event", "", 'data-id="' + event.id + '"') + '</div>';
+          }).join("");
+          var chooser = showOverlay("选择事件", '<div class="tm-map-event-picker">' + rows + '</div>', "tm-map-cell-modal");
+          chooser.addEventListener("click", function (click) {
+            var action = click.target.closest('[data-action="pick-event"]');
+            if (!action) return;
+            chooser.remove(); showPages(cellEvents.filter(function (event) { return event.id === Number(action.dataset.id); })[0]);
+          });
+          return;
+        }
+        showPages(cellEvents[0]);
+      }
+      function showPages(event) {
+        var pages = '<div class="tm-map-event-picker">' + [1, 2].map(function (page) {
+          return '<div class="tm-item"><span class="tm-name">事件页 ' + page + ' · 指令数 8</span>' + button("事件解释器", "show-page", "", 'data-page="' + page + '"') + '</div>';
+        }).join("") + '</div>';
+        var picker = showOverlay("事件解释器 · #" + event.id, pages, "tm-map-cell-modal");
+        picker.addEventListener("click", function (click) {
+          var action = click.target.closest('[data-action="show-page"]');
+          if (!action) return;
+          picker.remove(); showInterpreter(event, action.dataset.page);
+        });
+      }
+      function showInterpreter(event, page) {
+        var commands = ["显示文本", "条件分支", "控制开关", "传送玩家", "等待", "脚本"];
+        var body = '<div class="tm-modal-body tm-map-event-picker">' + commands.map(function (command, index) {
+          return '<div class="tm-item"><span class="tm-badge">' + (101 + index) + '</span><span class="tm-name">' + command + '</span><span class="tm-badge">#' + (index + 1) + '</span></div>';
+        }).join("") + '</div><div class="tm-modal-hint">预览事件 #' + event.id + ' · 事件页 ' + page + '</div>';
+        showOverlay("事件解释器", body, "tm-interpreter-modal");
+      }
+      root.addEventListener("click", function (event) {
+        if (event.target.closest("#reopen-map")) showMap();
+      });
+      showMap();
+    })();
+  </script>
+</body>
+</html>

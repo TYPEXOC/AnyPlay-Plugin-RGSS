@@ -6864,48 +6864,56 @@ module TyranorCheats
 
     def list_minimap
       return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:width) && $game_map.respond_to?(:height)
-      source_width = [[$game_map.width.to_i, 1].max, 8192].min
-      source_height = [[$game_map.height.to_i, 1].max, 8192].min
-      step = 1
-      while ((source_width + step - 1) / step) * ((source_height + step - 1) / step) > 65536
-        step += 1
-      end
-      width = (source_width + step - 1) / step
-      height = (source_height + step - 1) / step
-      px = $game_player && $game_player.respond_to?(:x) ? $game_player.x.to_i / step : -1
-      py = $game_player && $game_player.respond_to?(:y) ? $game_player.y.to_i / step : -1
-      grid = Array.new(height) { Array.new(width, '#') }
+      width = [$game_map.width.to_i, 1].max
+      height = [$game_map.height.to_i, 1].max
+      px = $game_player && $game_player.respond_to?(:x) ? $game_player.x.to_i : -1
+      py = $game_player && $game_player.respond_to?(:y) ? $game_player.y.to_i : -1
+      grid = Array.new(height) { Array.new(width, '0') }
       height.times do |y|
         width.times do |x|
           open = false
           [2, 4, 6, 8].each do |direction|
             begin
-              if $game_map.passable?(x * step, y * step, direction)
+              if $game_map.passable?(x, y, direction)
                 open = true
                 break
               end
             rescue Exception
             end
           end
-          grid[y][x] = '.' if open
+          grid[y][x] = '1' if open
         end
       end
       events = []
       if $game_map.respond_to?(:events)
         $game_map.events.each do |event_id, event|
           next unless event && event.respond_to?(:x) && event.respond_to?(:y)
-          x = event.x.to_i / step; y = event.y.to_i / step
-          grid[y][x] = 'E' if x >= 0 && y >= 0 && x < width && y < height
-          events << "E\t#{event_id.to_i}\t#{x}\t#{y}" if x >= 0 && y >= 0 && x < width && y < height
+          x = event.x.to_i; y = event.y.to_i
+          next unless x >= 0 && y >= 0 && x < width && y < height
+          transfer = minimap_transfer_event?(event) ? 1 : 0
+          events << "E\t#{event_id.to_i}\t#{x}\t#{y}\t#{transfer}"
         end
       end
-      grid[py][px] = '@' if px >= 0 && py >= 0 && px < width && py < height
       out = ["H\t#{width}\t#{height}\t#{px}\t#{py}"]
       grid.each { |row| out << "R\t#{row.join}" }
       out.concat(events)
       out.join("\n")
     rescue Exception => e
       "Couldn't read map layout: #{e.class}: #{e.message}"
+    end
+
+    def minimap_transfer_event?(event)
+      data = event.respond_to?(:event) ? (event.event rescue nil) : nil
+      pages = data && data.respond_to?(:pages) ? (data.pages rescue nil) : nil
+      Array(pages).any? do |page|
+        commands = page && page.respond_to?(:list) ? (page.list rescue nil) : nil
+        Array(commands).any? do |command|
+          code = command.respond_to?(:code) ? command.code : (command[0] rescue nil)
+          code.to_i == 201
+        end
+      end
+    rescue Exception
+      false
     end
 
     def battle_enemies

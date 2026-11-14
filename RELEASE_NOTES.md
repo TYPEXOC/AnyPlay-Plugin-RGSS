@@ -11,6 +11,7 @@ New versions install over the old one.
 ### What's new
 - Old Ruby 1.8 games: more scripts are repaired automatically at start-up (`return` inside procs, old `when x:` syntax, byte/character differences, missing old methods, and more).
 - TYN-owned virtual pad/editor and cheat panel are connected to the RGSS process.
+- The RGSS cheat minimap now uses the game's exact tile dimensions, opens fully fitted with a zoom slider, and supports per-tile teleport and event-interpreter browsing.
 - The selected TYN translation table loads at runtime and can be hot-reloaded without adding files to the game directory.
 - MIDI BGM uses FluidSynth built from upstream for both Android ABIs and the bundled GMGSx SoundFont when a game has no explicit SoundFont setting; no game files are changed.
 - FluidSynth now has libsndfile's Ogg/Vorbis decoder enabled, allowing games to use SF3 SoundFonts as well as SF2.

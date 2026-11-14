@@ -216,7 +216,8 @@ class TyranorCheatController(
     data class MiniMapEvent(
         val id: Int,
         val x: Int,
-        val y: Int
+        val y: Int,
+        val isTeleport: Boolean
     )
 
     data class MiniMap(
@@ -969,11 +970,13 @@ class TyranorCheatController(
                     rows.add(p[1])
                 } else if (p[0] == "E") {
                     val event = p[1].split('\t')
-                    if (event.size == 3) {
+                    if (event.size >= 4) {
                         val id = event[0].toIntOrNull()
                         val x = event[1].toIntOrNull()
                         val y = event[2].toIntOrNull()
-                        if (id != null && x != null && y != null) events.add(MiniMapEvent(id, x, y))
+                        if (id != null && x != null && y != null) {
+                            events.add(MiniMapEvent(id, x, y, event[3] == "1"))
+                        }
                     }
                 }
             }

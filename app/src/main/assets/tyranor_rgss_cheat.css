@@ -74,9 +74,9 @@ html[data-theme="dark"] #tyranor-mod-root{color:#eef3f0}html[data-theme="dark"] 
 html[data-theme="dark"] .tm-map-dropdown{background:#202522}
 .tm-badge.tm-on{background:var(--tm-primary,#237765);color:var(--tm-on-primary,#fff)}
 .tm-map-grid .tm-sep{height:1px;background:#e0e5e2;margin:10px 0;flex:0 0 auto}
-.tm-minimap{width:100%;image-rendering:pixelated;border:1px solid #e0e5e2;border-radius:10px;touch-action:manipulation}
-html[data-theme="dark"] .tm-map-grid .tm-map-tree-list>.tm-item{border-color:#343c37}html[data-theme="dark"] .tm-map-grid .tm-sep{background:#343c37}html[data-theme="dark"] .tm-minimap{border-color:#343c37}html[data-theme="dark"] .tm-map-grid .tm-map-tree-prefix{color:#aab4ae}html[data-theme="dark"] .tm-map-grid .tm-map-tree-guide.tm-guide-continuing{border-left-color:#aab4ae}
-/* 迷你地图对话框：独立覆盖层 + 图例，点遮罩或 × 关闭 */
+.tm-minimap{flex:0 0 auto;width:auto;height:auto;max-width:none;max-height:none;margin:auto;border:1px solid #f4fbff;border-radius:3px;background:#102c58;image-rendering:pixelated;touch-action:manipulation}
+html[data-theme="dark"] .tm-map-grid .tm-map-tree-list>.tm-item{border-color:#343c37}html[data-theme="dark"] .tm-map-grid .tm-sep{background:#343c37}html[data-theme="dark"] .tm-map-grid .tm-map-tree-prefix{color:#aab4ae}html[data-theme="dark"] .tm-map-grid .tm-map-tree-guide.tm-guide-continuing{border-left-color:#aab4ae}
+/* 迷你地图：默认完整适配弹窗；滑块放大后在同一视口内滚动查看 */
 .tm-modal{position:absolute;inset:0;z-index:20;background:#0009;display:flex;align-items:center;justify-content:center;padding:16px}
 .tm-modal-box{width:min(92vw,560px);max-height:88%;display:flex;flex-direction:column;background:#fff;border-radius:16px;padding:12px;box-shadow:0 10px 36px #000b}
 .tm-modal-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}.tm-modal-head strong{flex:1;font-size:16px}
@@ -86,6 +86,28 @@ html[data-theme="dark"] .tm-map-grid .tm-map-tree-list>.tm-item{border-color:#34
 .tm-modal-body{overflow:auto;min-height:0;-webkit-overflow-scrolling:touch}
 .tm-modal-hint{margin-top:8px;color:#748079}
 html[data-theme="dark"] .tm-modal-box{background:#202522}html[data-theme="dark"] .tm-lg{color:#c9d2cc}html[data-theme="dark"] .tm-modal-hint{color:#aab4ae}
+.tm-minimap-modal-box{width:min(94vw,760px);height:min(84vh,680px);max-height:88%}
+.tm-map-legend{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px 9px;flex:0 1 auto;max-width:72%}
+.tm-map-legend .tm-lg{gap:4px;font-size:11px;white-space:nowrap}
+.tm-map-legend-swatch{display:inline-block;flex:0 0 11px;width:11px;height:11px;border-radius:2px}
+.tm-map-legend-swatch.tm-blocked{background:#102c58}.tm-map-legend-swatch.tm-passable{background:#0788b1}
+.tm-map-legend-swatch.tm-event{border-radius:50%;background:#f4f6f7;border:1px solid #63727e}
+.tm-map-legend-swatch.tm-player{background:#17c34a}.tm-map-legend-swatch.tm-teleport{border-radius:50%;background:#f4f6f7;border:2px solid #d946ef}
+.tm-minimap-modal-body{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow:hidden}
+.tm-minimap-viewport{display:flex;flex:1 1 auto;min-height:0;overflow:auto;border-radius:9px;background:#0b2a52;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.tm-minimap-controls{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:0 0 auto;margin-top:8px;color:#53605a;font-size:12px}
+.tm-minimap-controls input[type=range]{flex:0 1 170px;width:170px;min-width:90px;margin:0;accent-color:var(--tm-primary,#237765);touch-action:pan-x}
+.tm-minimap-zoom-value{flex:0 0 42px;text-align:right;font-variant-numeric:tabular-nums}
+html[data-theme="dark"] .tm-minimap-controls{color:#c9d2cc}
+.tm-map-cell-modal-box{width:min(92vw,420px);height:auto;max-height:82%;gap:8px}
+.tm-map-cell-details{padding:4px 2px;color:#53605a;font-size:13px;overflow-wrap:anywhere}
+.tm-map-cell-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.tm-map-cell-actions .tm-btn{flex:1 1 130px}
+.tm-map-event-picker{display:flex;flex-direction:column;gap:6px;max-height:55vh;overflow:auto}
+.tm-map-event-picker .tm-item{gap:8px}
+.tm-map-event-picker .tm-name{min-width:0;overflow-wrap:anywhere}
+.tm-btn:disabled{opacity:.45;cursor:not-allowed}
+html[data-theme="dark"] .tm-map-cell-details{color:#c9d2cc}
 /* 系统页用途分析：展开在对应行下方的引用摘要 */
 .tm-fill-card>.tm-row{margin-bottom:0}
 .tm-fill-card .tm-list{margin-top:8px;padding:0 3px 12px 0;scroll-padding-bottom:12px}

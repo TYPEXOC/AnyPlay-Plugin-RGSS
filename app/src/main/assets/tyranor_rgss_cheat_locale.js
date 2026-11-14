@@ -4,7 +4,7 @@
   var languageTag = String(window.TyranorModLanguageTag || "").toLowerCase();
   var language = languageTag.indexOf("en") === 0 ? "en" : languageTag.indexOf("ja") === 0 ? "ja" : "zh";
   var dictionaries = {
-    zh: { "装备动作": "装备", "卸下动作": "卸下", "事件页开关": "开关", "事件解释器按钮": "事件解释器", "宝可梦修改器": "宝可梦修改器", "HP/PP不减": "HP/PP不减" },
+    zh: { "装备动作": "装备", "卸下动作": "卸下", "事件页开关": "开关", "事件解释器按钮": "事件解释器", "宝可梦修改器": "宝可梦修改器", "HP/PP不减": "HP/PP不减", "传送点": "传送点", "地图大小": "地图大小", "缩小": "缩小", "放大": "放大", "地图格": "地图格", "该格没有事件": "该格没有事件", "选择事件": "选择事件", "点击任一格查看传送和事件解释器选项；点击遮罩或 × 关闭": "点击任一格查看传送和事件解释器选项；点击遮罩或 × 关闭" },
     en: {
       "Tyranor RGSS 修改器": "Tyranor RGSS Cheats",
       "RPG Maker 修改器": "RPG Maker Cheats",
@@ -85,7 +85,7 @@
       "选择": "Select", "没有匹配地图": "No matching maps", "当前地图没有事件（进入地图场景后打开）": "No events on this map. Open the panel from a map scene.",
       "在左侧选择事件查看详情": "Select an event on the left to view its details", "独立开关:": "Self switches:",
       ":开": ": On", ":关": ": Off", "全开": "All on", "全关": "All off", "迷你地图": "Minimap",
-      "名称:": "Name:", "无法通行": "Impassable", "可通行": "Passable", "事件": "Event", "你": "Player",
+      "名称:": "Name:", "无法通行": "Impassable", "可通行": "Passable", "事件": "Event", "你": "Player", "传送点": "Teleport", "地图大小": "Map zoom", "缩小": "Zoom out", "放大": "Zoom in", "地图格": "Map tile", "该格没有事件": "No event on this tile", "选择事件": "Choose an event", "点击任一格查看传送和事件解释器选项；点击遮罩或 × 关闭": "Tap any tile for teleport and event interpreter options. Tap outside or × to close.",
       "点击事件块选中该事件；点外部区域或 × 关闭": "Tap an event tile to select it. Tap outside or × to close.",
       "已选中事件 #": "Selected event #", "当前不在战斗中": "Not in battle", "消灭全部敌人": "Defeat all enemies",
       "强制胜利": "Force victory", "强制战败": "Force defeat", "强制逃跑": "Force escape", "战斗操作": "Battle actions", "战斗开关": "Battle modifiers", "当前游戏没有可用的战斗开关": "No battle modifiers are available in this game", "敌方": "Enemies", "我方": "Party",
@@ -199,7 +199,7 @@
       "选择": "選択", "没有匹配地图": "該当するマップはありません", "当前地图没有事件（进入地图场景后打开）": "このマップにイベントはありません。マップ画面で開いてください。",
       "在左侧选择事件查看详情": "左側のイベントを選択すると詳細を表示します", "独立开关:": "セルフスイッチ:",
       ":开": ": オン", ":关": ": オフ", "全开": "すべてオン", "全关": "すべてオフ", "迷你地图": "ミニマップ",
-      "名称:": "名前:", "无法通行": "通行不可", "可通行": "通行可", "你": "プレイヤー",
+      "名称:": "名前:", "无法通行": "通行不可", "可通行": "通行可", "你": "プレイヤー", "传送点": "テレポート地点", "地图大小": "マップのズーム", "缩小": "縮小", "放大": "拡大", "地图格": "マップタイル", "该格没有事件": "このタイルにイベントはありません", "选择事件": "イベントを選択", "点击任一格查看传送和事件解释器选项；点击遮罩或 × 关闭": "タイルをタップすると移動とイベントインタプリタの操作が表示されます。外側または × をタップすると閉じます。",
       "点击事件块选中该事件；点外部区域或 × 关闭": "イベントをタップして選択します。外側または × をタップすると閉じます。",
       "已选中事件 #": "選択中のイベント #", "当前不在战斗中": "戦闘中ではありません", "消灭全部敌人": "敵をすべて倒す",
       "强制胜利": "強制勝利", "强制战败": "強制敗北", "强制逃跑": "強制逃走", "战斗操作": "戦闘操作", "战斗开关": "戦闘チート", "当前游戏没有可用的战斗开关": "このゲームで使える戦闘チートはありません", "敌方": "敵", "我方": "味方",
