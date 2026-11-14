@@ -343,8 +343,6 @@
     var actor = (context.actorEntries || []).filter(function (a) { return a.id === context.actorId; })[0];
     var section = root.querySelector("#tm-actor-section");
     if (!actor || !section) return;
-    var openClassMenu = root.querySelector(".tm-actor-class-menu");
-    if (openClassMenu) openClassMenu.remove();
     root.querySelectorAll(".tm-segmented-tab[data-action='actor-section']").forEach(function (tab) {
       tab.classList.toggle("active", tab.dataset.section === context.actorSection);
     });
@@ -367,10 +365,7 @@
       }).join("");
       section.innerHTML = card(translated("属性"), classRow + '<div class="tm-list">' + stats + '</div>');
       var classMenu = section.querySelector(".tm-actor-class-menu");
-      if (classMenu) {
-        root.appendChild(classMenu);
-        positionActorClassMenu();
-      }
+      if (classMenu) positionActorClassMenu();
     } else if (context.actorSection === "skills") {
       context.actorSkillEntries = mod.actorSkills(actor.id) || [];
       var skillControls = textInput("tm-skill-query", context.skillQuery, "search", 'placeholder="' + escapeHtml(translated("搜索技能名称或 ID")) + '"') +
@@ -1171,7 +1166,7 @@
         if (itemMenu) itemMenu.remove();
         if (itemTrigger) itemTrigger.setAttribute("aria-expanded", "false");
       }
-      if (context.actorClassExpanded && !event.target.closest(".tm-actor-class-picker") && !event.target.closest(".tm-actor-class-menu")) {
+      if (context.actorClassExpanded && !event.target.closest(".tm-actor-class-picker")) {
         context.actorClassExpanded = false;
         var classMenu = root.querySelector(".tm-actor-class-menu");
         var classTrigger = root.querySelector(".tm-actor-class-picker .tm-system-kind-trigger");
