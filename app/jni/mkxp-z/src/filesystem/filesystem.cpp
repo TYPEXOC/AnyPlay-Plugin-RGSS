@@ -612,8 +612,19 @@ openReadEnumCB(void *d, const char *dirpath, const char *filename) {
   if (data.stopSearching)
     return PHYSFS_ENUM_STOP;
 
-  /* If there's not even a partial match, continue searching */
-  if (strncmp(filename, data.filename, data.filenameN) != 0)
+  /* Windows RGSS games may request an asset with different casing than the
+   * filename stored in the game folder or RTP. Match the basename without
+   * regard to ASCII case, then open the actual enumerated path below. */
+  bool partialMatch = true;
+  for (size_t i = 0; i < data.filenameN; ++i) {
+    if (!filename[i] ||
+        std::tolower(static_cast<unsigned char>(filename[i])) !=
+            std::tolower(static_cast<unsigned char>(data.filename[i]))) {
+      partialMatch = false;
+      break;
+    }
+  }
+  if (!partialMatch)
     return PHYSFS_ENUM_OK;
 
   if (!*dirpath) {
