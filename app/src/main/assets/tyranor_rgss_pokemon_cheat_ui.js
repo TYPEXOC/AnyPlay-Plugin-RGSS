@@ -9,6 +9,10 @@
   var caps = null;
   var tab = "team";
   var teamView = "party";
+  var teamSection = "stats";
+  var teamQuery = "";
+  var teamPokemon = [];
+  var quickSection = "resources";
   var storageBox = -1;
   var pendingDepositIndex = null;
   var detectTimer = null;
@@ -21,7 +25,8 @@
   var itemOffset = 0;
   var bagCategory = "";
   var bagCategories = [];
-  var showEmptyItems = false;
+  var selectedItemId = null;
+  var showEmptyItems = true;
   var systemKind = "switch";
   var systemQuery = "";
   var systemOffset = 0;
@@ -34,7 +39,7 @@
   var addPokemonQuery = "";
   var statNames = ["HP", "攻击", "防御", "特攻", "特防", "速度"];
   var flagLabels = {
-    hpmp: "HP/PP不减", status: "异常状态免疫", items: "背包物品不减", coins: "游戏币不减",
+    hpmp: "HP/PP不减", gold: "金钱不减", status: "异常状态免疫", items: "背包物品不减", coins: "游戏币不减",
     noEncounter: "无野生遇敌", noclip: "穿墙", fastText: "快速文字", eventSpeed: "事件加速",
     msgSkip: "对话快进", invincible: "无敌", oneHit: "一击必杀", crit: "必定暴击", escape: "必定逃跑成功", freeSkill: "招式PP不减"
   };
@@ -48,6 +53,12 @@
   function safeId(value) { return String(value).replace(/[^a-zA-Z0-9_-]/g, "_"); }
   function card(title, body, cls) {
     return '<section class="tm-card' + (cls ? " " + cls : "") + '"><h3>' + esc(tr(title)) + '</h3>' + body + '</section>';
+  }
+  function segmentedTabs(items, selected, action, dataName) {
+    dataName = dataName || "section";
+    return '<div class="tm-segmented-tabs">' + items.map(function (item) {
+      return '<button type="button" class="tm-segmented-tab' + (item.id === selected ? ' active' : '') + '" data-action="' + action + '" data-' + dataName + '="' + esc(item.id) + '">' + esc(tr(item.label)) + '</button>';
+    }).join("") + '</div>';
   }
   function button(label, action, extra, data) {
     return '<button type="button" class="tm-btn ' + (extra || "") + '" data-action="' + action + '" ' + (data || "") + '>' + esc(tr(label)) + '</button>';
@@ -117,9 +128,9 @@
     retryFeatures();
   }
   function retryFeatures() {
-    if (!panel || detectTimer || featureAttempts >= 12 ||
-        (hasFeature("pokemonParty") && hasFeature("itemBag") && hasFeature("systemData"))) return;
-    featureAttempts++;
+    if (!panel || detectTimer ||
+        (hasFeature("pokemonPartyReady") && hasFeature("itemBagReady"))) return;
+    featureAttempts = Math.min(featureAttempts + 1, 12);
     detectTimer = setTimeout(function () {
       detectTimer = null;
       var previousFeatures = JSON.stringify(getCaps().features);
@@ -127,88 +138,187 @@
       catch (error) { console.warn("Essentials capability refresh failed", error); }
       if (previousFeatures !== JSON.stringify(getCaps().features)) render();
       else retryFeatures();
-    }, 1800);
+    }, featureAttempts < 12 ? 1800 : 5000);
   }
   function renderQuick(content) {
     var state = mod.getState() || {};
-    var groups = [["队伍与资源", ["hpmp", "status", "items", "coins"]],
-      ["探索与对话", ["noEncounter", "noclip", "fastText", "eventSpeed", "msgSkip"]],
-      ["战斗", ["invincible", "oneHit", "crit", "escape", "freeSkill"]]];
-    var html = groups.map(function (group) {
-      var toggles = group[1].filter(hasToggle).map(function (key) {
+    var groups = [
+      { id: "resources", label: "队伍与资源", toggles: ["hpmp", "gold", "status", "items", "coins"], currencies: true },
+      { id: "explore", label: "探索与对话", toggles: ["noEncounter", "noclip", "fastText", "eventSpeed", "msgSkip"], speed: true },
+      { id: "battle", label: "战斗", toggles: ["invincible", "oneHit", "crit", "escape", "freeSkill"] }
+    ].map(function (group) {
+      group.toggles = group.toggles.filter(hasToggle);
+      group.available = group.toggles.length > 0 || (group.currencies && (hasValue("gold") || hasValue("coins") ||
+        (hasFeature("pokemonRecover") && hasFeature("pokemonPartyReady")))) ||
+        (group.speed && (hasValue("speed") || hasFeature("pokemonGameSpeed")));
+      return group;
+    }).filter(function (group) { return group.available; });
+    if (!groups.length) { content.innerHTML = '<div class="tm-note">' + esc(tr("当前没有可用的快捷功能")) + '</div>'; return; }
+    if (!groups.some(function (group) { return group.id === quickSection; })) quickSection = groups[0].id;
+    var selected = groups.filter(function (group) { return group.id === quickSection; })[0];
+    var body = selected.toggles.map(function (key) {
         return '<label class="tm-pokemon-toggle"><span>' + esc(tr(flagLabels[key] || key)) + '</span>' +
           '<input class="tm-switch" type="checkbox" data-action="flag" data-name="' + key + '" ' + (state[key] ? "checked" : "") + '></label>';
       }).join("");
-      return toggles ? card(group[0], toggles) : "";
-    }).join("");
-    if (hasValue("gold")) {
-      var money = 0; try { money = mod.getGold(); } catch (_) {}
-      html += card("金钱", '<div class="tm-row"><label class="tm-grow">' + esc(tr("当前金钱")) + ' <strong>' + esc(money) + '</strong></label>' +
-        input("tm-pokemon-gold", money, "number", 'min="0" inputmode="numeric"') + button("设置", "set-gold", "primary") + button("拉满", "max-gold") + '</div>');
+    if (selected.currencies) {
+      if (hasValue("gold")) {
+        var money = 0; try { money = mod.getGold(); } catch (_) {}
+        body += '<div class="tm-row tm-gold-row"><label>' + esc(tr("金钱")) + '：<strong>' + esc(money) + '</strong></label>' +
+          input("tm-pokemon-gold", money, "number", 'min="0" inputmode="numeric"') + button("设置", "set-gold", "primary") + button("拉满", "max-gold") + '</div>';
+      }
+      if (hasValue("coins")) {
+        var coins = 0; try { coins = mod.getCoins(); } catch (_) {}
+        body += '<div class="tm-row"><label class="tm-grow">' + esc(tr("游戏币")) + '：<strong>' + esc(coins) + '</strong></label>' +
+          input("tm-pokemon-coins", coins, "number", 'min="0" inputmode="numeric"') + button("设置", "set-coins", "primary") + button("拉满", "max-coins") + '</div>';
+      }
+      if (hasFeature("pokemonRecover") && hasFeature("pokemonPartyReady")) body += '<div class="tm-row">' + button("恢复全队宝可梦", "recover-party", "primary") + '</div>';
     }
-    if (hasValue("coins")) {
-      var coins = 0; try { coins = mod.getCoins(); } catch (_) {}
-      html += card("游戏币", '<div class="tm-row"><label class="tm-grow">' + esc(tr("当前游戏币")) + ' <strong>' + esc(coins) + '</strong></label>' +
-        input("tm-pokemon-coins", coins, "number", 'min="0" inputmode="numeric"') + button("设置", "set-coins", "primary") + button("拉满", "max-coins") + '</div>');
+    if (selected.speed) {
+      if (hasValue("speed")) body += '<div class="tm-row"><label class="tm-grow">' + esc(tr("移动速度")) + '</label>' +
+        input("tm-pokemon-speed", state.speedMultiplier || 2, "number", 'min="0.25" max="8" step="0.25"') + button("设置", "set-speed", "primary") + '</div>';
+      if (hasFeature("pokemonGameSpeed")) body += '<div class="tm-row"><label class="tm-grow">' + esc(tr("游戏倍速")) + '</label>' +
+        input("tm-pokemon-game-speed", state.gameSpeedMultiplier || 1, "number", 'min="1" max="9" step="1"') + button("设置", "set-game-speed", "primary") + '</div>';
     }
-    if (hasFeature("pokemonRecover")) html += card("队伍恢复", '<div class="tm-row">' + button("恢复全队宝可梦", "recover-party", "primary") + '</div>');
-    content.innerHTML = html || '<div class="tm-note">' + esc(tr("当前没有可用的快捷功能")) + '</div>';
+    content.innerHTML = segmentedTabs(groups, quickSection, "quick-section") + card(selected.label, body || '<div class="tm-note">' + esc(tr("当前没有可用的快捷功能")) + '</div>');
   }
   function renderTeam(content) {
     if (!hasFeature("pokemonParty")) { content.innerHTML = '<div class="tm-note">' + esc(tr("宝可梦队伍能力正在初始化")) + '</div>'; return; }
+    if (!hasFeature("pokemonPartyReady")) { content.innerHTML = '<div class="tm-note">' + esc(tr("开始新游戏或载入存档后即可读取宝可梦队伍")) + '</div>'; return; }
     if (teamView === "storage" && hasFeature("pokemonStorage")) return renderPokemonStorage(content);
-    var party = mod.listPokemon() || [];
-    var addButton = hasFeature("pokemonObtain") ? '<div class="tm-row">' + button("获得宝可梦", "open-add-pokemon", "primary") + '</div>' : "";
-    var views = '<div class="tm-segmented-tabs">' + button("队伍", "team-view", teamView === "party" ? "primary" : "", 'data-view="party"') +
-      (hasFeature("pokemonStorage") ? button("PC 盒子", "team-view", teamView === "storage" ? "primary" : "", 'data-view="storage"') : "") + '</div>';
-    if (!party.length) { content.innerHTML = views + card("队伍管理", addButton + '<div class="tm-note">' + esc(tr("当前队伍里没有宝可梦")) + '</div>'); return; }
-    content.innerHTML = views + addButton + '<div class="tm-pokemon-party">' + party.map(function (pokemon) {
+    teamPokemon = mod.listPokemon() || [];
+    var views = [{ id: "party", label: "队伍" }];
+    if (hasFeature("pokemonStorage")) views.push({ id: "storage", label: "宝可梦仓库" });
+    var search = input("tm-team-query", teamQuery, "search", 'placeholder="' + esc(tr("搜索宝可梦名称或编号")) + '"');
+    var actions = hasFeature("pokemonObtain") || hasFeature("pokemonRecover") ? '<div class="tm-row">' +
+      (hasFeature("pokemonObtain") ? button("获得宝可梦", "open-add-pokemon", "primary") : "") +
+      (hasFeature("pokemonRecover") ? button("恢复全队", "recover-party") : "") + '</div>' : "";
+    content.innerHTML = segmentedTabs(views, teamView, "team-view", "view") +
+      '<div class="tm-grid tm-actor-layout tm-pokemon-team-layout">' +
+      card("队伍管理", search + actions + '<div id="tm-pokemon-roster" class="tm-list tm-actor-list"></div>', "tm-actor-roster") +
+      '<section class="tm-card tm-actor-detail" id="tm-pokemon-detail"></section></div>';
+    renderTeamRoster();
+  }
+  function renderTeamRoster() {
+    var roster = panel && panel.querySelector("#tm-pokemon-roster");
+    if (!roster) return;
+    var entries = teamPokemon.filter(function (pokemon) {
+      return !teamQuery || String(pokemon.name || "").toLowerCase().indexOf(teamQuery.toLowerCase()) >= 0 ||
+        String(pokemon.index).indexOf(teamQuery) >= 0;
+    });
+    if (!entries.some(function (pokemon) { return Number(pokemon.index) === Number(selectedPokemon); })) {
+      selectedPokemon = entries.length ? Number(entries[0].index) : null;
+    }
+    var rosterRows = entries.map(function (pokemon) {
       var index = Number(pokemon.index);
-      var body = '<div class="tm-pokemon-heading"><strong>' + esc(pokemon.name || ("#" + (index + 1))) + '</strong>' +
-        (pokemon.isEgg ? '<span class="tm-badge">' + esc(tr("蛋")) + '</span>' : "") + '</div>' +
-        '<div class="tm-pokemon-summary"><span>' + esc(tr("等级")) + ' ' + esc(pokemon.level) + '</span><span>HP ' + esc(pokemon.hp) + '/' + esc(pokemon.mhp) +
-        '</span><span>EXP ' + esc(pokemon.exp) + '</span></div>';
-      if (pokemon.status) body += '<p class="tm-pokemon-details">' + esc(tr("状态")) + '：' + esc(tr(statusName(pokemon.status))) + '</p>';
-      if (pokemon.heldItem) body += '<p class="tm-pokemon-details">' + esc(tr("携带物品")) + '：' + esc(pokemon.heldItem) + '</p>';
+      var selected = index === Number(selectedPokemon);
+      return '<div class="tm-item tm-actor-row' + (selected ? ' selected' : '') + '"><button type="button" class="tm-actor-select" data-action="select-pokemon" data-index="' + index + '">' +
+        '<span class="tm-name">#' + (index + 1) + ' ' + esc(pokemon.name || tr("未命名宝可梦")) + '</span></button>' +
+        '<span class="tm-badge">' + (pokemon.isEgg ? esc(tr("蛋")) : esc(tr("等级")) + " " + esc(pokemon.level)) + '</span></div>';
+    }).join("");
+    if (!rosterRows) rosterRows = '<div class="tm-note">' + esc(tr(teamPokemon.length ? "没有匹配宝可梦" : "当前队伍里没有宝可梦")) + '</div>';
+    roster.innerHTML = rosterRows;
+    var pokemon = entries.filter(function (entry) { return Number(entry.index) === Number(selectedPokemon); })[0] || null;
+    renderPokemonDetail(pokemon, teamPokemon.length);
+  }
+  function renderPokemonDetail(pokemon, partyLength) {
+    var detail = panel && panel.querySelector("#tm-pokemon-detail");
+    if (!detail) return;
+    if (!pokemon) {
+      detail.innerHTML = '<div class="tm-note">' + esc(tr(teamPokemon.length ? "请选择队伍中的宝可梦" : "当前队伍里没有宝可梦")) + '</div>';
+      return;
+    }
+    var index = Number(pokemon.index);
+    var sections = [];
+    if (pokemon.isEgg ? hasFeature("pokemonEggSteps") :
+      (hasFeature("pokemonLevel") || hasFeature("pokemonHp") || hasFeature("pokemonExp") || hasFeature("pokemonHappiness"))) {
+      sections.push({ id: "stats", label: pokemon.isEgg ? "孵化" : "属性" });
+    }
+    if (!pokemon.isEgg && hasFeature("pokemonMoves")) sections.push({ id: "moves", label: "招式" });
+    if (!pokemon.isEgg && hasFeature("pokemonStatus")) sections.push({ id: "status", label: "状态" });
+    if (!pokemon.isEgg && hasFeature("pokemonItem")) sections.push({ id: "item", label: "携带物" });
+    if (!pokemon.isEgg && hasFeature("pokemonStats")) sections.push({ id: "iv_ev", label: "IV / EV" });
+    if (!pokemon.isEgg && hasFeature("pokemonTraits")) sections.push({ id: "traits", label: "个体属性" });
+    if (!sections.some(function (entry) { return entry.id === teamSection; })) teamSection = sections.length ? sections[0].id : "";
+    var heading = '<div class="tm-actor-detail-heading"><h3>' + esc(pokemon.name || tr("未命名宝可梦")) + '</h3>' +
+      '<span class="tm-badge">' + (pokemon.isEgg ? esc(tr("蛋")) : esc(tr("等级")) + " " + esc(pokemon.level)) + '</span>' +
+      (hasFeature("pokemonRecover") && !pokemon.isEgg ? button("恢复", "recover-pokemon", "primary", 'data-index="' + index + '"') : "") + '</div>' +
+      '<div class="tm-pokemon-summary"><span>HP ' + esc(pokemon.hp) + '/' + esc(pokemon.mhp) + '</span><span>' + esc(tr("经验")) + ' ' + esc(pokemon.exp) + '</span>' +
+      (pokemon.status ? '<span>' + esc(tr(statusName(pokemon.status))) + '</span>' : "") + (pokemon.heldItem ? '<span>' + esc(pokemon.heldItem) + '</span>' : "") + '</div>';
+    var management = '<div class="tm-pokemon-actions">' +
+      (hasFeature("pokemonNickname") ? button("修改昵称", "edit-nickname", "", 'data-index="' + index + '" data-name="' + esc(pokemon.nickname || "") + '"') : "") +
+      (hasFeature("pokemonStorage") ? button("存入仓库", "deposit-pokemon", "", 'data-index="' + index + '"') : "") +
+      (hasFeature("pokemonStorage") ? button("释放", "confirm-release-pokemon", "danger", 'data-box="-1" data-slot="' + index + '" data-name="' + esc(pokemon.name) + '"') : "") +
+      (hasFeature("pokemonPartyOrder") && index > 0 ? button("上移", "reorder-pokemon", "", 'data-index="' + index + '" data-target="' + (index - 1) + '"') : "") +
+      (hasFeature("pokemonPartyOrder") && index < partyLength - 1 ? button("下移", "reorder-pokemon", "", 'data-index="' + index + '" data-target="' + (index + 1) + '"') : "") + '</div>';
+    detail.innerHTML = heading + management + (sections.length ? segmentedTabs(sections, teamSection, "pokemon-section") + '<div id="tm-actor-section"></div>' : '');
+    if (sections.length) renderPokemonSection(pokemon);
+  }
+  function renderPokemonSection(pokemon) {
+    var section = panel && panel.querySelector("#tm-actor-section");
+    if (!section || !pokemon) return;
+    var index = Number(pokemon.index);
+    if (teamSection === "stats") {
+      var fields = [];
       if (pokemon.isEgg) {
-        body += '<div class="tm-note">' + esc(tr("蛋只能调整孵化进度")) + '</div>';
-        if (hasFeature("pokemonEggSteps")) body += '<div class="tm-pokemon-edit-row">' + valueEditor(index, "eggSteps", "剩余孵化步数", pokemon.eggSteps) + '</div>' +
-          '<div class="tm-pokemon-actions">' + button("快速孵化", "hatch-egg", "primary", 'data-index="' + index + '"') +
-          (hasFeature("pokemonStorage") ? button("存入 PC", "deposit-pokemon", "", 'data-index="' + index + '"') : "") + '</div>';
+        if (hasFeature("pokemonEggSteps")) fields.push(valueEditor(index, "eggSteps", "剩余孵化步数", pokemon.eggSteps));
+        section.innerHTML = card("孵化进度", '<div class="tm-list">' + fields.join("") + '</div>' +
+          '<div class="tm-row">' + button("快速孵化", "hatch-egg", "primary", 'data-index="' + index + '"') + '</div>');
+        return;
       }
-      else {
-        var valueFields = [];
-        if (hasFeature("pokemonLevel")) valueFields.push(valueEditor(index, "level", "等级", pokemon.level));
-        if (hasFeature("pokemonHp")) valueFields.push(valueEditor(index, "hp", "当前 HP", pokemon.hp));
-        if (hasFeature("pokemonExp")) valueFields.push(valueEditor(index, "exp", "经验", pokemon.exp));
-        if (hasFeature("pokemonHappiness")) valueFields.push(valueEditor(index, "happiness", "亲密度", pokemon.happiness));
-        if (valueFields.length) body += '<div class="tm-pokemon-edit-row">' + valueFields.join("") + '</div>';
-        body += '<div class="tm-pokemon-actions">' +
-          (hasFeature("pokemonNickname") ? button("修改昵称", "edit-nickname", "", 'data-index="' + index + '" data-name="' + esc(pokemon.nickname || "") + '"') : "") +
-          (hasFeature("pokemonRecover") ? button("恢复", "recover-pokemon", "primary", 'data-index="' + index + '"') : "") +
-          (hasFeature("pokemonMoves") ? button("招式", "edit-moves", "", 'data-index="' + index + '"') : "") +
-          (hasFeature("pokemonStatus") ? button("状态", "edit-status", "", 'data-index="' + index + '"') : "") +
-          (hasFeature("pokemonItem") ? button("携带物品", "edit-item", "", 'data-index="' + index + '"') : "") +
-          (hasFeature("pokemonStats") ? button("IV / EV", "edit-stats", "", 'data-index="' + index + '"') : "") +
-          (hasFeature("pokemonTraits") ? button("个体属性", "edit-traits", "", 'data-index="' + index + '"') : "") +
-          (hasFeature("pokemonStorage") ? button("存入 PC", "deposit-pokemon", "", 'data-index="' + index + '"') : "") +
-          (hasFeature("pokemonStorage") ? button("释放", "confirm-release-pokemon", "danger", 'data-box="-1" data-slot="' + index + '" data-name="' + esc(pokemon.name) + '"') : "") +
-          (hasFeature("pokemonPartyOrder") && index > 0 ? button("上移", "reorder-pokemon", "", 'data-index="' + index + '" data-target="' + (index - 1) + '"') : "") +
-          (hasFeature("pokemonPartyOrder") && index < party.length - 1 ? button("下移", "reorder-pokemon", "", 'data-index="' + index + '" data-target="' + (index + 1) + '"') : "") + '</div>';
-      }
-      return '<section class="tm-card tm-pokemon-card">' + body + '</section>';
-    }).join("") + '</div>';
+      if (hasFeature("pokemonLevel")) fields.push(valueEditor(index, "level", "等级", pokemon.level));
+      if (hasFeature("pokemonHp")) fields.push(valueEditor(index, "hp", "当前 HP", pokemon.hp));
+      if (hasFeature("pokemonExp")) fields.push(valueEditor(index, "exp", "经验", pokemon.exp));
+      if (hasFeature("pokemonHappiness")) fields.push(valueEditor(index, "happiness", "亲密度", pokemon.happiness));
+      section.innerHTML = card("属性", fields.length ? '<div class="tm-list">' + fields.join("") + '</div>' :
+        '<div class="tm-note">' + esc(tr("当前游戏没有可修改的宝可梦属性接口")) + '</div>');
+    } else if (teamSection === "moves") {
+      var moves = mod.listPokemonMoves(index) || [];
+      var moveRows = moves.map(function (move) {
+        return '<div class="tm-item"><span class="tm-name">' + esc(tr("招式位") + " " + (Number(move.slot) + 1) + " · " + (move.name || tr("空"))) + '</span>' +
+          (move.pp == null ? "" : '<span class="tm-badge">PP ' + esc(move.pp) + (move.totalPp == null ? "" : "/" + esc(move.totalPp)) + '</span>') + '</div>';
+      }).join("");
+      section.innerHTML = card("招式", '<div class="tm-list">' + (moveRows || '<div class="tm-note">' + esc(tr("没有已学招式")) + '</div>') + '</div>' +
+        '<div class="tm-row">' + button("编辑招式与 PP", "edit-moves", "primary", 'data-index="' + index + '"') + '</div>');
+    } else if (teamSection === "status") {
+      var statuses = mod.listPokemonStatuses(index) || [];
+      var statusRows = statuses.map(function (entry) {
+        return '<div class="tm-item"><span class="tm-name">' + esc(tr(statusName(entry.key))) + '</span>' +
+          button(entry.active ? "清除" : "设置", "set-status", entry.active ? "" : "primary", 'data-index="' + index + '" data-key="' + (entry.active ? "" : esc(entry.key)) + '"') + '</div>';
+      }).join("");
+      section.innerHTML = card("状态", '<div class="tm-list">' + (statusRows || '<div class="tm-note">' + esc(tr("当前游戏没有可编辑的异常状态")) + '</div>') + '</div>');
+    } else if (teamSection === "item") {
+      section.innerHTML = card("携带物品", '<div class="tm-item"><span class="tm-name">' + esc(pokemon.heldItem || tr("未携带物品")) + '</span></div>' +
+        '<div class="tm-row">' + button("选择携带物品", "edit-item", "primary", 'data-index="' + index + '"') + '</div>');
+    } else if (teamSection === "iv_ev") {
+      var stats = mod.listPokemonStats(index) || { ivs: [], evs: [] };
+      var statRows = statNames.map(function (name, slot) {
+        var ivId = "tm-stat-" + index + "-iv-" + slot; var evId = "tm-stat-" + index + "-ev-" + slot;
+        return '<div class="tm-pokemon-stat-row"><strong>' + esc(tr(name)) + '</strong><label>' + esc(tr("IV")) + input(ivId, stats.ivs[slot], "number", 'min="0" max="31" step="1"') +
+          button("设置", "set-pokemon-value", "", 'data-index="' + index + '" data-field="iv_' + slot + '" data-input="' + ivId + '"') + '</label><label>' + esc(tr("EV")) +
+          input(evId, stats.evs[slot], "number", 'min="0" max="252" step="1"') + button("设置", "set-pokemon-value", "", 'data-index="' + index + '" data-field="ev_' + slot + '" data-input="' + evId + '"') + '</label></div>';
+      }).join("");
+      section.innerHTML = card("个体值与努力值", '<div class="tm-pokemon-stats">' + statRows + '</div>');
+    } else if (teamSection === "traits") {
+      var traits = mod.listPokemonTraits(index) || [];
+      var traitLabels = { nature: "性格", ability: "特性", form: "形态", gender: "性别", shiny: "闪光", superShiny: "超闪光" };
+      var traitRows = traits.map(function (trait) {
+        return '<div class="tm-pokemon-trait"><strong>' + esc(tr(traitLabels[trait.field] || trait.field)) + '</strong><span class="tm-pokemon-details">' +
+          esc(tr("当前值")) + '：' + esc(trait.currentName) + '</span><div class="tm-pokemon-choice-list">' + (trait.options || []).map(function (option) {
+            return button(option.name, "set-pokemon-trait", String(option.key) === String(trait.currentKey) ? "primary" : "", 'data-index="' + index + '" data-field="' + esc(trait.field) + '" data-key="' + esc(option.key) + '"');
+          }).join("") + '</div></div>';
+      }).join("");
+      section.innerHTML = card("个体属性", traitRows || '<div class="tm-note">' + esc(tr("当前宝可梦没有可修改的个体属性")) + '</div>');
+    }
   }
   function renderPokemonStorage(content) {
     var box = mod.listPokemonStorage(storageBox);
-    if (!box) { content.innerHTML = '<div class="tm-note">' + esc(tr("无法读取 PC 盒子")) + '</div>'; return; }
+    if (!box) { content.innerHTML = '<div class="tm-note">' + esc(tr("无法读取宝可梦仓库")) + '</div>'; return; }
     storageBox = Number(box.boxIndex) || 0;
-    var views = '<div class="tm-segmented-tabs">' + button("队伍", "team-view", "", 'data-view="party"') +
-      button("PC 盒子", "team-view", "primary", 'data-view="storage"') + '</div>';
+    var views = segmentedTabs([{ id: "party", label: "队伍" }, { id: "storage", label: "宝可梦仓库" }], "storage", "team-view", "view");
     var navigation = '<div class="tm-row tm-pokemon-box-nav">' + button("上一盒", "storage-prev", "", 'data-box="' + storageBox + '"') +
       '<strong class="tm-grow">' + esc(box.name) + ' · ' + esc(storageBox + 1) + '/' + esc(box.boxCount) + '</strong>' +
       button("下一盒", "storage-next", "", 'data-box="' + storageBox + '"') + '</div>';
-    var deposit = pendingDepositIndex == null ? '<div class="tm-note">' + esc(tr("从队伍选择宝可梦即可存入当前盒子")) + '</div>' :
+    var deposit = pendingDepositIndex == null ? '<div class="tm-note">' + esc(tr("从队伍选择宝可梦即可存入当前仓库盒")) + '</div>' :
       '<div class="tm-row"><span class="tm-grow">' + esc(tr("已选择队伍中的宝可梦")) + '</span>' +
       button("存入当前盒子", "store-selected-pokemon", "primary", 'data-index="' + pendingDepositIndex + '" data-box="' + storageBox + '"') +
       button("取消", "cancel-deposit-pokemon") + '</div>';
@@ -222,7 +332,7 @@
         '<div class="tm-pokemon-actions">' + button("取出到队伍", "withdraw-pokemon", "primary", 'data-box="' + storageBox + '" data-slot="' + slot + '"') +
         button("释放", "confirm-release-pokemon", "danger", 'data-box="' + storageBox + '" data-slot="' + slot + '" data-name="' + esc(pokemon.name) + '"') + '</div></div>';
     }).join("") || '<div class="tm-note">' + esc(tr("这个盒子是空的")) + '</div>';
-    content.innerHTML = views + card("PC 盒子", navigation + deposit + '<div class="tm-list">' + rows + '</div>');
+    content.innerHTML = views + card("宝可梦仓库", navigation + deposit + '<div class="tm-list">' + rows + '</div>');
   }
   function renderProgress(content) {
     var progress = mod.listPokemonProgress() || { badges: [], dexes: [] };
@@ -268,14 +378,18 @@
   }
   function renderBag(content) {
     if (!hasFeature("itemBag")) { content.innerHTML = '<div class="tm-note">' + esc(tr("背包能力正在初始化")) + '</div>'; return; }
+    if (!hasFeature("itemBagReady")) { content.innerHTML = '<div class="tm-note">' + esc(tr("开始新游戏或载入存档后即可读取背包")) + '</div>'; return; }
     try { bagCategories = mod.listBagCategories() || []; } catch (_) { bagCategories = []; }
     if (bagCategory && !bagCategories.some(function (entry) { return entry.id === bagCategory; })) bagCategory = "";
     var categoryButtons = '<button class="tm-btn ' + (!bagCategory ? "primary" : "") + '" data-action="bag-category" data-category="">' + esc(tr("全部")) + '</button>' +
       bagCategories.map(function (entry) { return '<button class="tm-btn ' + (bagCategory === entry.id ? "primary" : "") + '" data-action="bag-category" data-category="' + esc(entry.id) + '">' + esc(entry.name) + '</button>'; }).join("");
-    content.innerHTML = card("背包物品", '<div class="tm-pokemon-categories">' + categoryButtons + '</div><div class="tm-row">' + input("tm-bag-query", itemQuery, "search", 'placeholder="' + esc(tr("搜索背包物品")) + '"') +
+    var controls = '<div class="tm-pokemon-categories">' + categoryButtons + '</div><div class="tm-row">' + input("tm-bag-query", itemQuery, "search", 'placeholder="' + esc(tr("搜索物品名称或编号")) + '"') +
       button("搜索", "search-bag", "primary") + '</div><div class="tm-row tm-pokemon-pager"><label><input class="tm-switch" type="checkbox" data-action="show-empty-items" ' +
-      (showEmptyItems ? "checked" : "") + '> ' + esc(tr("显示空物品")) + '</label><span class="tm-grow" id="tm-bag-total"></span>' +
-      button("上一页", "bag-prev") + button("下一页", "bag-next") + '</div><div id="tm-bag-list" class="tm-list"></div>', "tm-fill-card");
+      (showEmptyItems ? "checked" : "") + '> ' + esc(tr("显示未持有物品")) + '</label><span class="tm-grow" id="tm-bag-total"></span>' +
+      button("上一页", "bag-prev") + button("下一页", "bag-next") + '</div>';
+    var header = '<div class="tm-lock-list-header tm-item-lock-header"><span>' + esc(tr("锁定")) + '</span><span>' + esc(tr("物品")) + '</span><span>' + esc(tr("数量")) + '</span></div>';
+    content.innerHTML = '<div class="tm-grid tm-item-layout">' + card("背包", controls + header + '<div id="tm-bag-list" class="tm-list"></div>', "tm-item-roster") +
+      '<section class="tm-card tm-item-detail" id="tm-bag-detail"></section></div>';
     loadBag();
   }
   function loadBag() {
@@ -283,13 +397,26 @@
     var result = mod.listDatabase("item", itemQuery, itemOffset, 100, bagCategory) || { total: 0, values: [] };
     var entries = result.values || [];
     if (!showEmptyItems) entries = entries.filter(function (item) { return Number(item.count) > 0; });
+    if (!entries.some(function (item) { return String(item.id) === String(selectedItemId); })) selectedItemId = entries.length ? String(entries[0].id) : null;
     list.innerHTML = entries.map(function (item) {
-      var id = String(item.id); var inputId = "tm-item-count-" + safeId(id);
-      return '<div class="tm-item tm-pokemon-bag-row"><label class="tm-pokemon-lock"><input class="tm-switch" type="checkbox" data-action="lock-item" data-id="' + esc(id) + '" ' +
-        (item.locked ? "checked" : "") + '></label><span class="tm-name">' + esc(item.name || id) + '</span>' + input(inputId, item.count || 0, "number", 'min="0" max="999999" step="1"') +
-        button("设置", "set-item-count", "", 'data-id="' + esc(id) + '" data-input="' + inputId + '"') + '</div>';
-    }).join("") || '<div class="tm-note">' + esc(tr(itemQuery ? "没有匹配项目" : "背包里没有物品；搜索名称可添加物品")) + '</div>';
+      var id = String(item.id); var selected = id === String(selectedItemId);
+      return '<div class="tm-item tm-lock-row tm-item-lock-row' + (selected ? ' selected' : '') + '"><label class="tm-lock-cell" aria-label="' + esc(tr("锁定") + " #" + id + " " + item.name) + '"><input class="tm-lock-checkbox" type="checkbox" data-action="lock-item" data-id="' + esc(id) + '" ' +
+        (item.locked ? "checked" : "") + '></label><button type="button" class="tm-item-select" data-action="select-bag-item" data-id="' + esc(id) + '" aria-pressed="' + (selected ? "true" : "false") + '"><span class="tm-name">#' + esc(id) + ' ' + esc(item.name || id) + '</span><span class="tm-badge tm-item-count">' + esc(item.count || 0) + '</span></button></div>';
+    }).join("") || '<div class="tm-note">' + esc(tr(itemQuery ? "没有匹配物品" : "背包里没有物品；搜索名称可添加物品")) + '</div>';
     var total = panel.querySelector("#tm-bag-total"); if (total) total.textContent = tr("共") + " " + String(result.total || 0) + " " + tr("项");
+    renderBagDetail(entries);
+  }
+  function renderBagDetail(entries) {
+    var detail = panel && panel.querySelector("#tm-bag-detail");
+    if (!detail) return;
+    var item = (entries || []).filter(function (entry) { return String(entry.id) === String(selectedItemId); })[0];
+    if (!item) { detail.innerHTML = '<h3>' + esc(tr("物品详情")) + '</h3><div class="tm-note">' + esc(tr("请选择背包物品查看详情")) + '</div>'; return; }
+    var description = String(item.description || "").trim() || "—";
+    detail.innerHTML = '<div class="tm-item-detail-heading"><h3>' + esc(tr("物品详情")) + '</h3><span class="tm-badge">#' + esc(item.id) + '</span></div>' +
+      '<div class="tm-item-detail-info"><div class="tm-item-detail-name"><span>' + esc(tr("名称：")) + '</span><strong>' + esc(item.name || "—") + '</strong></div>' +
+      '<div class="tm-item-detail-description"><span>' + esc(tr("说明：")) + '</span><p>' + esc(description) + '</p></div></div>' +
+      '<section class="tm-item-quantity-card"><div class="tm-item-quantity-heading"><h4>' + esc(tr("数量操作")) + '</h4><div class="tm-item-current-count"><span>' + esc(tr("当前数量")) + '</span><strong>' + esc(item.count || 0) + '</strong></div></div>' +
+      '<div class="tm-item-quantity-control">' + input("tm-detail-count", item.count || 0, "number", 'min="0" max="999999" inputmode="numeric"') + button("应用", "set-item-count", "primary", 'data-id="' + esc(item.id) + '" data-input="tm-detail-count"') + '</div></section>';
   }
   function renderSystem(content) {
     if (!hasFeature("systemData")) { content.innerHTML = '<div class="tm-note">' + esc(tr("游戏开关/变量能力正在初始化")) + '</div>'; return; }
@@ -444,6 +571,8 @@
   function openPokemon() {
     if (panel) return;
     featureAttempts = 0;
+    try { var initialCaps = mod.listCapabilities(); if (initialCaps && initialCaps.engine === "essentials") caps = initialCaps; }
+    catch (error) { console.warn("Essentials capability load failed", error); }
     panel = document.createElement("div"); panel.id = "tyranor-mod-root";
     panel.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>' + esc(tr("宝可梦修改器")) +
       '</strong><button class="tm-refresh" data-action="refresh" title="' + esc(tr("刷新面板")) + '" aria-label="' + esc(tr("刷新面板")) + '">↻</button>' +
@@ -452,6 +581,7 @@
     panel.addEventListener("click", handleClick);
     panel.addEventListener("change", handleChange);
     panel.addEventListener("input", function (event) {
+      if (event.target.id === "tm-team-query") { teamQuery = event.target.value; renderTeamRoster(); }
       if (event.target.id === "tm-move-query") renderMoveCandidates();
       if (event.target.id === "tm-held-query") renderHeldCandidates();
     });
@@ -565,7 +695,9 @@
     var raw = String(value(node.dataset.input || ("tm-pokemon-value-" + index + "-" + key))).trim();
     if (!/^\d+$/.test(raw)) { toast(tr("请输入有效的非负整数"), true); return; }
     run(function () { return mod.setPokemonValue(index, key, raw); }, function () {
-      toast(tr("数值已修改")); if (key.indexOf("iv_") === 0 || key.indexOf("ev_") === 0) editStats(index); else renderTeam(panel.querySelector(".tm-content"));
+      toast(tr("数值已修改"));
+      if ((key.indexOf("iv_") === 0 || key.indexOf("ev_") === 0) && teamSection !== "iv_ev") editStats(index);
+      else renderTeam(panel.querySelector(".tm-content"));
     });
   }
   function handleClick(event) {
@@ -593,12 +725,25 @@
       }
       return;
     }
+    if (action === "quick-section") { quickSection = node.dataset.section || "resources"; return renderQuick(panel.querySelector(".tm-content")); }
+    if (action === "set-speed") {
+      var movementSpeed = Number(value("tm-pokemon-speed"));
+      if (!Number.isFinite(movementSpeed) || movementSpeed < 0.25 || movementSpeed > 8) return toast(tr("移动速度必须在 0.25 到 8 之间"), true);
+      return run(function () { return mod.setSpeed(movementSpeed); }, function () { toast(tr("移动速度已设置")); renderQuick(panel.querySelector(".tm-content")); });
+    }
+    if (action === "set-game-speed") {
+      var gameSpeed = Number(value("tm-pokemon-game-speed"));
+      if (!Number.isInteger(gameSpeed) || gameSpeed < 1 || gameSpeed > 9) return toast(tr("游戏倍速必须在 1 到 9 之间"), true);
+      return run(function () { return mod.setGameSpeed(gameSpeed); }, function () { toast(tr("游戏倍速已设置")); renderQuick(panel.querySelector(".tm-content")); });
+    }
     if (action === "flag") return;
+    if (action === "select-pokemon") { selectedPokemon = Number(node.dataset.index); return renderTeamRoster(); }
+    if (action === "pokemon-section") { teamSection = node.dataset.section || "stats"; return renderTeam(panel.querySelector(".tm-content")); }
     if (action === "team-view") { teamView = node.dataset.view === "storage" ? "storage" : "party"; return renderTeam(panel.querySelector(".tm-content")); }
     if (action === "storage-prev" || action === "storage-next") {
       var currentBox = Number(node.dataset.box) || 0;
       var storageInfo = mod.listPokemonStorage(currentBox);
-      if (!storageInfo) return toast(tr("无法读取 PC 盒子"), true);
+      if (!storageInfo) return toast(tr("无法读取宝可梦仓库"), true);
       storageBox = Math.max(0, Math.min(Number(storageInfo.boxCount) - 1, currentBox + (action === "storage-next" ? 1 : -1)));
       return renderTeam(panel.querySelector(".tm-content"));
     }
@@ -611,7 +756,7 @@
     if (action === "store-selected-pokemon") return run(function () {
       return mod.movePokemonToStorage(Number(node.dataset.index), Number(node.dataset.box));
     }, function () {
-      pendingDepositIndex = null; toast(tr("宝可梦已存入 PC"));
+      pendingDepositIndex = null; toast(tr("宝可梦已存入仓库"));
       try { caps = mod.listCapabilities() || caps; } catch (_) {}
       renderTabs(); renderTeam(panel.querySelector(".tm-content"));
     });
@@ -687,6 +832,7 @@
     if (action === "edit-stats") return editStats(node.dataset.index);
     if (action === "search-bag") { itemQuery = value("tm-bag-query").trim(); itemOffset = 0; return loadBag(); }
     if (action === "bag-category") { bagCategory = node.dataset.category || ""; itemOffset = 0; return renderBag(panel.querySelector(".tm-content")); }
+    if (action === "select-bag-item") { selectedItemId = String(node.dataset.id || ""); return loadBag(); }
     if (action === "bag-prev") { itemOffset = Math.max(0, itemOffset - 100); return loadBag(); }
     if (action === "bag-next") { itemOffset += 100; return loadBag(); }
     if (action === "set-item-count") {

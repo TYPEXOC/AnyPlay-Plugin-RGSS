@@ -4553,6 +4553,7 @@ module TyranorCheats
       values << 'points' if custom_points_supported?
       values.each { |name| out << "V\t#{name}" }
       out << "V\tspeed" if engine != :unknown
+      out << "F\tpokemonGameSpeed" if ess? && defined?(Graphics) && Graphics.respond_to?(:set_fast_forward_speed)
       if rpgm? && defined?(Game_Troop)
         out << "V\texpMultiplier" if class_method?(Game_Troop, :exp_total)
         out << "V\tdropMultiplier" if class_method?(Game_Troop, :make_drop_items)
@@ -4564,13 +4565,15 @@ module TyranorCheats
       out << "F\tbattle" if ess? || $game_troop
       out << "F\tbattleEscape" if toggle_supported?('escape')
       out << "F\tsaveSlots" if save_slots_supported?
-      out << "F\tpokemonParty" if ess? && trainer
+      # Report Essentials data domains independently of whether a save has
+      # initialized its live objects yet. The Web panel can then keep the
+      # Party and Bag tabs visible during title/new-game setup, while the
+      # Ready features below control access to their current data.
+      out << "F\tpokemonParty" if ess?
+      out << "F\tpokemonPartyReady" if ess? && trainer
       out << "F\tpokemonStorage" if pokemon_storage_supported?
-      if ess? && bag && (bag.respond_to?(:remove) || bag.respond_to?(:pbDeleteItem)) &&
-          (bag.respond_to?(:quantity) || bag.respond_to?(:pbQuantity)) &&
-          (bag.respond_to?(:add) || bag.respond_to?(:pbStoreItem))
-        out << "F\titemBag"
-      end
+      out << "F\titemBag" if ess?
+      out << "F\titemBagReady" if ess? && bag
       out << "F\tpokemonObtain" if pokemon_obtain_supported?
       out << "F\tpokemonPartyOrder" if ess? && !in_battle? && trainer && trainer.respond_to?(:party) &&
         trainer.party.is_a?(Array) && trainer.party.length > 1
