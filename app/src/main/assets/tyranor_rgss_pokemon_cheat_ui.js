@@ -1242,11 +1242,9 @@
       return showMinimapEventInterpreterPicker();
     }
     if (action === "minimap-pick-event") {
-      var eventChooser = node.closest(".tm-pokemon-modal"); if (eventChooser) closeModal(eventChooser);
       return showMinimapEventInterpreterPicker(node.dataset.id);
     }
     if (action === "minimap-open-event-page") {
-      var eventPagePicker = node.closest(".tm-pokemon-modal"); if (eventPagePicker) closeModal(eventPagePicker);
       return showEventInterpreterDialog(node.dataset.page, true);
     }
     if (action === "show-event-conditions") return showEventConditionsDialog(node.dataset.page);

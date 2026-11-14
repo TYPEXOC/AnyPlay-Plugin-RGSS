@@ -209,14 +209,24 @@
         chooser.addEventListener("click", function (click) {
           var action = click.target.closest('[data-action="pick-event"]');
           if (!action) return;
-          chooser.remove(); showInterpreter(cellEvents.filter(function (event) { return event.id === Number(action.dataset.id); })[0], 1);
+          showInterpreter(cellEvents.filter(function (event) { return event.id === Number(action.dataset.id); })[0], 1);
         });
       }
       function showInterpreter(event, page) {
-        var commands = ["显示文本", "条件分支", "控制开关", "传送玩家", "等待", "脚本"];
-        var body = '<div class="tm-modal-body tm-map-event-picker">' + commands.map(function (command, index) {
-          return '<div class="tm-item"><span class="tm-badge">' + (101 + index) + '</span><span class="tm-name">' + command + '</span><span class="tm-badge">#' + (index + 1) + '</span></div>';
-        }).join("") + '</div><div class="tm-modal-hint">预览事件 #' + event.id + ' · 事件页 ' + page + '</div>';
+        var commands = [
+          { code: 108, name: "注释", preview: "初始城镇入口", parameters: "◆ 注释：进入初始城镇时显示欢迎信息" },
+          { code: 101, name: "显示文本", preview: "欢迎来到初始城镇。", parameters: "脸图：\n背景：窗口\n位置：底部" },
+          { code: 401, name: "文本内容", preview: "欢迎来到初始城镇。", parameters: "欢迎来到初始城镇。" },
+          { code: 121, name: "控制开关", preview: "#001 新手引导 = ON", parameters: "开关：#001\n操作：ON" },
+          { code: 201, name: "传送玩家", preview: "地图 #3 · (5, 6)", parameters: "指定方式：直接指定\n地图：#3\n位置：(5, 6)\n方向：保持不变" },
+          { code: 0, name: "结束", preview: "", parameters: "（无参数）" }
+        ];
+        var body = '<div class="tm-modal-body tm-interpreter-list">' + commands.map(function (command, index) {
+          return '<details class="tm-interpreter-command">' +
+            '<summary><span class="tm-command-code">' + command.code + '</span><strong>' + command.name + '</strong>' +
+            (command.preview ? '<span class="tm-command-preview" title="' + command.preview + '">' + command.preview + '</span>' : '') +
+            '<span class="tm-command-index">#' + (index + 1) + '</span></summary><pre>' + command.parameters + '</pre></details>';
+        }).join("") + '</div><div class="tm-modal-hint">预览事件 #' + event.id + ' · 事件页 ' + page + '（示例指令，点击指令可展开参数）</div>';
         showOverlay("事件解释器", body, "", "tm-interpreter-modal");
       }
       root.addEventListener("click", function (event) {

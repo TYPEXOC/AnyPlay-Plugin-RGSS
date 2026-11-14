@@ -1167,11 +1167,9 @@
       return showMinimapEventInterpreterPicker();
     }
     if (action === "minimap-pick-event") {
-      var eventChooser = node.closest(".tm-map-cell-modal"); if (eventChooser) eventChooser.remove();
       return showMinimapEventInterpreterPicker(node.dataset.id);
     }
     if (action === "minimap-open-event-page") {
-      var pageChooser = node.closest(".tm-map-cell-modal"); if (pageChooser) pageChooser.remove();
       return showEventInterpreterDialog(node.dataset.page);
     }
     if (action === "show-event-conditions") return showEventConditionsDialog(node.dataset.page);
