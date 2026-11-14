@@ -34,6 +34,7 @@
 #include <physfs.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <stack>
 #include <stdio.h>
@@ -656,6 +657,34 @@ openReadEnumCB(void *d, const char *dirpath, const char *filename) {
   return PHYSFS_ENUM_OK;
 }
 
+struct OpenReadMissData {
+  const char *requested;
+  size_t requestedN;
+  size_t entryCount;
+  size_t caseInsensitiveBaseMatches;
+};
+
+static PHYSFS_EnumerateCallbackResult
+openReadMissEnumCB(void *d, const char *dirpath, const char *filename) {
+  OpenReadMissData &data = *static_cast<OpenReadMissData *>(d);
+  ++data.entryCount;
+
+  for (size_t i = 0; i < data.requestedN; ++i) {
+    if (!filename[i] ||
+        std::tolower(static_cast<unsigned char>(filename[i])) !=
+            std::tolower(static_cast<unsigned char>(data.requested[i])))
+      return PHYSFS_ENUM_OK;
+  }
+
+  if (filename[data.requestedN] != '.' && filename[data.requestedN] != '\0')
+    return PHYSFS_ENUM_OK;
+
+  ++data.caseInsensitiveBaseMatches;
+  Debug() << "[AnyPlayFS] Case-insensitive filename candidate:" << dirpath
+          << filename << "requested:" << data.requested;
+  return PHYSFS_ENUM_OK;
+}
+
 void FileSystem::openRead(OpenHandler &handler, const char *filename) {
   if (p->pathCachePending)
     createPathCache();
@@ -703,8 +732,31 @@ void FileSystem::openRead(OpenHandler &handler, const char *filename) {
   if (data.physfsError)
     throw Exception(Exception::PHYSFSError, "PhysFS: %s", data.physfsError);
 
-  if (data.matchCount == 0)
+  if (data.matchCount == 0) {
+    static std::atomic<unsigned int> loggedMisses(0);
+    const unsigned int missNumber = ++loggedMisses;
+    if (missNumber <= 64) {
+      Debug() << "[AnyPlayFS] Resource lookup miss:" << filename
+              << "normalized:" << filename_nm << "directory:" << dir
+              << "basename:" << file << "pathCache:" << p->havePathCache
+              << "pathCachePending:" << p->pathCachePending;
+
+      OpenReadMissData missData = {file, strlen(file), 0, 0};
+      if (!PHYSFS_enumerate(dir, openReadMissEnumCB, &missData)) {
+        const PHYSFS_ErrorCode errorCode = PHYSFS_getLastErrorCode();
+        Debug() << "[AnyPlayFS] Resource directory enumeration failed:"
+                << dir << "error:" << PHYSFS_getErrorByCode(errorCode);
+      } else {
+        Debug() << "[AnyPlayFS] Resource directory inspected:" << dir
+                << "entries:" << missData.entryCount
+                << "caseInsensitiveBaseMatches:"
+                << missData.caseInsensitiveBaseMatches;
+      }
+    } else if (missNumber == 65) {
+      Debug() << "[AnyPlayFS] Further resource lookup miss logs suppressed";
+    }
     throw Exception(Exception::NoFileError, "%s", filename);
+  }
 }
 
 void FileSystem::openReadRaw(SDL_RWops &ops, const char *filename,
