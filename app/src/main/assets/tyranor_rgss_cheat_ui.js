@@ -316,7 +316,7 @@
     renderActorSection();
   }
   function positionActorClassMenu() {
-    var menu = root && root.querySelector(".tm-actor-class-picker .tm-system-kind-menu");
+    var menu = root && root.querySelector(".tm-actor-class-menu");
     var trigger = root && root.querySelector("#tm-actor-class");
     if (!menu || !trigger) return;
     var rect = trigger.getBoundingClientRect();
@@ -343,6 +343,8 @@
     var actor = (context.actorEntries || []).filter(function (a) { return a.id === context.actorId; })[0];
     var section = root.querySelector("#tm-actor-section");
     if (!actor || !section) return;
+    var openClassMenu = root.querySelector(".tm-actor-class-menu");
+    if (openClassMenu) openClassMenu.remove();
     root.querySelectorAll(".tm-segmented-tab[data-action='actor-section']").forEach(function (tab) {
       tab.classList.toggle("active", tab.dataset.section === context.actorSection);
     });
@@ -355,7 +357,7 @@
         return '<button type="button" class="tm-system-kind-option' + (selected ? ' active' : '') + '" role="option" aria-selected="' + (selected ? 'true' : 'false') + '" data-action="select-actor-class" data-id="' + Number(entry.id) + '">' + escapeHtml(entry.name) + '</button>';
       }).join("");
       var classPicker = '<div class="tm-system-kind-picker tm-actor-class-picker"><button type="button" id="tm-actor-class" class="tm-system-kind-trigger" data-action="toggle-actor-class" aria-haspopup="listbox" aria-expanded="' + (context.actorClassExpanded ? 'true' : 'false') + '" aria-label="' + escapeHtml(translated("职业")) + '"><span>' + escapeHtml(currentClass ? currentClass.name : translated("选择职业")) + '</span><span class="tm-system-kind-arrow" aria-hidden="true">▾</span></button>' +
-        (context.actorClassExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + classOptionsHtml + '</div>' : '') + '</div>';
+        (context.actorClassExpanded ? '<div class="tm-system-kind-menu tm-actor-class-menu" role="listbox">' + classOptionsHtml + '</div>' : '') + '</div>';
       var classRow = classOptions.length
         ? '<div class="tm-item tm-actor-class-row"><span class="tm-name">' + escapeHtml(translated("职业")) + '</span>' + classPicker + '</div>'
         : '<div class="tm-note">' + escapeHtml(translated("当前游戏没有职业列表")) + '</div>';
@@ -364,7 +366,11 @@
       return '<div class="tm-item"><span class="tm-name">' + escapeHtml(translated(statLabels[key] || key.toUpperCase())) + '</span>' + textInput("tm-stat-" + key, actor[key], "number", 'style="width:94px"') + button("设置", "set-stat", "", 'data-key="' + key + '"') + '</div>';
       }).join("");
       section.innerHTML = card(translated("属性"), classRow + '<div class="tm-list">' + stats + '</div>');
-      if (context.actorClassExpanded) positionActorClassMenu();
+      var classMenu = section.querySelector(".tm-actor-class-menu");
+      if (classMenu) {
+        root.appendChild(classMenu);
+        positionActorClassMenu();
+      }
     } else if (context.actorSection === "skills") {
       context.actorSkillEntries = mod.actorSkills(actor.id) || [];
       var skillControls = textInput("tm-skill-query", context.skillQuery, "search", 'placeholder="' + escapeHtml(translated("搜索技能名称或 ID")) + '"') +
@@ -1165,9 +1171,9 @@
         if (itemMenu) itemMenu.remove();
         if (itemTrigger) itemTrigger.setAttribute("aria-expanded", "false");
       }
-      if (context.actorClassExpanded && !event.target.closest(".tm-actor-class-picker")) {
+      if (context.actorClassExpanded && !event.target.closest(".tm-actor-class-picker") && !event.target.closest(".tm-actor-class-menu")) {
         context.actorClassExpanded = false;
-        var classMenu = root.querySelector(".tm-actor-class-picker .tm-system-kind-menu");
+        var classMenu = root.querySelector(".tm-actor-class-menu");
         var classTrigger = root.querySelector(".tm-actor-class-picker .tm-system-kind-trigger");
         if (classMenu) classMenu.remove();
         if (classTrigger) classTrigger.setAttribute("aria-expanded", "false");

@@ -214,7 +214,10 @@ html[data-theme="dark"] .tm-item-lock-header,html[data-theme="dark"] .tm-item-lo
 .tm-actor-collection-card>h3{flex:0 0 auto}
 .tm-actor-collection-card>.tm-actor-collection-list{flex:1 1 auto;min-height:0;margin-top:0;max-height:none;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 3px 10px 0}
 @media(max-width:420px){.tm-actor-collection-columns{grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(2,minmax(0,1fr))}}
-html[data-theme="dark"] .tm-actor-collection-card{background:#171a18}
+.tm-actor-collection-card{background:#f7f9f7;border-color:#d3ddd7;box-shadow:0 1px 3px #17211d0a}
+.tm-actor-collection-list>.tm-item{border:1px solid #e0e7e2;background:#fff}
+html[data-theme="dark"] .tm-actor-collection-card{background:#171a18;border-color:#343c37;box-shadow:none}
+html[data-theme="dark"] .tm-actor-collection-list>.tm-item{border-color:#3b4740;background:#292f2b}
 .tm-card-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;min-width:0;margin:0 0 10px}
 .tm-card-heading>h3{flex:1;min-width:0;margin:0}
 .tm-hide-empty-toggle{display:flex;align-items:center;gap:6px;flex:0 0 auto;color:#66736c;font-size:13px;white-space:nowrap;cursor:pointer}
@@ -261,9 +264,10 @@ html[data-theme="dark"] .tm-item-detail-name>span,html[data-theme="dark"] .tm-it
 .tm-item-layout{grid-template-columns:repeat(2,minmax(0,1fr))}
 .tm-item-lock-header{min-height:30px;margin:6px 0 4px;padding:5px 8px;font-size:12px;font-weight:600}
 .tm-system-kind-picker{position:relative;flex:1 1 0;min-width:0}
+.tm-actor-class-picker{flex:0 0 150px;width:150px}
 .tm-system-kind-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-width:0;height:42px;padding:8px 11px;border:1px solid #cbd5cf;border-radius:9px;background:#fff;color:#17211d;text-align:left;font:inherit;cursor:pointer}
 .tm-system-kind-arrow{flex:0 0 auto;color:#748079;font-size:12px}
-.tm-system-kind-menu{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;display:flex;flex-direction:column;gap:3px;max-height:220px;overflow-y:auto;padding:4px;border:1px solid #dce2de;border-radius:10px;background:#f7f8f7;box-shadow:0 8px 22px #0005}
+.tm-system-kind-menu{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;display:flex;flex-direction:column;gap:3px;max-height:220px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:4px;border:1px solid #dce2de;border-radius:10px;background:#f7f8f7;box-shadow:0 8px 22px #0005}
 .tm-system-kind-option{width:100%;min-height:38px;padding:7px 10px;border:0;border-radius:7px;background:transparent;color:#27332d;text-align:left;font:inherit;cursor:pointer}
 .tm-system-kind-option.active,.tm-system-kind-option:active{background:#e4ebe7;color:#165f51}
 html[data-theme="dark"] .tm-system-kind-trigger{background:#171b19;color:#eef3f0;border-color:#4a554f}html[data-theme="dark"] .tm-system-kind-arrow{color:#aab4ae}html[data-theme="dark"] .tm-system-kind-menu{border-color:#3b4740;background:#202522;box-shadow:0 8px 22px #0008}html[data-theme="dark"] .tm-system-kind-option{color:#d8e0db}html[data-theme="dark"] .tm-system-kind-option.active,html[data-theme="dark"] .tm-system-kind-option:active{background:#334039;color:#b9eadc}
@@ -276,5 +280,5 @@ html[data-theme="dark"] .tm-system-kind-trigger{background:#171b19;color:#eef3f0
 .tm-equip-data-card>.tm-card-heading>.tm-hide-empty-toggle .tm-switch{flex:0 0 16px;width:16px;height:16px}
 .tm-equip-action{height:auto;min-height:36px;font-size:11px;line-height:1.2;white-space:normal;overflow-wrap:anywhere}
 .tm-equip-option>.tm-equip-action{font-size:11px}
-.tm-actor-class-picker .tm-system-kind-menu{position:fixed;top:auto;right:auto;z-index:50}
+.tm-actor-class-menu{position:fixed;top:auto;right:auto;z-index:50}
 .tm-pokemon-box-nav{min-height:38px}.tm-pokemon-box-nav>.tm-grow{text-align:center}.tm-pokemon-box-row{flex-wrap:wrap;min-width:0}.tm-pokemon-box-row>.tm-name{flex:1 1 100%;font-weight:650}.tm-pokemon-box-row>.tm-pokemon-actions{flex:1 1 100%;justify-content:flex-end}
