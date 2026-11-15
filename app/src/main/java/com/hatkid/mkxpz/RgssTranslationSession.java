@@ -56,6 +56,9 @@ final class RgssTranslationSession implements AutoCloseable {
         thread.setDaemon(true);
         return thread;
     });
+    private volatile boolean closed;
+    private volatile boolean started;
+    private volatile boolean hasSuccessfulLoad;
     private final Object taskLock = new Object();
     private final Runnable notificationRefresh = () -> {
         if (closed) return;
@@ -79,9 +82,6 @@ final class RgssTranslationSession implements AutoCloseable {
         }
     };
 
-    private volatile boolean closed;
-    private volatile boolean started;
-    private volatile boolean hasSuccessfulLoad;
     private boolean observerRegistered;
     private long lastRevision;
     private boolean hasRevision;
@@ -385,12 +385,4 @@ final class RgssTranslationSession implements AutoCloseable {
         worker.shutdownNow();
     }
 
-    private void onUriChanged(Uri changedUri) {
-        if (closed || (changedUri != null && !uri.equals(changedUri))) return;
-        append("Received translation URI change notification");
-        mainHandler.removeCallbacks(notificationRefresh);
-        if (!mainHandler.postDelayed(notificationRefresh, NOTIFICATION_COALESCE_MS)) {
-            append("Could not queue the coalesced translation notification refresh");
-        }
-    }
 }
