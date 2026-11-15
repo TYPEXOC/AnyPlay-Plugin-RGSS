@@ -721,8 +721,8 @@
       '<div class="tm-minimap-controls"><div class="tm-minimap-action-card"><span class="tm-minimap-selection" id="tm-pokemon-minimap-selection">' + esc(tr("点击地图选择格子")) + '</span>' +
       '<div class="tm-minimap-actions">' + button(tr("传送"), "minimap-cell-teleport", "primary", "disabled") +
       button(tr("事件解释器"), "minimap-cell-event-interpreter", "", "disabled") + '</div></div>' +
-      '<div class="tm-minimap-zoom-card"><div class="tm-minimap-control-head"><span>' + esc(tr("地图大小")) + '</span><strong class="tm-minimap-zoom-value">100%</strong></div>' +
-      '<div class="tm-minimap-slider-row"><span>' + esc(tr("缩小")) + '</span><input id="tm-pokemon-minimap-zoom" type="range" min="100" max="1000" step="5" value="100" aria-label="' + esc(tr("地图大小")) + '">' +
+      '<div class="tm-minimap-zoom-card"><div class="tm-minimap-control-head"><span>' + esc(tr("地图大小")) + '</span><strong class="tm-minimap-zoom-value">0%</strong></div>' +
+      '<div class="tm-minimap-slider-row"><span>' + esc(tr("缩小")) + '</span><input id="tm-pokemon-minimap-zoom" type="range" min="0" max="1000" step="5" value="0" aria-label="' + esc(tr("地图大小")) + '">' +
       '<span>' + esc(tr("放大")) + '</span></div></div></div>';
     var dialog = modal(tr("迷你地图 #") + data.mapId + " · " + data.width + "×" + data.height, body, {
       headerSuffix: legend, closeLabel: "×", hint: tr("点击格子选中坐标；再用下方按钮传送或查看事件；按住拖动地图可平移；点击遮罩或 × 关闭"),

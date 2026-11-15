@@ -93,8 +93,8 @@
       var availableHeight = viewport.clientHeight;
       if (availableWidth <= 0 || availableHeight <= 0) return;
 
-      var fitSize = Math.min(availableWidth / width, availableHeight / height);
-      var zoom = Math.max(100, Number(slider && slider.value) || 100) / 100;
+      var fitSize = Math.min(Math.max(1, availableWidth - 24) / width, Math.max(1, availableHeight - 24) / height);
+      var zoom = 1 + Math.max(0, Number(slider && slider.value) || 0) / 100;
       cellSize = fitSize * zoom;
       var cssWidth = width * cellSize;
       var cssHeight = height * cellSize;
@@ -228,7 +228,7 @@
       context.strokeStyle = colors.boundary;
       context.lineWidth = 1;
       context.strokeRect(0.5, 0.5, Math.max(0, cssWidth - 1), Math.max(0, cssHeight - 1));
-      if (zoomValue) zoomValue.textContent = Math.round(zoom * 100) + "%";
+      if (zoomValue) zoomValue.textContent = Math.round((zoom - 1) * 100) + "%";
     }
 
     function onCanvasClick(event) {
