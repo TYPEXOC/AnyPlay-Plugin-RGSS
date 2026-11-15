@@ -16,7 +16,7 @@
   var pendingEquipScroll = null;
   var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, currentMapId: 0, selectedMapId: 0, eventId: 0, selectedEventDetail: null, mapEntries: [], capabilities: null, capabilitiesLoading: false };
   var tabs = [
-    ["quick", "快捷"], ["items", "物品"], ["actors", "角色"], ["system", "系统"],
+    ["quick", "快捷"], ["items", "物品"], ["actors", "队伍"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
   ];
   var flagGroups = [
@@ -154,13 +154,17 @@
     if (refreshGold === undefined) refreshGold = true;
     var state = mod.getState();
     var supported = context.capabilities && context.capabilities.toggles;
-    var groups = flagGroups.map(function (group) {
+    var supportedValues = context.capabilities && context.capabilities.values;
+    var groups = flagGroups.concat([["战斗", battleFlags]]).map(function (group) {
       var entries = group[1].filter(function (entry) {
         var capability = entry[0] === "godMode" ? "invincible" : entry[0] === "alwaysCrit" ? "crit" : entry[0];
         return !supported || supported.indexOf(capability) >= 0;
       });
       return { id: group[0], label: group[0], entries: entries };
-    }).filter(function (group) { return group.entries.length > 0 || group.id === "探索"; });
+    }).filter(function (group) {
+      return group.entries.length > 0 || group.id === "探索" || (group.id === "角色与资源" &&
+        (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0 || supportedValues.indexOf("dropMultiplier") >= 0));
+    });
     if (!groups.length) groups.push({ id: "队伍", label: "队伍", entries: [] });
     var sections = groups;
     if (!sections.some(function (section) { return section.id === context.quickSection; })) context.quickSection = sections[0].id;
@@ -175,6 +179,7 @@
         return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
       }).join("");
       var speedControls = "";
+      var rewardControls = "";
       if (selectedGroup.id === "探索") {
         if (!supported || supported.indexOf("speed") >= 0) {
           speedControls += card("移动速度", '<div class="tm-row"><input class="tm-input" id="tm-speed" type="number" min="0.25" max="8" step="0.25" value="' + escapeHtml(state.speedMultiplier || 2) + '">' + button("设置", "set-speed", "primary") + '</div>');
@@ -182,7 +187,21 @@
         speedControls += card("游戏倍速", '<div class="tm-row"><input class="tm-input" id="tm-game-speed" type="number" min="1" max="9" step="1" value="' + escapeHtml(state.gameSpeedMultiplier || 1) + '">' + button("设置", "set-game-speed", "primary") + '</div>');
         if (speedControls) speedControls = '<div class="tm-grid tm-speed-controls">' + speedControls + '</div>';
       }
-      var sectionContent = selectedGroup.id === "角色与资源" ? gold + toggles : toggles;
+      if (selectedGroup.id === "角色与资源") {
+        var rewardFields = [];
+        if (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0) {
+          rewardFields.push('<div class="tm-row"><label for="tm-exp-multiplier">经验倍率</label>' +
+            textInput("tm-exp-multiplier", state.expMultiplier == null ? 1 : state.expMultiplier, "number", 'min="0" max="100" step="0.1"') +
+            button("设置", "set-exp-multiplier", "primary") + '</div>');
+        }
+        if (!supportedValues || supportedValues.indexOf("dropMultiplier") >= 0) {
+          rewardFields.push('<div class="tm-row"><label for="tm-drop-multiplier">掉落倍率</label>' +
+            textInput("tm-drop-multiplier", state.dropMultiplier == null ? 1 : state.dropMultiplier, "number", 'min="0" max="100" step="0.1"') +
+            button("设置", "set-drop-multiplier", "primary") + '</div>');
+        }
+        if (rewardFields.length) rewardControls = '<div class="tm-reward-multipliers">' + rewardFields.join("") + '</div>';
+      }
+      var sectionContent = selectedGroup.id === "角色与资源" ? gold + toggles + rewardControls : toggles;
       sectionBody = card(selectedGroup.label, sectionContent);
       sectionBody += speedControls;
     } else {
@@ -842,15 +861,6 @@
   function renderBattle(content) {
     var snapshot = mod.battleSnapshot();
     context.inBattle = !!snapshot.inBattle;
-    var state = mod.getState();
-    var supported = context.capabilities && context.capabilities.toggles;
-    var toggles = battleFlags.filter(function (entry) {
-      var capability = entry[0] === "godMode" ? "invincible" : entry[0] === "alwaysCrit" ? "crit" : entry[0];
-      return !supported || supported.indexOf(capability) >= 0;
-    }).map(function (entry) {
-      return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
-    }).join("");
-    if (!toggles) toggles = '<div class="tm-note">当前游戏没有可用的战斗开关</div>';
     var actionDisabled = snapshot.inBattle ? "" : "disabled";
     var actions = '<div class="tm-battle-actions">' +
       button("全体恢复", "recover-party", "primary") +
@@ -858,19 +868,6 @@
       button("强制胜利", "victory", "primary", actionDisabled) +
       button("强制战败", "defeat", "danger", actionDisabled) +
       button("强制逃跑", "escape", "", actionDisabled) + '</div>';
-    var supportedValues = context.capabilities && context.capabilities.values;
-    var rewardFields = [];
-    if (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0) {
-      rewardFields.push('<div class="tm-row"><label for="tm-exp-multiplier">经验倍率</label>' +
-        textInput("tm-exp-multiplier", state.expMultiplier == null ? 1 : state.expMultiplier, "number", 'min="0" max="100" step="0.1"') +
-        button("设置", "set-exp-multiplier", "primary") + '</div>');
-    }
-    if (!supportedValues || supportedValues.indexOf("dropMultiplier") >= 0) {
-      rewardFields.push('<div class="tm-row"><label for="tm-drop-multiplier">掉落倍率</label>' +
-        textInput("tm-drop-multiplier", state.dropMultiplier == null ? 1 : state.dropMultiplier, "number", 'min="0" max="100" step="0.1"') +
-        button("设置", "set-drop-multiplier", "primary") + '</div>');
-    }
-    var rewards = rewardFields.length ? card("战斗奖励倍率", '<div class="tm-reward-multipliers">' + rewardFields.join("") + '</div>', "tm-battle-reward") : "";
     var enemies = snapshot.enemies.filter(function (enemy) { return !context.hideEmptyBattleEnemies || String(enemy.name || "").trim().length > 0; }).map(function (enemy) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(enemy.name) + ' HP ' + enemy.hp + '/' + enemy.mhp + '</span>' + textInput("tm-enemy-" + enemy.index, enemy.hp, "number", 'style="width:86px"') + button("设置", "set-enemy", "", 'data-index="' + enemy.index + '"') + '</div>'; }).join("");
     var actors = snapshot.actors.filter(function (actor) { return !context.hideEmptyBattleActors || String(actor.name || "").trim().length > 0; }).map(function (actor) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(actor.name) + '</span><span class="tm-badge">HP ' + actor.hp + '/' + actor.mhp + '</span></div>'; }).join("");
     if (!snapshot.inBattle) {
@@ -880,9 +877,9 @@
     if (snapshot.inBattle && !enemies) enemies = '<div class="tm-note">没有匹配项目</div>';
     if (snapshot.inBattle && !actors) actors = '<div class="tm-note">没有匹配项目</div>';
     content.innerHTML = '<div class="tm-battle-page">' +
-      '<div class="tm-grid tm-battle-controls">' + card("战斗开关", toggles) + card("战斗操作", actions) + rewards + '</div>' +
+      '<div class="tm-grid tm-battle-controls">' + card("战斗操作", actions) + '</div>' +
       '<div class="tm-grid tm-battle-grid">' +
-      card("我方", '<div class="tm-list">' + actors + '</div>', "", snapshot.inBattle ? hideEmptyToggle("toggle-hide-empty-battle-actors", context.hideEmptyBattleActors) : "") +
+      card("我方队伍", '<div class="tm-list">' + actors + '</div>', "", snapshot.inBattle ? hideEmptyToggle("toggle-hide-empty-battle-actors", context.hideEmptyBattleActors) : "") +
       card("敌方", '<div class="tm-list">' + enemies + '</div>', "", snapshot.inBattle ? hideEmptyToggle("toggle-hide-empty-battle-enemies", context.hideEmptyBattleEnemies) : "") + '</div>' +
       '</div>';
     ensureCapabilities();
@@ -928,8 +925,8 @@
     }
     if (action === "set-speed") return run(function () { return mod.setSpeed(inputValue("tm-speed")); }, function () { toast("移动速度已设置"); renderQuick(root.querySelector(".tm-content"), false); });
     if (action === "set-game-speed") return run(function () { return mod.setGameSpeed(inputValue("tm-game-speed")); }, function () { toast("游戏倍速已设置"); renderQuick(root.querySelector(".tm-content"), false); });
-    if (action === "set-exp-multiplier") return run(function () { return mod.setRewardMultiplier("expMultiplier", inputValue("tm-exp-multiplier")); }, function () { toast("经验倍率已设置"); renderBattle(root.querySelector(".tm-content")); });
-    if (action === "set-drop-multiplier") return run(function () { return mod.setRewardMultiplier("dropMultiplier", inputValue("tm-drop-multiplier")); }, function () { toast("掉落倍率已设置"); renderBattle(root.querySelector(".tm-content")); });
+    if (action === "set-exp-multiplier") return run(function () { return mod.setRewardMultiplier("expMultiplier", inputValue("tm-exp-multiplier")); }, function () { toast("经验倍率已设置"); renderQuick(root.querySelector(".tm-content"), false); });
+    if (action === "set-drop-multiplier") return run(function () { return mod.setRewardMultiplier("dropMultiplier", inputValue("tm-drop-multiplier")); }, function () { toast("掉落倍率已设置"); renderQuick(root.querySelector(".tm-content"), false); });
     if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () { toast("金币已拉满"); render(); });
     if (action === "lock-item") {
       var itemLocked = node.checked;
