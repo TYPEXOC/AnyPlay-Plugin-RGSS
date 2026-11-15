@@ -4367,7 +4367,7 @@ module TyranorCheats
       return list_events(arg) if kind == 'events'
       return list_event_detail(arg) if kind == 'event_detail'
       return list_event_interpreter(arg) if kind == 'event_interpreter'
-      return list_minimap if kind == 'minimap'
+      return list_minimap(arg) if kind == 'minimap'
       return list_battle if kind == 'battle'
       return list_battle_actors if kind == 'battle_actors'
       return list_save_slots if kind == 'saves'
@@ -6862,19 +6862,33 @@ module TyranorCheats
       "Couldn't change map event self-switches: #{e.class}: #{e.message}"
     end
 
-    def list_minimap
-      return "The current map isn't ready." unless $game_map && $game_map.respond_to?(:width) && $game_map.respond_to?(:height)
-      width = [$game_map.width.to_i, 1].max
-      height = [$game_map.height.to_i, 1].max
-      px = $game_player && $game_player.respond_to?(:x) ? $game_player.x.to_i : -1
-      py = $game_player && $game_player.respond_to?(:y) ? $game_player.y.to_i : -1
+    def list_minimap(map_id_text = "")
+      return "Start or load a game first." unless $game_map && $game_map.respond_to?(:map_id)
+      current_map_id = $game_map.map_id.to_i
+      map_id = map_id_text.to_i
+      map_id = current_map_id if map_id <= 0
+      current = map_id == current_map_id
+      map = if current
+              $game_map
+            else
+              return "Game map class isn't available." unless defined?(Game_Map)
+              # Preview with a separate map instance; never switch the live game map.
+              preview = Game_Map.new
+              preview.setup(map_id)
+              preview
+            end
+      return "Map ##{map_id} isn't ready." unless map && map.respond_to?(:width) && map.respond_to?(:height)
+      width = [map.width.to_i, 1].max
+      height = [map.height.to_i, 1].max
+      px = current && $game_player && $game_player.respond_to?(:x) ? $game_player.x.to_i : -1
+      py = current && $game_player && $game_player.respond_to?(:y) ? $game_player.y.to_i : -1
       grid = Array.new(height) { Array.new(width, '0') }
       height.times do |y|
         width.times do |x|
           open = false
           [2, 4, 6, 8].each do |direction|
             begin
-              if $game_map.passable?(x, y, direction)
+              if map.passable?(x, y, direction)
                 open = true
                 break
               end
@@ -6885,8 +6899,8 @@ module TyranorCheats
         end
       end
       events = []
-      if $game_map.respond_to?(:events)
-        $game_map.events.each do |event_id, event|
+      if map.respond_to?(:events)
+        map.events.each do |event_id, event|
           next unless event && event.respond_to?(:x) && event.respond_to?(:y)
           x = event.x.to_i; y = event.y.to_i
           next unless x >= 0 && y >= 0 && x < width && y < height
@@ -6899,7 +6913,7 @@ module TyranorCheats
       out.concat(events)
       out.join("\n")
     rescue Exception => e
-      "Couldn't read map layout: #{e.class}: #{e.message}"
+      "Couldn't read map ##{map_id || map_id_text}: #{e.class}: #{e.message}"
     end
 
     def minimap_event_flags(event)

@@ -949,8 +949,8 @@ class TyranorCheatController(
         fun freeze() = EventPageDetail(index, validCount, commandCount, conditions.toList())
     }
 
-    fun loadMiniMap(onResult: (MiniMap?) -> Unit) {
-        send("list\tminimap", 30_000L) { raw ->
+    fun loadMiniMap(mapId: Int = 0, onResult: (MiniMap?) -> Unit) {
+        send("list\tminimap\t$mapId", 30_000L) { raw ->
             var width = 0
             var height = 0
             var playerX = 0

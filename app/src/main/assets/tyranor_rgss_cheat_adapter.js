@@ -123,7 +123,7 @@
     teleport: function (mapId, x, y, direction, fade) {
       return invoke("teleport", [mapId, x, y, direction, fade]);
     },
-    minimapData: function () { return invoke("minimapData"); },
+    minimapData: function (mapId) { return invoke("minimapData", mapId == null ? [] : [mapId]); },
     listEvents: function (mapId) {
       var values = invoke("listEvents", mapId == null ? [] : [mapId]) || [];
       return { total: values.length, values: values };

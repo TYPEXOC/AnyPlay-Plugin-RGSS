@@ -98,7 +98,8 @@
       cellSize = fitSize * zoom;
       var cssWidth = width * cellSize;
       var cssHeight = height * cellSize;
-      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var canvasPixels = Math.max(1, cssWidth * cssHeight);
+      var dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(16777216 / canvasPixels));
       var colors = getColors(canvas);
       canvas.style.width = cssWidth + "px";
       canvas.style.height = cssHeight + "px";

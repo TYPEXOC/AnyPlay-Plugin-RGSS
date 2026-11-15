@@ -688,8 +688,8 @@
   }
   function showMinimapDialog() {
     var data;
-    try { data = mod.minimapData(); } catch (e) { toast(String(e && e.message || e)); return; }
-    if (!data || !(Number(data.width) > 0) || !(Number(data.height) > 0)) { toast(translated("无法读取当前地图"), true); return; }
+    try { data = mod.minimapData(context.selectedMapId); } catch (e) { toast(String(e && e.message || e)); return; }
+    if (!data || !(Number(data.width) > 0) || !(Number(data.height) > 0)) { toast(translated("无法读取所选地图"), true); return; }
     var lg = '<div class="tm-map-legend">'
       + '<span class="tm-lg"><i class="tm-map-legend-swatch tm-blocked"></i>' + escapeHtml(translated("无法通行")) + '</span>'
       + '<span class="tm-lg"><i class="tm-map-legend-swatch tm-passable"></i>' + escapeHtml(translated("可通行")) + '</span>'
@@ -707,7 +707,7 @@
       + '<div class="tm-minimap-actions">' + button(translated("传送"), "minimap-cell-teleport", "primary", 'disabled')
       + button(translated("事件解释器"), "minimap-cell-event-interpreter", "", 'disabled') + '</div></div>'
       + '<div class="tm-minimap-zoom-card"><div class="tm-minimap-control-head"><span>' + escapeHtml(translated("地图大小")) + '</span><strong class="tm-minimap-zoom-value">100%</strong></div>'
-      + '<div class="tm-minimap-slider-row"><span>' + escapeHtml(translated("缩小")) + '</span><input id="tm-minimap-zoom" type="range" min="100" max="400" step="5" value="100" aria-label="' + escapeHtml(translated("地图大小")) + '">'
+      + '<div class="tm-minimap-slider-row"><span>' + escapeHtml(translated("缩小")) + '</span><input id="tm-minimap-zoom" type="range" min="100" max="1000" step="5" value="100" aria-label="' + escapeHtml(translated("地图大小")) + '">'
       + '<span>' + escapeHtml(translated("放大")) + '</span></div></div></div>'
       + '<div class="tm-modal-hint">' + escapeHtml(translated("点击格子选中坐标；再用下方按钮传送或查看事件；按住拖动地图可平移；点击遮罩或 × 关闭")) + '</div>'
       + '</div>';
@@ -1136,7 +1136,7 @@
         window.setTimeout(function () {
           if (!minimap || !minimap.parentNode || !minimap._miniMapRenderer) return;
           try {
-            var updated = mod.minimapData();
+            var updated = mod.minimapData(selection.mapId);
             if (!updated || !minimap._miniMapRenderer.updateData(updated)) return;
             var updatedMapId = Number(updated.mapId) || selection.mapId;
             if (updatedMapId !== selection.mapId) {

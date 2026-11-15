@@ -452,7 +452,7 @@ class TyranorRgssCheatPanel(
                 "teleport" -> cheats.warpToPosition(
                     argInt(a, 0), argInt(a, 1), argInt(a, 2),
                 ) { completeMessage(it, done) }
-                "minimapData" -> miniMapData(done)
+                "minimapData" -> miniMapData(argInt(a, 0), done)
                 "listEvents" -> cheats.listEvents(argInt(a, 0)) { events -> done(events.map { eventMap(it) }) }
                 "eventDetail" -> eventDetail(argInt(a, 0), argInt(a, 1), done)
                 "eventInterpreter" -> eventInterpreter(argInt(a, 0), argInt(a, 1), argInt(a, 2), done)
@@ -623,12 +623,13 @@ class TyranorRgssCheatPanel(
             }
         }
 
-        private fun miniMapData(done: (Any?) -> Unit) {
+        private fun miniMapData(requestedMapId: Int, done: (Any?) -> Unit) {
             cheats.listMaps { maps ->
-                val mapId = maps.firstOrNull { it.isCurrent }?.id ?: 0
-                cheats.loadMiniMap { miniMap ->
+                val currentMapId = maps.firstOrNull { it.isCurrent }?.id ?: 0
+                val mapId = requestedMapId.takeIf { it > 0 } ?: currentMapId
+                cheats.loadMiniMap(mapId) { miniMap ->
                     if (miniMap == null) {
-                        done(JsFailure("当前地图没有可用的迷你地图数据"))
+                        done(JsFailure("地图 #$mapId 没有可用的迷你地图数据"))
                     } else {
                         done(mapOf(
                             "mapId" to mapId,
