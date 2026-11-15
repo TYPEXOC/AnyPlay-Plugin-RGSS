@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ContentResolver;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -32,19 +31,9 @@ import java.io.File;
 import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -128,8 +117,7 @@ public class MainActivity extends SDLActivity
     private Context mTynUiLocalizedContext;
     private PendingIntent mTynSaveSessionEndedCallback;
     private boolean mTynSaveSessionEndedCallbackSent;
-    private ScheduledExecutorService mTranslationSync;
-    private volatile long mLastTranslationFailureLogAt;
+    private RgssTranslationSession mTranslationSession;
     private boolean mDiagnosticsExporting;
     private String mLaunchDetectedCheatEngine = "unknown";
     private String mLaunchEngineDetectionSummary = "Static game detection has not run";
@@ -450,11 +438,16 @@ public class MainActivity extends SDLActivity
             }
 
             if (mTranslationMapUri != null) {
-                TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: importing selected translation table");
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Runtime setup: subscribing to the selected translation table and loading it before game startup");
                 File table = new File(mSessionDir, "runtime_translations.hex");
-                if (!syncTranslationTable(mTranslationMapUri, table)) {
-                    TynRuntimeDiagnostics.append(mSessionDir, "Selected translation table could not be loaded; continuing without it");
-                    mTranslationMapUri = null;
+                if (mTranslationSession == null) {
+                    mTranslationSession = new RgssTranslationSession(
+                        getContentResolver(), Uri.parse(mTranslationMapUri), table, mSessionDir);
+                }
+                if (!mTranslationSession.start()) {
+                    TynRuntimeDiagnostics.append(mSessionDir,
+                        "Initial translation table read failed; keeping the URI session active for retries");
                 }
             }
 
@@ -1071,92 +1064,6 @@ public class MainActivity extends SDLActivity
         }
     }
 
-    private boolean syncTranslationTable(String uriText, File destination)
-    {
-        try (InputStream input = getContentResolver().openInputStream(Uri.parse(uriText)); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
-            if (input == null) return false;
-            byte[] buffer = new byte[8192];
-            int count;
-            while ((count = input.read(buffer)) >= 0) {
-                if (bytes.size() + count > 16 * 1024 * 1024) return false;
-                bytes.write(buffer, 0, count);
-            }
-            JSONObject map = new JSONObject(new String(bytes.toByteArray(), StandardCharsets.UTF_8).replace("\uFEFF", ""));
-            String encoded = encodeTranslationMap(map);
-            String current = destination.isFile() ? new String(readBytes(destination, 16 * 1024 * 1024), StandardCharsets.US_ASCII) : null;
-            if (!encoded.equals(current)) {
-                writeAtomically(destination, encoded);
-                TynRuntimeDiagnostics.append(mSessionDir,
-                    "Translation table loaded or refreshed; entries=" + map.length());
-            }
-            return true;
-        } catch (Exception error) {
-            Log.w(TAG, "Translation table is unavailable or invalid", error);
-            long now = android.os.SystemClock.elapsedRealtime();
-            if (mSessionDir != null && now - mLastTranslationFailureLogAt >= TimeUnit.SECONDS.toMillis(30)) {
-                mLastTranslationFailureLogAt = now;
-                TynRuntimeDiagnostics.append(mSessionDir, "Translation table read or validation failed; polling will continue", error);
-            }
-            return false;
-        }
-    }
-
-    private static String encodeTranslationMap(JSONObject map)
-    {
-        StringBuilder output = new StringBuilder();
-        Iterator<String> keys = map.keys();
-        ArrayList<Charset> charsets = new ArrayList<>(Arrays.asList(
-            StandardCharsets.UTF_8,
-            Charset.forName("Shift_JIS"),
-            Charset.forName("windows-1252"),
-            Charset.forName("windows-1250"),
-            Charset.forName("windows-1251"),
-            Charset.forName("GB18030")
-        ));
-        while (keys.hasNext()) {
-            String source = keys.next();
-            Object rawTarget = map.opt(source);
-            if (!(rawTarget instanceof String)) continue;
-            String target = (String) rawTarget;
-            if (source.isEmpty() || target.isEmpty()) continue;
-            for (Charset charset : charsets) {
-                byte[] sourceBytes = encodeStrict(source, charset);
-                if (sourceBytes == null || sourceBytes.length == 0) continue;
-                byte[] targetBytes = encodeStrict(target, charset);
-                Charset targetCharset = charset;
-                if (targetBytes == null) {
-                    targetCharset = StandardCharsets.UTF_8;
-                    targetBytes = target.getBytes(StandardCharsets.UTF_8);
-                }
-                output.append(hex(sourceBytes)).append('\t').append(hex(targetBytes)).append('\t')
-                    .append(targetCharset.name()).append('\n');
-            }
-        }
-        return output.toString();
-    }
-
-    private static byte[] encodeStrict(String value, Charset charset)
-    {
-        try {
-            CharsetEncoder encoder = charset.newEncoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT);
-            ByteBuffer bytes = encoder.encode(CharBuffer.wrap(value));
-            byte[] result = new byte[bytes.remaining()];
-            bytes.get(result);
-            return result;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static String hex(byte[] bytes)
-    {
-        StringBuilder out = new StringBuilder(bytes.length * 2);
-        for (byte value : bytes) out.append(String.format(Locale.ROOT, "%02x", value & 0xff));
-        return out.toString();
-    }
-
     private static void writeAtomically(File destination, String text) throws java.io.IOException
     {
         File parent = destination.getParentFile();
@@ -1184,14 +1091,6 @@ public class MainActivity extends SDLActivity
             }
             return output.toByteArray();
         }
-    }
-
-    private void startTranslationSync(final File table)
-    {
-        if (mTranslationMapUri == null) return;
-        mTranslationSync = Executors.newSingleThreadScheduledExecutor();
-        final String uri = mTranslationMapUri;
-        mTranslationSync.scheduleWithFixedDelay(() -> syncTranslationTable(uri, table), 2, 2, TimeUnit.SECONDS);
     }
 
     /**
@@ -1283,9 +1182,6 @@ public class MainActivity extends SDLActivity
 
         // TYN controls on top of the game surface
         sInstance = this;
-        if (mTynLaunch && mTranslationMapUri != null && mSessionDir != null) {
-            startTranslationSync(new File(mSessionDir, "runtime_translations.hex"));
-        }
         if (mLayout != null) {
             mUi = new TynRuntimeUi(
                 this,
@@ -1461,9 +1357,9 @@ public class MainActivity extends SDLActivity
     protected void onDestroy()
     {
         TynRuntimeDiagnostics.append(mSessionDir, "Runtime activity destroyed; clean process exit requested");
-        if (mTranslationSync != null) {
-            mTranslationSync.shutdownNow();
-            mTranslationSync = null;
+        if (mTranslationSession != null) {
+            mTranslationSession.close();
+            mTranslationSession = null;
         }
         if (mUi != null) mUi.onDestroy();
         sInstance = null;
