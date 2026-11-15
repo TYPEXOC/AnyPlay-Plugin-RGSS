@@ -60,13 +60,13 @@ public class MainActivity extends SDLActivity
     private static String OBB_MAIN_FILENAME;
     private static boolean DEBUG = false;
 
-    // ---- Runtime module launch ------------------------------------------
+    // ---- TYN RGSS external launch ---------------------------------------
     // TYN supplies the v1 launch payload plus optional TYN-specific extensions.
     public static final String EXTRA_DIAGNOSTIC_GAME_DIR = "com.tyranor.runtime.extra.DIAGNOSTIC_GAME_DIR";
     public static final String EXTRA_STANDALONE_DIAGNOSTIC = "com.tyranor.runtime.extra.STANDALONE_DIAGNOSTIC";
     public static final String EXTRA_DIAGNOSTIC_RUBY_RUNTIME = "com.tyranor.runtime.extra.DIAGNOSTIC_RUBY_RUNTIME";
     public static final String EXTRA_DIAGNOSTIC_GAME_TITLE = "com.tyranor.runtime.extra.DIAGNOSTIC_GAME_TITLE";
-    private static final String TYN_ACTION_LAUNCH = "com.tyranor.runtime.action.LAUNCH";
+    private static final String TYN_RGSS_ACTION_LAUNCH = "com.tyranor.runtime.rgss.action.LAUNCH";
     private static final String TYN_EXTRA_PROTOCOL_VERSION = "com.tyranor.runtime.extra.PROTOCOL_VERSION";
     private static final String TYN_EXTRA_UI_LANGUAGE_TAG = "com.tyranor.runtime.extra.UI_LANGUAGE_TAG";
     private static final String TYN_EXTRA_FOLDER = "com.tyranor.runtime.extra.FOLDER_PATH";
@@ -258,17 +258,17 @@ public class MainActivity extends SDLActivity
             return;
         }
 
-        if (TYN_ACTION_LAUNCH.equals(intent.getAction())) {
+        if (isTynRgssLaunchAction(intent.getAction())) {
             mTynLaunch = true;
             mLaunchRequestedAtMillis = System.currentTimeMillis();
             mLaunchRequestedAtElapsedRealtime = SystemClock.elapsedRealtime();
-            // Protocol v1 is the default in the module contract; explicit unknown versions are rejected.
+            // The payload contract remains v1; explicit unknown versions are rejected.
             int protocol = intent.getIntExtra(TYN_EXTRA_PROTOCOL_VERSION, 1);
             if (protocol != 1) {
-                rejectLaunch("Unsupported or missing runtime-module protocol version: " + protocol);
+                rejectLaunch("Unsupported or missing TYN RGSS protocol version: " + protocol);
                 return;
             }
-            Log.i(TAG, "TYN runtime-module launch accepted; protocol=" + protocol);
+            Log.i(TAG, "TYN RGSS launch accepted; protocol=" + protocol);
             String rubyRuntime = intent.getStringExtra(TYN_EXTRA_RUBY_RUNTIME);
             String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
             if (!isAbsoluteDirectory(dir)) {
@@ -307,7 +307,7 @@ public class MainActivity extends SDLActivity
             return;
         }
 
-        rejectLaunch("Rejected activity launch outside the TYN module contract");
+        rejectLaunch("Rejected activity launch outside the TYN RGSS contract");
     }
 
     private static boolean isAbsoluteDirectory(String path)
@@ -315,6 +315,11 @@ public class MainActivity extends SDLActivity
         if (path == null || path.trim().isEmpty()) return false;
         File folder = new File(path);
         return folder.isAbsolute() && folder.isDirectory();
+    }
+
+    private static boolean isTynRgssLaunchAction(String action)
+    {
+        return TYN_RGSS_ACTION_LAUNCH.equals(action);
     }
 
     private void rejectLaunch(String reason)
@@ -325,7 +330,7 @@ public class MainActivity extends SDLActivity
 
     private void applyTynUiLanguage(Intent intent)
     {
-        if (intent == null || !TYN_ACTION_LAUNCH.equals(intent.getAction())) return;
+        if (intent == null || !isTynRgssLaunchAction(intent.getAction())) return;
         String requestedTag = intent.getStringExtra(TYN_EXTRA_UI_LANGUAGE_TAG);
         if (requestedTag == null || requestedTag.trim().isEmpty()) return;
 
@@ -1102,15 +1107,15 @@ public class MainActivity extends SDLActivity
     protected void onNewIntent(Intent intent)
     {
         super.onNewIntent(intent);
-        if (!TYN_ACTION_LAUNCH.equals(intent.getAction()) ||
+        if (!isTynRgssLaunchAction(intent.getAction()) ||
             intent.getIntExtra(TYN_EXTRA_PROTOCOL_VERSION, 1) != 1) {
-            Log.e(TAG, "Rejected new activity intent outside the TYN runtime-module v1 contract");
+            Log.e(TAG, "Rejected new activity intent outside the TYN RGSS launch contract");
             finish();
             return;
         }
         String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
         if (!isAbsoluteDirectory(dir)) {
-            Log.e(TAG, "Rejected new runtime-module intent with invalid game folder");
+            Log.e(TAG, "Rejected new TYN RGSS intent with invalid game folder");
             finish();
             return;
         }

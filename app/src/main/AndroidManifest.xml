@@ -68,9 +68,9 @@
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
 
-            <!-- TYN runtime-module v1 entry point; TYN-specific extension extras are additive. -->
+            <!-- Dedicated TYN RGSS entry point. -->
             <intent-filter>
-                <action android:name="com.tyranor.runtime.action.LAUNCH" />
+                <action android:name="com.tyranor.runtime.rgss.action.LAUNCH" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
