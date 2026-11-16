@@ -19,23 +19,22 @@
     ["quick", "快捷"], ["items", "物品"], ["actors", "队伍"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
   ];
-  var flagGroups = [
-    ["角色与资源", [
-      ["hpmp", "HP/MP不减"], ["tp", "TP不减"], ["points", "自定义点数不减"],
-      ["gold", "金币不减"], ["coins", "游戏币不减"], ["status", "异常状态免疫"], ["items", "物品不减"]
-    ]],
-    ["探索", [
-      ["noclip", "穿墙"], ["noEncounter", "无遇敌"],
-      ["fastText", "快速文字"], ["eventSpeed", "事件加速"], ["msgSkip", "对话快进"]
-    ]]
+  var resourceFlags = [
+    ["hpmp", "HP/MP不减"], ["gold", "金币不减"], ["status", "异常状态免疫"], ["items", "物品不减"]
+  ];
+  var explorationFlags = [
+    ["noclip", "穿墙"], ["noEncounter", "无遇敌"],
+    ["fastText", "快速文字"], ["eventSpeed", "事件加速"], ["msgSkip", "对话快进"]
   ];
   var battleFlags = [
     ["godMode", "无敌"], ["oneHit", "一击必杀"], ["alwaysCrit", "必定暴击"],
-    ["escape", "必定逃跑成功"], ["freeSkill", "技能不消耗"]
+    ["escape", "必定逃跑成功"], ["freeSkill", "技能不消耗"], ["tp", "TP不减"]
   ];
   var gameSceneShortcuts = [
-    ["status", "状态"], ["equip", "装备"], ["skill", "技能"], ["item", "物品"],
-    ["menu", "菜单"], ["load", "加载"], ["save", "保存"], ["debug", "调试"]
+    ["status", "状态", "sceneStatus"], ["equip", "装备", "sceneEquip"],
+    ["skill", "技能", "sceneSkill"], ["item", "物品", "sceneItem"],
+    ["menu", "菜单", "sceneMenu"], ["load", "加载", "sceneLoad"],
+    ["save", "保存", "sceneSave"], ["debug", "调试", "sceneDebug"]
   ];
   function escapeHtml(value) { return String(value == null ? "" : value).replace(/[&<>'"]/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]; }); }
   function inputValue(id) { var node = root && root.querySelector("#" + id); return node ? node.value : ""; }
@@ -91,7 +90,7 @@
   function textInput(id, value, type, attrs) { return '<input class="tm-input" id="' + id + '" type="' + (type || "text") + '" value="' + escapeHtml(value == null ? "" : value) + '" ' + (attrs || "") + '>'; }
   function fitGoldInput(input) {
     if (!input) return;
-    var baseWidth = 94;
+    var baseWidth = 104;
     var maxWidth = 220;
     var textWidth = 0;
     try {
@@ -223,67 +222,89 @@
   function renderQuick(content, refreshGold) {
     if (refreshGold === undefined) refreshGold = true;
     var state = mod.getState();
-    var supported = context.capabilities && context.capabilities.toggles;
-    var supportedValues = context.capabilities && context.capabilities.values;
-    var groups = flagGroups.concat([["战斗", battleFlags]]).map(function (group) {
-      var entries = group[1].filter(function (entry) {
+    var capabilities = context.capabilities;
+    var supported = capabilities && capabilities.toggles;
+    var supportedValues = capabilities && capabilities.values;
+    var sceneFeatures = capabilities && capabilities.features;
+    var knownScenes = !!(capabilities && capabilities.engine !== "unknown" && Array.isArray(sceneFeatures));
+    var sections = [
+      { id: "角色与资源", label: translated("角色与资源") },
+      { id: "探索与战斗", label: translated("探索与战斗") }
+    ];
+    if (!sections.some(function (section) { return section.id === context.quickSection; })) context.quickSection = sections[0].id;
+    function availableFlags(entries) {
+      return entries.filter(function (entry) {
         var capability = entry[0] === "godMode" ? "invincible" : entry[0] === "alwaysCrit" ? "crit" : entry[0];
         return !supported || supported.indexOf(capability) >= 0;
       });
-      return { id: group[0], label: group[0], entries: entries };
-    }).filter(function (group) {
-      return group.entries.length > 0 || group.id === "探索" || group.id === "打开场景" || (group.id === "角色与资源" &&
-        (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0 || supportedValues.indexOf("dropMultiplier") >= 0));
-    });
-    groups.push({ id: "打开场景", label: "打开场景", entries: [] });
-    if (!groups.length) groups.push({ id: "队伍", label: "队伍", entries: [] });
-    var sections = groups;
-    if (!sections.some(function (section) { return section.id === context.quickSection; })) context.quickSection = sections[0].id;
-    var selectedGroup = groups.filter(function (group) { return group.id === context.quickSection; })[0];
-    var cachedGold = context.gold == null ? "…" : context.gold;
-    var gold = '<div class="tm-row tm-gold-row"><label>金币：<span id="tm-gold-current">' + cachedGold + '</span></label>' +
-      textInput("tm-gold", cachedGold, "number", 'min="0"') +
-      button("拉满", "max-gold") + '</div>';
-    var sectionBody;
-    if (selectedGroup && selectedGroup.id === "打开场景") {
-      var sceneButtons = gameSceneShortcuts.map(function (scene) {
-        return button(scene[1], "open-game-scene", "", 'data-scene="' + scene[0] + '"');
-      }).join("");
-      sectionBody = card("游戏内场景", '<div class="tm-scene-shortcuts">' + sceneButtons + '</div>');
-    } else if (selectedGroup) {
-      var toggles = selectedGroup.entries.map(function (entry) {
-        return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
-      }).join("");
-      var speedControls = "";
-      var rewardControls = "";
-      if (selectedGroup.id === "探索") {
-        if (!supported || supported.indexOf("speed") >= 0) {
-          speedControls += card("移动速度", '<div class="tm-row"><input class="tm-input" id="tm-speed" type="number" min="0.25" max="8" step="0.25" value="' + escapeHtml(state.speedMultiplier || 2) + '">' + button("设置", "set-speed", "primary") + '</div>');
-        }
-        speedControls += card("游戏倍速", '<div class="tm-row"><input class="tm-input" id="tm-game-speed" type="number" min="1" max="9" step="1" value="' + escapeHtml(state.gameSpeedMultiplier || 1) + '">' + button("设置", "set-game-speed", "primary") + '</div>');
-        if (speedControls) speedControls = '<div class="tm-grid tm-speed-controls">' + speedControls + '</div>';
-      }
-      if (selectedGroup.id === "角色与资源") {
-        var rewardFields = [];
-        if (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0) {
-          rewardFields.push('<div class="tm-row"><label for="tm-exp-multiplier">经验倍率</label>' +
-            textInput("tm-exp-multiplier", state.expMultiplier == null ? 1 : state.expMultiplier, "number", 'min="0" max="100" step="0.1"') +
-            button("设置", "set-exp-multiplier", "primary") + '</div>');
-        }
-        if (!supportedValues || supportedValues.indexOf("dropMultiplier") >= 0) {
-          rewardFields.push('<div class="tm-row"><label for="tm-drop-multiplier">掉落倍率</label>' +
-            textInput("tm-drop-multiplier", state.dropMultiplier == null ? 1 : state.dropMultiplier, "number", 'min="0" max="100" step="0.1"') +
-            button("设置", "set-drop-multiplier", "primary") + '</div>');
-        }
-        if (rewardFields.length) rewardControls = '<div class="tm-reward-multipliers">' + rewardFields.join("") + '</div>';
-      }
-      var sectionContent = selectedGroup.id === "角色与资源" ? gold + toggles + rewardControls : toggles;
-      sectionBody = card(selectedGroup.label, sectionContent);
-      sectionBody += speedControls;
-    } else {
-      sectionBody = card(selectedGroup.label, '<div class="tm-note">当前没有可用的快捷功能</div>');
     }
-    content.innerHTML = segmentedTabs(sections, context.quickSection, "quick-section") + '<div id="tm-quick-section">' + sectionBody + '</div>';
+    function toggleMarkup(entry) {
+      return '<label class="tm-quick-toggle"><span>' + escapeHtml(translated(entry[1])) + '</span>' +
+        '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '></label>';
+    }
+    function toggleGrid(entries, emptyMessage) {
+      var markup = entries.map(toggleMarkup).join("");
+      if (!markup) markup = '<div class="tm-quick-empty">' + escapeHtml(translated(emptyMessage)) + '</div>';
+      return '<div class="tm-quick-flag-grid">' + markup + '</div>';
+    }
+    function quickCard(title, note, body, extraClass) {
+      var header = '<span class="tm-quick-note">' + escapeHtml(translated(note)) + '</span>';
+      return card(translated(title), body, "tm-quick-card " + (extraClass || ""), header);
+    }
+    var sectionBody;
+    if (context.quickSection === "角色与资源") {
+      var sceneButtons = gameSceneShortcuts.map(function (scene) {
+        var unavailable = knownScenes && sceneFeatures.indexOf(scene[2]) < 0;
+        var sceneClass = "tm-quick-scene-button" + (unavailable ? " unsupported" : "");
+        return button(translated(scene[1]), "open-game-scene", sceneClass,
+          'data-scene="' + scene[0] + '" data-feature="' + scene[2] + '" data-scene-label="' + escapeHtml(translated(scene[1])) + '"' +
+          (unavailable ? ' aria-disabled="true"' : ""));
+      }).join("");
+      var sceneCard = card(translated("游戏内场景"), '<div class="tm-quick-scene-grid">' + sceneButtons + '</div>', "tm-quick-scene-card");
+      var cachedGold = context.gold == null ? "…" : context.gold;
+      var gold = '<div class="tm-row tm-quick-gold-row"><label>' + escapeHtml(translated("金币：")) +
+        '<span id="tm-gold-current">' + escapeHtml(cachedGold) + '</span></label>' +
+        textInput("tm-gold", cachedGold, "number", 'min="0"') + button(translated("拉满"), "max-gold") + '</div>';
+      var resourceCard = quickCard("角色与资源", "临时作弊开关", gold +
+        toggleGrid(availableFlags(resourceFlags), "当前游戏没有可用的角色资源开关"), "tm-quick-resource-card");
+      var rewardRows = [];
+      if (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0) {
+        rewardRows.push('<div class="tm-quick-growth-row"><label for="tm-exp-multiplier">' + escapeHtml(translated("经验倍率")) + '</label>' +
+          textInput("tm-exp-multiplier", state.expMultiplier == null ? 1 : state.expMultiplier, "number", 'min="0" max="100" step="0.1"') +
+          button(translated("设置"), "set-exp-multiplier", "primary") + '</div>');
+      }
+      if (!supportedValues || supportedValues.indexOf("dropMultiplier") >= 0) {
+        rewardRows.push('<div class="tm-quick-growth-row"><label for="tm-drop-multiplier">' + escapeHtml(translated("掉落倍率")) + '</label>' +
+          textInput("tm-drop-multiplier", state.dropMultiplier == null ? 1 : state.dropMultiplier, "number", 'min="0" max="100" step="0.1"') +
+          button(translated("设置"), "set-drop-multiplier", "primary") + '</div>');
+      }
+      var growthBody = rewardRows.length
+        ? '<div class="tm-quick-growth-rows">' + rewardRows.join("") + '</div>'
+        : '<div class="tm-quick-empty">' + escapeHtml(translated("当前游戏不支持成长倍率")) + '</div>';
+      var growthCard = quickCard("成长倍率", "修改后立即生效", growthBody, "tm-quick-growth-card");
+      sectionBody = sceneCard + '<div class="tm-quick-resource-grid">' + resourceCard + growthCard + '</div>';
+    } else {
+      var exploration = availableFlags(explorationFlags);
+      var battle = availableFlags(battleFlags);
+      var speedRows = "";
+      if (!supported || supported.indexOf("speed") >= 0) {
+        speedRows += '<div class="tm-quick-speed-row"><label for="tm-speed">' + escapeHtml(translated("移动速度")) + '</label>' +
+          textInput("tm-speed", state.speedMultiplier == null ? 2 : state.speedMultiplier, "number", 'min="0.25" max="8" step="0.25"') +
+          button(translated("设置"), "set-speed", "primary") + '</div>';
+      }
+      speedRows += '<div class="tm-quick-speed-row"><label for="tm-game-speed">' + escapeHtml(translated("游戏倍速")) + '</label>' +
+        textInput("tm-game-speed", state.gameSpeedMultiplier == null ? 1 : state.gameSpeedMultiplier, "number", 'min="1" max="9" step="1"') +
+        button(translated("设置"), "set-game-speed", "primary") + '</div>';
+      var speedControls = '<div class="tm-quick-speed-list">' + speedRows + '</div>';
+      var explorationCard = quickCard("探索", "移动与事件",
+        toggleGrid(exploration, "当前游戏没有可用的探索开关") + speedControls, "tm-quick-exploration-card");
+      var battleCard = quickCard("战斗", "快捷开关",
+        toggleGrid(battle, "当前游戏没有可用的战斗开关"), "tm-quick-battle-card");
+      sectionBody = '<div class="tm-quick-control-grid">' + explorationCard + battleCard + '</div>';
+    }
+    content.innerHTML = '<div class="tm-quick-layout">' +
+      segmentedTabs(sections, context.quickSection, "quick-section") +
+      '<div class="tm-quick-page" id="tm-quick-section">' + sectionBody + '</div></div>';
     fitGoldInput(root.querySelector("#tm-gold"));
     // Render the panel before crossing the Ruby command-file bridge. One query
     // used to block open() twice (the badge and input each called getGold).
@@ -1098,7 +1119,15 @@
     if (action === "close") return close();
     if (action === "render") { mod.refreshReads(); return render(); }
     if (action === "quick-section") { context.quickSection = node.dataset.section; return renderQuick(root.querySelector(".tm-content"), false); }
-    if (action === "open-game-scene") return run(function () { return mod.openGameScene(node.dataset.scene); }, function () { close(); });
+    if (action === "open-game-scene") {
+      var sceneFeature = node.dataset.feature;
+      if (sceneFeature && context.capabilities && context.capabilities.engine !== "unknown" &&
+          Array.isArray(context.capabilities.features) && context.capabilities.features.indexOf(sceneFeature) < 0) {
+        toast(translated("当前游戏不支持此场景"), true);
+        return;
+      }
+      return run(function () { return mod.openGameScene(node.dataset.scene); }, function () { close(); });
+    }
     if (action === "flag") {
       var flagOn = node.type === "checkbox" ? node.checked : !mod.getState()[node.dataset.flag];
       return run(function () { return mod.setFlag(node.dataset.flag, flagOn); }, function () { toast("设置已保存"); renderEventPanel(); })
