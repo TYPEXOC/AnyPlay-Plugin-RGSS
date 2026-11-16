@@ -61,8 +61,7 @@ enum class TyranorCheatToggle(
  * Must be used from the main thread.
  */
 class TyranorCheatController(
-    context: Context,
-    gameKey: String
+    context: Context
 ) {
     data class Capabilities(
         val engine: String,
@@ -270,16 +269,6 @@ class TyranorCheatController(
 
     data class EquipCandidate(val kind: String, val itemId: Int, val name: String)
 
-    private val prefs =
-        context.applicationContext.getSharedPreferences("tyranor_cheats", Context.MODE_PRIVATE)
-
-    private val keyBase = "game_${gameKey.hashCode()}"
-    private val togglesKey = "$keyBase.toggles"
-    private val speedKey = "$keyBase.speed"
-    private val gameSpeedKey = "$keyBase.game_speed"
-    private val expMultiplierKey = "$keyBase.exp_multiplier"
-    private val dropMultiplierKey = "$keyBase.drop_multiplier"
-
     private val dir = context.applicationContext.cacheDir
     private val cmdFile = File(dir, "tyranor_cheat_cmd.txt")
     private val tmpFile = File(dir, "tyranor_cheat_cmd.tmp")
@@ -304,6 +293,11 @@ class TyranorCheatController(
     private var nextId = 1
     private var ready = false
     private var polling = false
+    private var activeToggles: Set<String> = emptySet()
+    private var activeSpeedMultiplier = 2f
+    private var activeGameSpeedMultiplier = 1
+    private var activeExpMultiplier = 1f
+    private var activeDropMultiplier = 1f
 
     private val pollRunnable = object : Runnable {
         override fun run() {
@@ -341,31 +335,36 @@ class TyranorCheatController(
     }
 
     init {
+        // Older builds saved cheat settings per game. Discard those stale settings;
+        // cheats now last only for the current game session.
+        context.applicationContext
+            .getSharedPreferences("tyranor_cheats", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
         cmdFile.delete()
         tmpFile.delete()
         replyFile.delete()
         runtimeStateFile.delete()
-        // Gives the game the saved checkboxes as soon as it starts running.
-        enqueue("restore\t${speedMultiplier()}\t${enabledNames().joinToString(",")}\t${gameSpeedMultiplier()}\t${expMultiplier()}\t${dropMultiplier()}", 0L) { ready = true }
+        // Start every game session with cheats off and neutral multipliers.
+        enqueue("restore\t2.0\t\t1\t1.0\t1.0", 0L) { ready = true }
     }
 
     private fun syncRuntimeState() {
-        val fields = runCatching { runtimeStateFile.readText().split('\t', limit = 4) }.getOrNull() ?: return
+        val fields = runCatching { runtimeStateFile.readText().split('\t', limit = 5) }.getOrNull() ?: return
         if (fields.size < 2) return
         val speed = fields[0].toFloatOrNull()?.takeIf { it > 0f } ?: return
         val enabled = fields[1].split(',').filter { it.isNotBlank() }.toMutableSet()
-        prefs.edit().putFloat(speedKey, speed.coerceIn(0.25f, 8f)).putStringSet(togglesKey, enabled).apply()
-        fields.getOrNull(2)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let {
-            prefs.edit().putFloat(expMultiplierKey, it).apply()
-        }
-        fields.getOrNull(3)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let {
-            prefs.edit().putFloat(dropMultiplierKey, it).apply()
-        }
+        activeSpeedMultiplier = speed.coerceIn(0.25f, 8f)
+        activeToggles = enabled.toSet()
+        fields.getOrNull(2)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let { activeExpMultiplier = it }
+        fields.getOrNull(3)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let { activeDropMultiplier = it }
+        fields.getOrNull(4)?.toIntOrNull()?.takeIf { it in 1..9 }?.let { activeGameSpeedMultiplier = it }
     }
 
     private fun enabledNames(): Set<String> {
         syncRuntimeState()
-        return prefs.getStringSet(togglesKey, emptySet())?.toSet() ?: emptySet()
+        return activeToggles.toSet()
     }
 
     fun isEnabled(toggle: TyranorCheatToggle): Boolean = enabledNames().contains(toggle.wireName)
@@ -375,29 +374,31 @@ class TyranorCheatController(
 
     fun speedMultiplier(): Float {
         syncRuntimeState()
-        return prefs.getFloat(speedKey, 2f)
+        return activeSpeedMultiplier
     }
 
-    fun gameSpeedMultiplier(): Int = prefs.getInt(gameSpeedKey, 1).coerceIn(1, 9)
+    fun gameSpeedMultiplier(): Int {
+        syncRuntimeState()
+        return activeGameSpeedMultiplier
+    }
 
-    fun expMultiplier(): Float = prefs.getFloat(expMultiplierKey, 1f).coerceIn(0f, 100f)
+    fun expMultiplier(): Float {
+        syncRuntimeState()
+        return activeExpMultiplier
+    }
 
-    fun dropMultiplier(): Float = prefs.getFloat(dropMultiplierKey, 1f).coerceIn(0f, 100f)
+    fun dropMultiplier(): Float {
+        syncRuntimeState()
+        return activeDropMultiplier
+    }
 
     fun setRewardMultiplier(name: String, value: String, onResult: (String) -> Unit) {
-        val key = when (name) {
-            "expMultiplier" -> expMultiplierKey
-            "dropMultiplier" -> dropMultiplierKey
-            else -> {
-                onResult("Unknown reward multiplier.")
-                return
-            }
+        if (name != "expMultiplier" && name != "dropMultiplier") {
+            onResult("Unknown reward multiplier.")
+            return
         }
         send("value\t$name\t${clean(value)}") { message ->
-            val multiplier = value.trim().toFloatOrNull()?.takeIf { it in 0f..100f }
-            if (multiplier != null && message.startsWith("${if (name == "expMultiplier") "EXP" else "Drop"} multiplier x")) {
-                prefs.edit().putFloat(key, multiplier).apply()
-            }
+            syncRuntimeState()
             onResult(message)
         }
     }
@@ -409,15 +410,7 @@ class TyranorCheatController(
      */
     fun setEnabled(toggle: TyranorCheatToggle, enabled: Boolean, onResult: (String) -> Unit = {}) {
         send("toggle\t${toggle.wireName}\t${if (enabled) "1" else "0"}") { msg ->
-            if (msg.isEmpty()) {
-                val updated = enabledNames().toMutableSet()
-                if (enabled) updated.add(toggle.wireName) else updated.remove(toggle.wireName)
-                prefs.edit().putStringSet(togglesKey, updated).apply()
-            } else if (!enabled) {
-                // Turning OFF can never really fail; keep the saved state honest.
-                val updated = enabledNames().toMutableSet().apply { remove(toggle.wireName) }
-                prefs.edit().putStringSet(togglesKey, updated).apply()
-            }
+            syncRuntimeState()
             onResult(msg)
         }
     }
@@ -428,24 +421,14 @@ class TyranorCheatController(
      */
     fun setValue(name: String, a: String, onResult: (String) -> Unit) {
         send("value\t$name\t${clean(a)}") { msg ->
-            if (name == "speed" && msg.startsWith("Speed x")) {
-                a.trim().toFloatOrNull()?.takeIf { it > 0f }?.let {
-                    prefs.edit().putFloat(speedKey, it.coerceIn(0.25f, 8f)).apply()
-                    val updated = enabledNames().toMutableSet().apply { add(TyranorCheatToggle.SPEED_BOOST.wireName) }
-                    prefs.edit().putStringSet(togglesKey, updated).apply()
-                }
-            }
+            syncRuntimeState()
             onResult(msg)
         }
     }
 
     fun setGameSpeed(value: String, onResult: (String) -> Unit) {
         send("value\tgameSpeed\t${clean(value)}") { message ->
-            if (message.startsWith("Game speed x")) {
-                value.trim().toIntOrNull()?.takeIf { it in 1..9 }?.let {
-                    prefs.edit().putInt(gameSpeedKey, it).apply()
-                }
-            }
+            syncRuntimeState()
             onResult(message)
         }
     }

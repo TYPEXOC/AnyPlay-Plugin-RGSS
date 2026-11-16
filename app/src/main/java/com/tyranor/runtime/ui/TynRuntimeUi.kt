@@ -42,7 +42,6 @@ import kotlin.math.abs
 class TynRuntimeUi(
     private val activity: Activity,
     parent: ViewGroup,
-    gameKey: String,
     private val initialCheatEngine: String,
     padProfilePath: String?,
     padProfileUri: android.net.Uri?,
@@ -62,7 +61,7 @@ class TynRuntimeUi(
     private val loading = FrameLayout(activity)
     private val controller: TyranorPadController
     private val mouseController: TyranorMouseController
-    private val cheats = if (cheatsEnabled) TyranorCheatController(activity, gameKey) else null
+    private val cheats = if (cheatsEnabled) TyranorCheatController(activity) else null
     private var cheatMenu: TyranorRgssCheatPanel? = null
     private var actionBar: TyranorRuntimeActionBar? = null
     private var dialog: Dialog? = null

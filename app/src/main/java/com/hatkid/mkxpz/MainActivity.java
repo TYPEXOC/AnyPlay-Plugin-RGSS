@@ -1191,7 +1191,6 @@ public class MainActivity extends SDLActivity
             mUi = new TynRuntimeUi(
                 this,
                 mLayout,
-                mGameId == null ? GAME_FOLDER : mGameId,
                 mLaunchDetectedCheatEngine,
                 PAD_PROFILE_PATH,
                 mPadProfileUri == null ? null : Uri.parse(mPadProfileUri),

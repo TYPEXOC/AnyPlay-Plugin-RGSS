@@ -3331,7 +3331,7 @@ module TyranorCheats
     def speed_on?; @on['speed'] ? true : false; end
     def write_state
       File.open(STATE + ".tmp", "wb") do |file|
-        file.write("#{@speed}\t#{@on.keys.join(',')}\t#{@exp_multiplier}\t#{@drop_multiplier}")
+        file.write("#{@speed}\t#{@on.keys.join(',')}\t#{@exp_multiplier}\t#{@drop_multiplier}\t#{@game_speed}")
       end
       File.rename(STATE + ".tmp", STATE)
     rescue Exception
@@ -3345,11 +3345,110 @@ module TyranorCheats
       fallback
     end
     def reward_multiplier_supported?(name)
-      return false unless rpgm? && defined?(Game_Troop)
+      return false unless rpgm?
+      if engine == :xp
+        return xp_battle_exp_supported? if name == 'expMultiplier'
+        return xp_battle_drop_supported? if name == 'dropMultiplier'
+        return false
+      end
+      return false unless defined?(Game_Troop)
       name == 'expMultiplier' ? class_method?(Game_Troop, :exp_total) :
         (name == 'dropMultiplier' && class_method?(Game_Troop, :make_drop_items))
     rescue Exception
       false
+    end
+    def xp_actor_exp_supported?
+      engine == :xp && defined?(Game_Actor) && class_method?(Game_Actor, :exp) &&
+        class_method?(Game_Actor, :exp=)
+    rescue Exception
+      false
+    end
+    def xp_scene_exp_supported?
+      xp_actor_exp_supported? && defined?(Scene_Battle) && class_method?(Scene_Battle, :start_phase5)
+    rescue Exception
+      false
+    end
+    def xp_abs_processor
+      return nil unless engine == :xp && defined?(BlizzABS) && defined?(BlizzABS::Processor)
+      BlizzABS::Processor
+    rescue Exception
+      nil
+    end
+    def xp_abs_exp_supported?
+      processor = xp_abs_processor
+      xp_actor_exp_supported? && processor && class_method?(processor, :exp_result)
+    rescue Exception
+      false
+    end
+    def xp_battle_exp_supported?
+      (defined?(Game_Troop) && class_method?(Game_Troop, :exp_total)) ||
+        xp_scene_exp_supported? || xp_abs_exp_supported?
+    rescue Exception
+      false
+    end
+    def xp_scene_drop_supported?
+      xp_scene_exp_supported? && defined?(Game_Party) &&
+        class_method?(Game_Party, :gain_item) && class_method?(Game_Party, :gain_weapon) &&
+        class_method?(Game_Party, :gain_armor)
+    rescue Exception
+      false
+    end
+    def xp_battle_drop_supported?
+      processor = xp_abs_processor
+      (defined?(Game_Troop) && class_method?(Game_Troop, :make_drop_items)) ||
+        xp_scene_drop_supported? || (processor && class_method?(processor, :drop_items))
+    rescue Exception
+      false
+    end
+    def battle_reward_active?
+      !!@battle_reward_active
+    end
+    def with_battle_reward
+      previous = @battle_reward_active
+      previous_drops = @battle_reward_display_drops
+      @battle_reward_active = true
+      @battle_reward_display_drops = [] unless previous
+      begin
+        yield
+      ensure
+        @battle_reward_active = previous
+        @battle_reward_display_drops = previous_drops
+      end
+    end
+    def record_battle_drop(kind, id, copies)
+      return unless battle_reward_active? && @battle_reward_display_drops && copies > 0
+      table = case kind
+              when :item then (defined?($data_items) ? $data_items : nil)
+              when :weapon then (defined?($data_weapons) ? $data_weapons : nil)
+              when :armor then (defined?($data_armors) ? $data_armors : nil)
+              else nil
+              end
+      item = table && table[id.to_i]
+      copies.times { @battle_reward_display_drops << item } if item
+    rescue Exception
+    end
+    def battle_reward_display_drops
+      @battle_reward_display_drops || []
+    end
+    def battle_drop_copies(amount)
+      return 1 unless battle_reward_active? && amount.to_i > 0
+      multiplier = drop_multiplier
+      return 0 if multiplier <= 0
+      copies = multiplier.to_i
+      copies += 1 if rand < multiplier - multiplier.to_i
+      copies
+    end
+    def scale_battle_drop_list(base)
+      items = base || []
+      multiplier = drop_multiplier
+      return [] if multiplier <= 0
+      return items.select { rand < multiplier } if multiplier < 1.0
+      return items if multiplier == 1.0
+      copies = multiplier.to_i
+      copies += 1 if rand < multiplier - multiplier.to_i
+      result = items.dup
+      (copies - 1).times { result.concat(yield || []) }
+      result
     end
     def exp_multiplier; @exp_multiplier.to_f; end
     def drop_multiplier; @drop_multiplier.to_f; end
@@ -4046,6 +4145,7 @@ module TyranorCheats
         return "Global game speed is unavailable." unless defined?(Graphics) && Graphics.respond_to?(:set_fast_forward_speed)
         Graphics.set_fast_forward_speed(speed)
         @game_speed = speed
+        write_state
         return "Game speed x#{@game_speed}"
       end
       if name == 'expMultiplier' || name == 'dropMultiplier'
@@ -4554,7 +4654,10 @@ module TyranorCheats
       values.each { |name| out << "V\t#{name}" }
       out << "V\tspeed" if engine != :unknown
       out << "F\tpokemonGameSpeed" if ess? && defined?(Graphics) && Graphics.respond_to?(:set_fast_forward_speed)
-      if rpgm? && defined?(Game_Troop)
+      if engine == :xp
+        out << "V\texpMultiplier" if xp_battle_exp_supported?
+        out << "V\tdropMultiplier" if xp_battle_drop_supported?
+      elsif rpgm? && defined?(Game_Troop)
         out << "V\texpMultiplier" if class_method?(Game_Troop, :exp_total)
         out << "V\tdropMultiplier" if class_method?(Game_Troop, :make_drop_items)
       end
@@ -8052,9 +8155,8 @@ module TyranorCheats
         end
       end
 
-      # Standard RGSS1/2/3 battle rewards flow through these Game_Troop
-      # methods. Keep the hooks here so custom games retain their own enemy
-      # data and drop tables; only the final reward calculation is scaled.
+      # VX/VX Ace calculate standard battle rewards through Game_Troop. Keep
+      # these hooks at the final reward methods so custom tables remain intact.
       if rpgm? && defined?(Game_Troop)
         Game_Troop.class_eval do
           if method_defined?(:exp_total) && !method_defined?(:__ap_cheat_exp_total)
@@ -8085,6 +8187,120 @@ module TyranorCheats
                 result.concat(__ap_cheat_make_drop_items(*args) || [])
               end
               result
+            end
+          end
+        end
+      end
+
+      # RGSS1 (XP) calculates rewards in Scene_Battle#start_phase5 instead of
+      # Game_Troop. Scale only the actor EXP setter and inventory awards while
+      # that reward phase is running.
+      if engine == :xp && xp_actor_exp_supported? &&
+          (xp_scene_exp_supported? || xp_abs_exp_supported?)
+        Game_Actor.class_eval do
+          if method_defined?(:exp=) && !method_defined?(:__ap_cheat_xp_exp_set)
+            alias_method :__ap_cheat_xp_exp_set, :exp=
+            def exp=(*args)
+              if TyranorCheats.battle_reward_active? && !args.empty? && args[0].is_a?(Numeric)
+                previous = exp.to_f
+                requested = args[0].to_f
+                if requested > previous
+                  multiplier = TyranorCheats.exp_multiplier
+                  args[0] = (previous + (requested - previous) * multiplier).round if multiplier != 1.0
+                end
+              end
+              __ap_cheat_xp_exp_set(*args)
+            end
+          end
+        end
+
+        if xp_scene_exp_supported? && defined?(Scene_Battle) &&
+            !(defined?(Game_Troop) && class_method?(Game_Troop, :exp_total))
+          Scene_Battle.class_eval do
+            if method_defined?(:start_phase5) && !method_defined?(:__ap_cheat_xp_start_phase5)
+              alias_method :__ap_cheat_xp_start_phase5, :start_phase5
+              def start_phase5(*args)
+                TyranorCheats.with_battle_reward { __ap_cheat_xp_start_phase5(*args) }
+              end
+            end
+          end
+        end
+
+        processor = xp_abs_processor
+        if xp_abs_exp_supported? && processor
+          processor.class_eval do
+            if method_defined?(:exp_result) && !method_defined?(:__ap_cheat_xp_exp_result)
+              alias_method :__ap_cheat_xp_exp_result, :exp_result
+              def exp_result(*args)
+                TyranorCheats.with_battle_reward { __ap_cheat_xp_exp_result(*args) }
+              end
+            end
+          end
+        end
+      end
+
+      if engine == :xp && xp_scene_drop_supported? && defined?(Game_Party) &&
+          !(defined?(Game_Troop) && class_method?(Game_Troop, :make_drop_items))
+        Game_Party.class_eval do
+          if method_defined?(:gain_item) && !method_defined?(:__ap_cheat_xp_gain_item)
+            alias_method :__ap_cheat_xp_gain_item, :gain_item
+            def gain_item(*args)
+              copies = TyranorCheats.battle_drop_copies(args[1])
+              return nil if copies <= 0
+              TyranorCheats.record_battle_drop(:item, args[0], copies)
+              result = __ap_cheat_xp_gain_item(*args)
+              (copies - 1).times { __ap_cheat_xp_gain_item(*args) }
+              result
+            end
+          end
+          if method_defined?(:gain_weapon) && !method_defined?(:__ap_cheat_xp_gain_weapon)
+            alias_method :__ap_cheat_xp_gain_weapon, :gain_weapon
+            def gain_weapon(*args)
+              copies = TyranorCheats.battle_drop_copies(args[1])
+              return nil if copies <= 0
+              TyranorCheats.record_battle_drop(:weapon, args[0], copies)
+              result = __ap_cheat_xp_gain_weapon(*args)
+              (copies - 1).times { __ap_cheat_xp_gain_weapon(*args) }
+              result
+            end
+          end
+          if method_defined?(:gain_armor) && !method_defined?(:__ap_cheat_xp_gain_armor)
+            alias_method :__ap_cheat_xp_gain_armor, :gain_armor
+            def gain_armor(*args)
+              copies = TyranorCheats.battle_drop_copies(args[1])
+              return nil if copies <= 0
+              TyranorCheats.record_battle_drop(:armor, args[0], copies)
+              result = __ap_cheat_xp_gain_armor(*args)
+              (copies - 1).times { __ap_cheat_xp_gain_armor(*args) }
+              result
+            end
+          end
+        end
+
+        if defined?(Window_BattleResult)
+          Window_BattleResult.class_eval do
+            if TyranorCheats.class_method?(self, :initialize) &&
+                !TyranorCheats.class_method?(self, :__ap_cheat_xp_result_initialize)
+              alias_method :__ap_cheat_xp_result_initialize, :initialize
+              def initialize(*args)
+                if TyranorCheats.battle_reward_active? && args.size >= 3
+                  args[2] = TyranorCheats.battle_reward_display_drops
+                end
+                __ap_cheat_xp_result_initialize(*args)
+              end
+            end
+          end
+        end
+      end
+
+      processor = xp_abs_processor
+      if engine == :xp && xp_battle_drop_supported? && processor
+        processor.class_eval do
+          if method_defined?(:drop_items) && !method_defined?(:__ap_cheat_xp_drop_items)
+            alias_method :__ap_cheat_xp_drop_items, :drop_items
+            def drop_items(*args)
+              base = __ap_cheat_xp_drop_items(*args)
+              TyranorCheats.scale_battle_drop_list(base) { __ap_cheat_xp_drop_items(*args) }
             end
           end
         end
