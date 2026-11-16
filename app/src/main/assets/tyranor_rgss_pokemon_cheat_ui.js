@@ -33,16 +33,21 @@
   var hideEmptySystemEntries = false;
   var mapId = 0;
   var currentMapId = 0;
+  var mapViewInitialized = false;
   var mapListExpanded = false;
+  var browseQuery = "";
   var mapEntries = [];
   var eventId = 0;
+  var eventLoading = false;
   var eventEntries = [];
   var selectedEventDetail = null;
   var minimapSelection = null;
+  var pendingMinimapMapId = null;
   var selectedPokemon = 0;
   var moveContext = null;
   var pendingConfirmation = null;
   var addPokemonQuery = "";
+  var heldQueryTimer = null;
   var statNames = ["HP", "攻击", "防御", "特攻", "特防", "速度"];
   var flagLabels = {
     hpmp: "HP/PP不减", gold: "金钱不减", status: "异常状态免疫", items: "背包物品不减", coins: "游戏币不减",
@@ -200,6 +205,7 @@
     if (!hasFeature("pokemonPartyReady")) { content.innerHTML = '<div class="tm-note">' + esc(tr("开始新游戏或载入存档后即可读取宝可梦队伍")) + '</div>'; return; }
     if (teamView === "storage" && hasFeature("pokemonStorage")) return renderPokemonStorage(content);
     teamPokemon = mod.listPokemon() || [];
+    if (teamPokemon.loading) { content.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     var views = [{ id: "party", label: "队伍" }];
     if (hasFeature("pokemonStorage")) views.push({ id: "storage", label: "宝可梦仓库" });
     var search = input("tm-team-query", teamQuery, "search", 'placeholder="' + esc(tr("搜索宝可梦名称或编号")) + '"');
@@ -287,6 +293,7 @@
         '<div class="tm-note">' + esc(tr("当前游戏没有可修改的宝可梦属性接口")) + '</div>');
     } else if (teamSection === "moves") {
       var moves = mod.listPokemonMoves(index) || [];
+      if (moves.loading) { section.innerHTML = card("招式", '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'); return; }
       var moveRows = moves.map(function (move) {
         return '<div class="tm-item"><span class="tm-name">' + esc(tr("招式位") + " " + (Number(move.slot) + 1) + " · " + (move.name || tr("空"))) + '</span>' +
           (move.pp == null ? "" : '<span class="tm-badge">PP ' + esc(move.pp) + (move.totalPp == null ? "" : "/" + esc(move.totalPp)) + '</span>') + '</div>';
@@ -295,6 +302,7 @@
         '<div class="tm-row">' + button("编辑招式与 PP", "edit-moves", "primary", 'data-index="' + index + '"') + '</div>');
     } else if (teamSection === "status") {
       var statuses = mod.listPokemonStatuses(index) || [];
+      if (statuses.loading) { section.innerHTML = card("状态", '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'); return; }
       var statusRows = statuses.map(function (entry) {
         return '<div class="tm-item"><span class="tm-name">' + esc(tr(statusName(entry.key))) + '</span>' +
           button(entry.active ? "清除" : "设置", "set-status", entry.active ? "" : "primary", 'data-index="' + index + '" data-key="' + (entry.active ? "" : esc(entry.key)) + '"') + '</div>';
@@ -305,6 +313,7 @@
         '<div class="tm-row">' + button("选择携带物品", "edit-item", "primary", 'data-index="' + index + '"') + '</div>');
     } else if (teamSection === "iv_ev") {
       var stats = mod.listPokemonStats(index) || { ivs: [], evs: [] };
+      if (stats.loading) { section.innerHTML = card("个体值与努力值", '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'); return; }
       var statRows = statNames.map(function (name, slot) {
         var ivId = "tm-stat-" + index + "-iv-" + slot; var evId = "tm-stat-" + index + "-ev-" + slot;
         return '<div class="tm-pokemon-stat-row"><strong>' + esc(tr(name)) + '</strong><label>' + esc(tr("IV")) + input(ivId, stats.ivs[slot], "number", 'min="0" max="31" step="1"') +
@@ -314,6 +323,7 @@
       section.innerHTML = card("个体值与努力值", '<div class="tm-pokemon-stats">' + statRows + '</div>');
     } else if (teamSection === "traits") {
       var traits = mod.listPokemonTraits(index) || [];
+      if (traits.loading) { section.innerHTML = card("个体属性", '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'); return; }
       var traitLabels = { nature: "性格", ability: "特性", form: "形态", gender: "性别", shiny: "闪光", superShiny: "超闪光" };
       var traitRows = traits.map(function (trait) {
         return '<div class="tm-pokemon-trait"><strong>' + esc(tr(traitLabels[trait.field] || trait.field)) + '</strong><span class="tm-pokemon-details">' +
@@ -326,6 +336,7 @@
   }
   function renderPokemonStorage(content) {
     var box = mod.listPokemonStorage(storageBox);
+    if (box && box.loading) { content.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     if (!box) { content.innerHTML = '<div class="tm-note">' + esc(tr("无法读取宝可梦仓库")) + '</div>'; return; }
     storageBox = Number(box.boxIndex) || 0;
     var views = segmentedTabs([{ id: "party", label: "队伍" }, { id: "storage", label: "宝可梦仓库" }], "storage", "team-view", "view");
@@ -350,6 +361,7 @@
   }
   function renderProgress(content) {
     var progress = mod.listPokemonProgress() || { badges: [], dexes: [] };
+    if (progress.loading) { content.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     var rows = [];
     if (progress.hasPokedex != null) rows.push('<label class="tm-pokemon-toggle"><span>' + esc(tr("拥有图鉴")) + '</span>' +
       '<input class="tm-switch" type="checkbox" data-action="pokemon-progress" data-kind="pokedex" data-index="-1" ' + (progress.hasPokedex ? "checked" : "") + '></label>');
@@ -376,6 +388,7 @@
   function loadAddPokemonCandidates() {
     var list = panel && panel.querySelector("#tm-add-pokemon-list"); if (!list) return;
     var result = mod.listDatabase("pokemon", addPokemonQuery, 0, 100) || { values: [] };
+    if (result.loading) { list.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     list.innerHTML = (result.values || []).map(function (entry) {
       return '<div class="tm-item"><span class="tm-name">' + esc(entry.name || entry.id) + '</span><span class="tm-badge">#' + esc(entry.id) + '</span>' +
         button("获得", "add-pokemon", "primary", 'data-key="' + esc(entry.id) + '"') + '</div>';
@@ -409,6 +422,7 @@
   function loadBag() {
     var list = panel && panel.querySelector("#tm-bag-list"); if (!list) return;
     var result = mod.listDatabase("item", itemQuery, itemOffset, 100, bagCategory) || { total: 0, values: [] };
+    if (result.loading) { list.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     var entries = result.values || [];
     if (!showEmptyItems) entries = entries.filter(function (item) { return Number(item.count) > 0; });
     if (!entries.some(function (item) { return String(item.id) === String(selectedItemId); })) selectedItemId = entries.length ? String(entries[0].id) : null;
@@ -450,16 +464,21 @@
   function renderMap(content) {
     var position = {};
     try { position = mod.currentPosition() || {}; } catch (_) {}
-    mapListExpanded = false;
-    currentMapId = Number(position.mapId) || 0;
-    mapId = currentMapId;
-    eventId = 0;
-    selectedEventDetail = null;
+    if (position && !position.loading) {
+      currentMapId = Number(position.mapId) || 0;
+      if (!mapViewInitialized) {
+        mapId = currentMapId;
+        eventId = 0;
+        selectedEventDetail = null;
+        mapListExpanded = false;
+        mapViewInitialized = true;
+      }
+    }
     var currentMapLabel = mapLabel(mapId);
     var mapPicker = '<button class="tm-btn tm-map-picker" data-action="toggle-map-list" title="' + esc(currentMapLabel) + '"><span class="tm-map-picker-label">' + esc(currentMapLabel) + '</span><span class="tm-map-picker-arrow" aria-hidden="true">▾</span></button>';
     var browseRow = (hasFeature("mapControl") ? '<div class="tm-map-picker-row">' + mapPicker + '</div>' : '') +
       ((hasFeature("mapControl") || hasFeature("events")) ? '<div class="tm-row">' +
-        input("tm-browse-query", "", "search", 'placeholder="' + esc(tr("搜索")) + '"') + button("搜索", "render-browse", "primary") + '</div>' : '');
+        input("tm-browse-query", browseQuery, "search", 'placeholder="' + esc(tr("搜索")) + '"') + button("搜索", "render-browse", "primary") + '</div>' : '');
     var mapControls = (hasFeature("mapControl") ? '<div class="tm-row tm-map-teleport-row">' +
       input("tm-pokemon-map-id", position.mapId, "number", 'placeholder="' + esc(tr("地图 ID")) + '"') +
       input("tm-pokemon-map-x", position.x, "number", 'placeholder="X"') + input("tm-pokemon-map-y", position.y, "number", 'placeholder="Y"') +
@@ -490,8 +509,14 @@
   }
   function loadEventsForMap(targetMapId) {
     eventEntries = [];
+    eventLoading = false;
     if (!hasFeature("events")) return;
-    try { eventEntries = (mod.listEvents(Number(targetMapId) || 0) || {}).values || []; } catch (_) {}
+    if (!mapViewInitialized) { eventLoading = true; return; }
+    try {
+      var result = mod.listEvents(Number(targetMapId) || 0) || {};
+      eventEntries = result.values || [];
+      eventLoading = !!result.loading;
+    } catch (_) {}
   }
   function fillTeleport(targetMapId, x, y) {
     var mapInput = panel && panel.querySelector("#tm-pokemon-map-id");
@@ -538,8 +563,11 @@
     list.classList.add("tm-map-tree-list");
     var position = {};
     try { position = mod.currentPosition() || {}; } catch (_) {}
-    try { mapEntries = (mod.listMaps(value("tm-browse-query"), 0, 300) || {}).values || []; }
+    var mapResult;
+    try { mapResult = mod.listMaps(value("tm-browse-query"), 0, 300) || {}; }
     catch (error) { list.innerHTML = '<div class="tm-note">' + esc(error.message || String(error)) + '</div>'; return; }
+    if (mapResult.loading) { list.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
+    mapEntries = mapResult.values || [];
     var depths = mapEntries.map(function (entry) { return Math.max(0, Number(entry.depth) || 0); });
     var maxDepth = depths.reduce(function (max, depth) { return Math.max(max, depth); }, 0);
     var nextAtOrAbove = [];
@@ -579,6 +607,7 @@
     var list = panel && panel.querySelector("#tm-browse-list");
     if (!list) return;
     if (!hasFeature("events")) { list.innerHTML = '<div class="tm-note">' + esc(tr("事件列表对当前游戏不可用")) + '</div>'; return; }
+    if (eventLoading) { list.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     var query = String(value("tm-browse-query") || "").toLowerCase();
     var filtered = eventEntries.filter(function (entry) {
       return !query || String(entry.name || "").toLowerCase().indexOf(query) >= 0 || String(entry.id).indexOf(query) >= 0;
@@ -617,6 +646,7 @@
     var detail;
     try { detail = mod.eventDetail(eventId, mapId); }
     catch (error) { selectedEventDetail = null; return '<div class="tm-note tm-event-empty">' + esc(error.message || String(error)) + '</div>'; }
+    if (detail && detail.loading) { selectedEventDetail = null; return '<div class="tm-note tm-event-empty">' + esc(tr("加载中…")) + '</div>'; }
     if (!detail || detail.error) { selectedEventDetail = null; return '<div class="tm-note tm-event-empty">' + esc(tr("无法读取所选事件详情")) + '</div>'; }
     selectedEventDetail = detail;
     var pages = (detail.pages || []).map(function (page) {
@@ -659,22 +689,37 @@
     catch (error) { return modal("事件解释器", '<div class="tm-note">' + esc(error.message || String(error)) + '</div>', {
       boxClass: "tm-interpreter-modal", headerSuffix: '<span class="tm-interpreter-page">' + esc(tr("事件页 ") + (Number(page.index) + 1)) + '</span>', closeLabel: "×", stack: !!stack
     }); }
-    var rows = commands.map(function (command) {
+    var rows = commands.loading ? '<div class="tm-note">' + esc(tr("加载中…")) + '</div>' : commands.map(function (command) {
       var indent = Math.max(0, Math.min(8, Number(command.indent) || 0));
       var preview = String(command.preview || "").trim();
       return '<details class="tm-interpreter-command" style="margin-left:' + (indent * 8) + 'px"><summary><span class="tm-command-code">' + esc(command.code) +
         '</span><strong>' + esc(eventCommandName(command.code)) + '</strong>' + (preview ? '<span class="tm-command-preview" title="' + esc(preview) + '">' + esc(preview) + '</span>' : "") +
         '<span class="tm-command-index">#' + esc(command.index) + '</span></summary><pre>' + esc(command.parameters || "（无参数）") + '</pre></details>';
     }).join("") || '<div class="tm-note">' + esc(tr("此事件页没有指令")) + '</div>';
-    modal("事件解释器", rows, {
+    var dialog = modal("事件解释器", rows, {
       boxClass: "tm-interpreter-modal", bodyClass: "tm-interpreter-list",
       headerSuffix: '<span class="tm-interpreter-page">' + esc(tr("事件页 ") + (Number(page.index) + 1)) + '</span>',
       closeLabel: "×", hint: tr("点击指令可展开查看参数"), stack: !!stack
     });
+    if (commands.loading) dialog._refreshAsync = function () {
+      var updated = mod.eventInterpreter(detail.id, detail.mapId, page.index) || [];
+      if (updated.loading) return;
+      var body = dialog.querySelector(".tm-interpreter-list");
+      if (!body) return;
+      body.innerHTML = updated.map(function (command) {
+        var indent = Math.max(0, Math.min(8, Number(command.indent) || 0));
+        var preview = String(command.preview || "").trim();
+        return '<details class="tm-interpreter-command" style="margin-left:' + (indent * 8) + 'px"><summary><span class="tm-command-code">' + esc(command.code) +
+          '</span><strong>' + esc(eventCommandName(command.code)) + '</strong>' + (preview ? '<span class="tm-command-preview" title="' + esc(preview) + '">' + esc(preview) + '</span>' : "") +
+          '<span class="tm-command-index">#' + esc(command.index) + '</span></summary><pre>' + esc(command.parameters || "（无参数）") + '</pre></details>';
+      }).join("") || '<div class="tm-note">' + esc(tr("此事件页没有指令")) + '</div>';
+      dialog._refreshAsync = null;
+    };
   }
   function renderBattle(content) {
     var snapshot = {};
     try { snapshot = mod.battleSnapshot() || {}; } catch (_) {}
+    if (snapshot.loading) { content.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     var inBattle = !!snapshot.inBattle;
     var enemies = (snapshot.enemies || []).map(function (enemy) {
       var id = "tm-pokemon-enemy-" + safeId(enemy.index);
@@ -693,6 +738,7 @@
   function renderSave(content) {
     var slots = [];
     try { slots = mod.listSaveSlots() || []; } catch (error) { content.innerHTML = card("存档管理", '<div class="tm-note">' + esc(error.message || String(error)) + '</div>'); return; }
+    if (slots.loading) { content.innerHTML = card("存档管理", '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'); return; }
     content.innerHTML = card("存档管理", '<div class="tm-list">' + slots.map(function (slot) {
       var actions = button(slot.exists ? "覆盖" : "保存", "save-slot", "primary", 'data-id="' + esc(slot.id) + '"');
       if (slot.exists) actions += button("读取", "load-slot", "", 'data-id="' + esc(slot.id) + '"') + button("删除", "delete-slot", "danger", 'data-id="' + esc(slot.id) + '"');
@@ -706,9 +752,12 @@
     content.innerHTML = card("虚拟按键", '<p>' + esc(tr("按键层由应用原生实现，可自定义按键的位置、文字、大小与输出键位。")) + '</p><div class="tm-row">' +
       button("进入按键编辑", "enter-keys", "primary") + button("恢复默认", "reset-keys") + '</div>');
   }
-  function showMinimap() {
+  function showMinimap(requestedMapId) {
+    requestedMapId = requestedMapId == null ? (mapId || currentMapId) : Number(requestedMapId);
+    if (!(requestedMapId > 0)) { pendingMinimapMapId = 0; return; }
     var data;
-    try { data = mod.minimapData(mapId || currentMapId); } catch (error) { toast(error.message || String(error), true); return; }
+    try { data = mod.minimapData(requestedMapId); } catch (error) { toast(error.message || String(error), true); return; }
+    if (data && data.loading) { pendingMinimapMapId = requestedMapId; return; }
     if (!data || !(Number(data.width) > 0) || !(Number(data.height) > 0)) return toast(tr("无法读取所选地图"), true);
     var legend = '<div class="tm-map-legend"><span class="tm-lg"><i class="tm-map-legend-swatch tm-blocked"></i>' + esc(tr("无法通行")) + '</span>' +
       '<span class="tm-lg"><i class="tm-map-legend-swatch tm-passable"></i>' + esc(tr("可通行")) + '</span>' +
@@ -775,6 +824,7 @@
     var detail;
     try { detail = mod.eventDetail(Number(selected.id), selection.mapId); }
     catch (error) { toast(error.message || String(error), true); return; }
+    if (detail && detail.loading) return toast(tr("事件详情加载中，请稍后再试"));
     if (!detail || detail.error || !detail.pages || !detail.pages.length) return toast(tr("事件没有可显示的页面"), true);
     eventId = Number(selected.id);
     mapId = selection.mapId;
@@ -791,6 +841,7 @@
     systemQuery = value("tm-system-query");
     var includeUnnamed = !hideEmptySystemEntries;
     var result = systemKind === "switch" ? mod.listSwitches(systemQuery, 0, 200, includeUnnamed) : mod.listVariables(systemQuery, 0, 200, includeUnnamed);
+    if (result && result.loading) { list.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     var entries = (result.values || []).filter(function (entry) {
       if (isDashPlaceholder(entry.name)) return false;
       return !hideEmptySystemEntries || entry.named !== false;
@@ -829,9 +880,12 @@
     panel.addEventListener("input", function (event) {
       if (event.target.id === "tm-team-query") { teamQuery = event.target.value; renderTeamRoster(); }
       if (event.target.id === "tm-move-query") renderMoveCandidates();
-      if (event.target.id === "tm-held-query") renderHeldCandidates();
+      if (event.target.id === "tm-held-query") {
+        if (heldQueryTimer) clearTimeout(heldQueryTimer);
+        heldQueryTimer = setTimeout(function () { heldQueryTimer = null; renderHeldCandidates(); }, 180);
+      }
       if (event.target.id === "tm-system-query") loadSystem();
-      if (event.target.id === "tm-browse-query") loadBrowse();
+      if (event.target.id === "tm-browse-query") { browseQuery = event.target.value; loadBrowse(); }
     });
     panel.addEventListener("keydown", function (event) {
       if (event.key === "Escape") { event.preventDefault(); closePokemon(true); }
@@ -847,8 +901,9 @@
         var pickingMap = target.closest("[data-action='pick-map']");
         if (!insidePicker && !insideMapSearch && !pickingMap) {
           mapListExpanded = false;
-          var browseQuery = panel.querySelector("#tm-browse-query");
-          if (browseQuery) browseQuery.value = "";
+          browseQuery = "";
+          var browseQueryInput = panel.querySelector("#tm-browse-query");
+          if (browseQueryInput) browseQueryInput.value = "";
           loadBrowse();
         }
       }
@@ -910,6 +965,11 @@
   function editMoves(index) {
     moveContext = { index: Number(index), slot: 0, candidates: mod.listPokemonMoveCandidates() || [] };
     var moves = mod.listPokemonMoves(index) || [];
+    if (moves.loading) {
+      var pendingDialog = modal("编辑招式", '<div class="tm-note">' + esc(tr("加载中…")) + '</div>');
+      pendingDialog._refreshAsync = function () { editMoves(index); };
+      return;
+    }
     modal("编辑招式", '<div class="tm-pokemon-choice-list">' + moves.map(function (move) {
       var row = '<div class="tm-item"><span class="tm-name">' + esc(tr("招式位") + " " + (Number(move.slot) + 1) + " · " + (move.name || tr("空"))) + '</span>' +
         button("替换", "choose-move", "", 'data-index="' + index + '" data-slot="' + move.slot + '"') + button("清空", "clear-move", "", 'data-index="' + index + '" data-slot="' + move.slot + '"') + '</div>';
@@ -929,6 +989,11 @@
   function editTraits(index) {
     var fields = { nature: "性格", ability: "特性", form: "形态", gender: "性别", shiny: "闪光", superShiny: "超闪光" };
     var traits = mod.listPokemonTraits(Number(index)) || [];
+    if (traits.loading) {
+      var pendingDialog = modal("个体属性", '<div class="tm-note">' + esc(tr("加载中…")) + '</div>');
+      pendingDialog._refreshAsync = function () { editTraits(index); };
+      return;
+    }
     var html = traits.map(function (trait) {
       return '<section class="tm-pokemon-trait"><strong>' + esc(tr(fields[trait.field] || trait.field)) + '</strong><span class="tm-pokemon-details">' +
         esc(tr("当前值")) + '：' + esc(trait.currentName) + '</span><div class="tm-pokemon-choice-list">' + (trait.options || []).map(function (option) {
@@ -945,6 +1010,10 @@
   }
   function renderMoveCandidates() {
     var list = panel && panel.querySelector("#tm-move-list"); if (!list || !moveContext) return;
+    if (moveContext.candidates && moveContext.candidates.loading) {
+      moveContext.candidates = mod.listPokemonMoveCandidates() || [];
+      if (moveContext.candidates.loading) { list.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
+    }
     var query = String(value("tm-move-query")).trim().toLowerCase();
     var entries = moveContext.candidates.filter(function (entry) {
       return !query || String(entry.name).toLowerCase().indexOf(query) >= 0 || String(entry.key).toLowerCase().indexOf(query) >= 0;
@@ -954,6 +1023,11 @@
   }
   function editStatus(index) {
     var statuses = mod.listPokemonStatuses(index) || [];
+    if (statuses.loading) {
+      var pendingDialog = modal("编辑状态", '<div class="tm-note">' + esc(tr("加载中…")) + '</div>');
+      pendingDialog._refreshAsync = function () { editStatus(index); };
+      return;
+    }
     modal("编辑状态", '<div class="tm-pokemon-choice-list">' + button("清除状态", "set-status", "", 'data-index="' + index + '" data-key=""') +
       statuses.map(function (entry) { return button(statusName(entry.key), "set-status", entry.active ? "primary" : "", 'data-index="' + index + '" data-key="' + esc(entry.key) + '"'); }).join("") + '</div>');
   }
@@ -967,11 +1041,17 @@
   function renderHeldCandidates() {
     var list = panel && panel.querySelector("#tm-held-list"); if (!list) return;
     var query = String(value("tm-held-query")).trim(); var result = mod.listDatabase("item", query, 0, 100) || { values: [], total: 0 };
+    if (result.loading) { list.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     list.innerHTML = (result.values || []).map(function (item) { return '<button class="tm-item tm-pokemon-choice" data-action="set-held-item" data-key="' + esc(item.id) + '">' +
       '<span class="tm-name">' + esc(item.name || item.id) + '</span></button>'; }).join("") || '<div class="tm-note">' + esc(tr("没有匹配项目")) + '</div>';
   }
   function editStats(index) {
     var stats = mod.listPokemonStats(index) || { ivs: [], evs: [] };
+    if (stats.loading) {
+      var pendingDialog = modal("编辑 IV / EV", '<div class="tm-note">' + esc(tr("加载中…")) + '</div>');
+      pendingDialog._refreshAsync = function () { editStats(index); };
+      return;
+    }
     var html = statNames.map(function (name, slot) {
       var ivId = "tm-stat-" + index + "-iv-" + slot; var evId = "tm-stat-" + index + "-ev-" + slot;
       return '<div class="tm-pokemon-stat-row"><strong>' + esc(tr(name)) + '</strong><label>' + esc(tr("IV")) + input(ivId, stats.ivs[slot], "number", 'min="0" max="31" step="1"') +
@@ -992,12 +1072,18 @@
   }
   function handleClick(event) {
     var tabNode = event.target.closest("[data-tab]");
-    if (tabNode) { tab = tabNode.dataset.tab; render(); event.stopPropagation(); return; }
+    if (tabNode) {
+      tab = tabNode.dataset.tab;
+      if (tab === "map") { mapViewInitialized = false; browseQuery = ""; }
+      render();
+      event.stopPropagation();
+      return;
+    }
     var node = event.target.closest("[data-action]"); if (!node) return;
     if (node.type === "checkbox") return;
     event.preventDefault(); event.stopPropagation(); var action = node.dataset.action;
     if (action === "close") return close(true);
-    if (action === "refresh") { try { caps = mod.listCapabilities(); render(); } catch (error) { toast(error.message || String(error), true); } return; }
+    if (action === "refresh") { try { mod.refreshReads(); caps = mod.listCapabilities(); render(); } catch (error) { toast(error.message || String(error), true); } return; }
     if (action === "close-modal") { pendingConfirmation = null; return closeModal(node); }
     if (action === "confirm-pending") {
       var pending = pendingConfirmation; pendingConfirmation = null; closeModal();
@@ -1142,8 +1228,9 @@
     if (action === "render-system") return loadSystem();
     if (action === "toggle-map-list") {
       mapListExpanded = !mapListExpanded;
-      var mapSearch = panel.querySelector("#tm-browse-query");
-      if (mapSearch) mapSearch.value = "";
+      browseQuery = "";
+      var mapSearchInput = panel.querySelector("#tm-browse-query");
+      if (mapSearchInput) mapSearchInput.value = "";
       return loadBrowse();
     }
     if (action === "render-browse") return loadBrowse();
@@ -1154,8 +1241,10 @@
       mapId = selectedMapId;
       eventId = 0;
       mapListExpanded = false;
-      var browseQuery = panel.querySelector("#tm-browse-query");
-      if (browseQuery) browseQuery.value = "";
+      mapViewInitialized = true;
+      browseQuery = "";
+      var browseQueryInput = panel.querySelector("#tm-browse-query");
+      if (browseQueryInput) browseQueryInput.value = "";
       loadEventsForMap(mapId);
       loadBrowse();
       renderEventPanel();
@@ -1378,6 +1467,8 @@
     if (probe) { probe.remove(); probe = null; notifyClosed(restoreFocus); return true; }
     if (panel) {
       if (detectTimer) clearTimeout(detectTimer); detectTimer = null;
+      if (heldQueryTimer) clearTimeout(heldQueryTimer); heldQueryTimer = null;
+      pendingMinimapMapId = null;
       var openModals = panel.querySelectorAll(".tm-pokemon-modal");
       for (var modalIndex = openModals.length - 1; modalIndex >= 0; modalIndex--) closeModal(openModals[modalIndex]);
       panel.remove(); panel = null;
@@ -1395,6 +1486,79 @@
     close: close,
     toggle: toggle,
     isOpen: isOpen,
+    onAsyncDataUpdated: function () {
+      if (!panel) {
+        if (rpgUI && typeof rpgUI.onAsyncDataUpdated === "function") rpgUI.onAsyncDataUpdated();
+        return;
+      }
+      var content = panel.querySelector(".tm-content");
+      var active = document.activeElement;
+      var selectionStart = null;
+      var selectionEnd = null;
+      if (active && active.setSelectionRange) {
+        try { selectionStart = active.selectionStart; selectionEnd = active.selectionEnd; } catch (_) {}
+      }
+      var focused = active && panel.contains(active) && active.id ? {
+        id: active.id, value: active.value, checked: active.checked,
+        start: selectionStart, end: selectionEnd,
+        checkable: active.type === "checkbox" || active.type === "radio"
+      } : null;
+      var scrollPositions = [];
+      panel.querySelectorAll("*").forEach(function (node) {
+        if (!(node.scrollHeight > node.clientHeight + 1) && !node.scrollTop) return;
+        var classes = Array.prototype.slice.call(node.classList || []);
+        if (!node.id && !classes.length) return;
+        var selector = classes.length ? "." + classes.join(".") : "";
+        var index = 0;
+        if (!node.id) {
+          var matches = panel.querySelectorAll(selector);
+          while (index < matches.length && matches[index] !== node) index++;
+        }
+        scrollPositions.push({ id: node.id, selector: selector, index: index, top: node.scrollTop, left: node.scrollLeft });
+      });
+      var contentScrollTop = content ? content.scrollTop : 0;
+      var contentScrollLeft = content ? content.scrollLeft : 0;
+      render();
+      renderMoveCandidates();
+      renderHeldCandidates();
+      loadAddPokemonCandidates();
+      Array.prototype.forEach.call(panel.querySelectorAll(".tm-pokemon-modal"), function (dialog) {
+        if (typeof dialog._refreshAsync === "function") dialog._refreshAsync();
+      });
+      if (focused) {
+        var inputNode = document.getElementById(focused.id);
+        if (inputNode && panel.contains(inputNode)) {
+          if (focused.checkable) inputNode.checked = focused.checked;
+          else inputNode.value = focused.value;
+          try { inputNode.focus({ preventScroll: true }); } catch (_) { inputNode.focus(); }
+          if (!focused.checkable && focused.start != null && inputNode.setSelectionRange) {
+            try { inputNode.setSelectionRange(focused.start, focused.end); } catch (_) {}
+          }
+        }
+      }
+      if (content) {
+        content.scrollTop = contentScrollTop;
+        content.scrollLeft = contentScrollLeft;
+      }
+      scrollPositions.forEach(function (saved) {
+        var node = saved.id ? document.getElementById(saved.id) : null;
+        if (!node && saved.selector) node = panel.querySelectorAll(saved.selector)[saved.index] || null;
+        if (node && panel.contains(node)) {
+          node.scrollTop = saved.top;
+          node.scrollLeft = saved.left;
+        }
+      });
+      if (pendingMinimapMapId != null) {
+        var requestedMapId = Number(pendingMinimapMapId) || Number(mapId) || Number(currentMapId);
+        if (requestedMapId > 0) {
+          var minimap = mod.minimapData(requestedMapId);
+          if (minimap && Number(minimap.width) > 0 && Number(minimap.height) > 0) {
+            pendingMinimapMapId = null;
+            showMinimap(requestedMapId);
+          }
+        }
+      }
+    },
     onRuntimeEngineDetected: applyRuntimeEngine,
   };
   if (detectedEngine !== "unknown") {

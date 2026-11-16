@@ -235,6 +235,45 @@ class TyranorRgssCheatPanel(
             else JSONObject().put("value", jsonValue(value)).toString()
         }
 
+        /** Queue a bridge request and return immediately to the WebView script thread. */
+        @JavascriptInterface
+        fun invokeAsync(requestId: String, method: String, argsJson: String) {
+            if (requestId.isBlank() || requestId.length > MAX_ASYNC_REQUEST_ID_LENGTH) return
+            if (destroyed || host.isFinishing || host.isDestroyed) {
+                deliverAsyncResult(requestId, JsFailure("RGSS 宿主已关闭"))
+                return
+            }
+
+            val args = runCatching { JSONArray(argsJson) }.getOrElse { JSONArray() }
+            val completed = AtomicBoolean(false)
+            fun finish(value: Any?) {
+                if (completed.compareAndSet(false, true)) deliverAsyncResult(requestId, value)
+            }
+
+            host.runOnUiThread {
+                if (destroyed || host.isFinishing || host.isDestroyed) {
+                    finish(JsFailure("RGSS 宿主已关闭"))
+                } else {
+                    try {
+                        dispatch(method, args, ::finish)
+                    } catch (error: Exception) {
+                        Log.e(TAG, "RGSS async cheat UI call failed: $method", error)
+                        finish(JsFailure(error.message ?: error.javaClass.simpleName))
+                    }
+                }
+            }
+        }
+
+        private fun deliverAsyncResult(requestId: String, value: Any?) {
+            val response = if (value is JsFailure) errorJson(value.message)
+            else JSONObject().put("value", jsonValue(value)).toString()
+            val script = "window.TyranorModBridgeResponse&&window.TyranorModBridgeResponse(" +
+                JSONObject.quote(requestId) + "," + JSONObject.quote(response) + ");"
+            webView.post {
+                if (!destroyed) webView.evaluateJavascript(script, null)
+            }
+        }
+
         private fun dispatch(method: String, a: JSONArray, done: (Any?) -> Unit) {
             when (method) {
                 "isReady" -> done(cheats.isReady())
@@ -815,5 +854,6 @@ class TyranorRgssCheatPanel(
         const val CHEAT_BRIDGE = "TyranorCheatNative"
         const val INPUT_BRIDGE = "TyranorInputNative"
         const val COMMAND_WAIT_SECONDS = 36L
+        const val MAX_ASYNC_REQUEST_ID_LENGTH = 128
     }
 }
