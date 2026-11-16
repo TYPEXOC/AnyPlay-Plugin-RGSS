@@ -3888,6 +3888,7 @@ module TyranorCheats
       when 'event_switch' then set_event_switch(a, b)
       when 'map_event_switches' then set_map_event_switches(a, b)
       when 'battle_enemy_hp' then set_enemy_hp(a, b)
+      when 'battle_enemy_mp' then set_enemy_mp(a, b)
       when 'save_slot' then select_save_slot(a)
       when 'delete_save' then delete_save_slot(a)
       when 'give'    then give(a, b)
@@ -7042,16 +7043,44 @@ module TyranorCheats
       { :teleport => false, :movable => false, :item_change => false }
     end
 
+    def battle_mp_values(battler)
+      return [nil, nil] unless battler.respond_to?(:mp=) || battler.respond_to?(:sp=)
+      current = if battler.respond_to?(:mp)
+                  battler.mp
+                elsif battler.respond_to?(:sp)
+                  battler.sp
+                else
+                  return [nil, nil]
+                end
+      maximum = if battler.respond_to?(:mmp)
+                  battler.mmp
+                elsif battler.respond_to?(:maxsp)
+                  battler.maxsp
+                elsif battler.respond_to?(:maxmp)
+                  battler.maxmp
+                else
+                  return [nil, nil]
+                end
+      [current.to_i, maximum.to_i]
+    rescue Exception
+      [nil, nil]
+    end
+
     def battle_enemies
       if ess? && @battle
         battlers = @battle.respond_to?(:battlers) ? @battle.battlers : []
-        return battlers.compact.select { |b| foe?(@battle, b.index) }.map { |b| [b.index.to_i, b.name.to_s, b.hp.to_i, (b.respond_to?(:totalhp) ? b.totalhp.to_i : b.hp.to_i)] }
+        return battlers.compact.select { |b| foe?(@battle, b.index) }.map do |battler|
+          mp, max_mp = battle_mp_values(battler)
+          [battler.index.to_i, battler.name.to_s, battler.hp.to_i,
+           (battler.respond_to?(:totalhp) ? battler.totalhp.to_i : battler.hp.to_i), mp, max_mp]
+        end
       end
       return [] unless $game_troop
       values = $game_troop.respond_to?(:enemies) ? $game_troop.enemies : ($game_troop.respond_to?(:members) ? $game_troop.members : [])
       values.each_with_index.map do |enemy, index|
+        mp, max_mp = battle_mp_values(enemy)
         [index, (enemy.respond_to?(:name) ? enemy.name.to_s : "Enemy #{index + 1}"), enemy.respond_to?(:hp) ? enemy.hp.to_i : 0,
-         (enemy.respond_to?(:mhp) ? enemy.mhp.to_i : (enemy.respond_to?(:maxhp) ? enemy.maxhp.to_i : 0))]
+         (enemy.respond_to?(:mhp) ? enemy.mhp.to_i : (enemy.respond_to?(:maxhp) ? enemy.maxhp.to_i : 0)), mp, max_mp]
       end
     rescue Exception
       []
@@ -7059,7 +7088,7 @@ module TyranorCheats
 
     def list_battle
       return NEED_BATTLE unless in_battle?
-      battle_enemies.map { |row| "B\t#{row[0]}\t#{wire_text(row[1])}\t#{row[2]}\t#{row[3]}" }.join("\n")
+      battle_enemies.map { |row| "B\t#{row[0]}\t#{wire_text(row[1])}\t#{row[2]}\t#{row[3]}\t#{row[4].nil? ? -1 : row[4]}\t#{row[5].nil? ? -1 : row[5]}" }.join("\n")
     rescue Exception => e
       "Couldn't read battle: #{e.class}: #{e.message}"
     end
@@ -7068,18 +7097,22 @@ module TyranorCheats
       return NEED_BATTLE unless in_battle?
       rows = if ess? && @battle
                @battle.battlers.compact.reject { |battler| foe?(@battle, battler.index) }.map do |battler|
-                 [battler.index.to_i, battler.name.to_s, battler.hp.to_i,
-                  (battler.respond_to?(:totalhp) ? battler.totalhp.to_i : battler.hp.to_i)]
+                 mp, max_mp = battle_mp_values(battler)
+                 actor_id = battler.respond_to?(:id) ? battler.id.to_i : -1
+                 [battler.index.to_i, actor_id, battler.name.to_s, battler.hp.to_i,
+                  (battler.respond_to?(:totalhp) ? battler.totalhp.to_i : battler.hp.to_i), mp, max_mp]
                end
              else
                list = $game_party && $game_party.respond_to?(:battle_members) ? $game_party.battle_members : actors
                list.each_with_index.map do |actor, index|
-                 [index, actor.respond_to?(:name) ? actor.name.to_s : "Actor #{index + 1}",
+                 mp, max_mp = battle_mp_values(actor)
+                 actor_id = actor.respond_to?(:id) ? actor.id.to_i : -1
+                 [index, actor_id, actor.respond_to?(:name) ? actor.name.to_s : "Actor #{index + 1}",
                   actor.respond_to?(:hp) ? actor.hp.to_i : 0,
-                  actor.respond_to?(:mhp) ? actor.mhp.to_i : maxhp_of(actor).to_i]
+                  actor.respond_to?(:mhp) ? actor.mhp.to_i : maxhp_of(actor).to_i, mp, max_mp]
                end
              end
-      rows.map { |row| "L\t#{row[0]}\t#{wire_text(row[1])}\t#{row[2]}\t#{row[3]}" }.join("\n")
+      rows.map { |row| "L\t#{row[0]}\t#{wire_text(row[2])}\t#{row[3]}\t#{row[4]}\t#{row[1]}\t#{row[5].nil? ? -1 : row[5]}\t#{row[6].nil? ? -1 : row[6]}" }.join("\n")
     rescue Exception => e
       "Couldn't read party battle status: #{e.class}: #{e.message}"
     end
@@ -7113,6 +7146,33 @@ module TyranorCheats
       "Enemy HP updated"
     rescue Exception => e
       "Couldn't change enemy HP: #{e.class}: #{e.message}"
+    end
+
+    def set_enemy_mp(index_text, mp_text)
+      return NEED_BATTLE unless in_battle?
+      return "Enter a non-negative MP value." unless mp_text.to_s =~ /\A\d+\z/
+      index = index_text.to_i
+      enemy = if ess? && @battle
+                @battle.battlers.compact.find { |battler| battler.index.to_i == index && foe?(@battle, battler.index) }
+              else
+                rows = $game_troop.respond_to?(:enemies) ? $game_troop.enemies : ($game_troop.respond_to?(:members) ? $game_troop.members : [])
+                rows[index]
+              end
+      return "That enemy isn't in the current battle." unless enemy
+      current, maximum = battle_mp_values(enemy)
+      return NOPE if current.nil? || maximum.nil?
+      value = [[mp_text.to_i, 0].max, maximum].min
+      if enemy.respond_to?(:mp=)
+        enemy.mp = value
+      elsif enemy.respond_to?(:sp=)
+        enemy.sp = value
+      else
+        return NOPE
+      end
+      enemy.refresh if enemy.respond_to?(:refresh)
+      "Enemy MP updated"
+    rescue Exception => e
+      "Couldn't change enemy MP: #{e.class}: #{e.message}"
     end
 
     def safe_map_position(map)

@@ -191,6 +191,12 @@ html[data-theme="dark"] .tm-pokemon-toggle{border-color:#343c37}html[data-theme=
 .tm-battle-grid>.tm-card>.tm-list{max-height:min(34vh,280px);min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:12px;scroll-padding-bottom:12px}
 .tm-battle-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .tm-battle-actions>.tm-btn{min-width:0;white-space:normal}
+.tm-battle-unit{align-items:stretch;flex-direction:column}
+.tm-battle-unit>.tm-name{flex:0 0 auto;white-space:normal}
+.tm-battle-vitals{display:flex;flex-direction:column;gap:5px;width:100%}
+.tm-battle-stat-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:6px}
+.tm-battle-stat-row>.tm-input{height:36px;padding:6px 8px}
+.tm-battle-stat-row>.tm-btn{min-height:36px;padding:6px 10px}
 .tm-gold-row>label{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tm-gold-row>.tm-input{flex:0 1 auto;width:94px;max-width:min(42vw,220px);min-width:72px;margin-left:auto}
 .tm-lock-list-header{display:grid;align-items:center;gap:8px;padding:0 8px 4px;color:#66736c;font-size:12px}

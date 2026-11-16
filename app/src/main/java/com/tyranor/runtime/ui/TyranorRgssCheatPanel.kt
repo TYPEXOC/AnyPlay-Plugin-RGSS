@@ -508,6 +508,9 @@ class TyranorRgssCheatPanel(
                 "setEnemyHp" -> cheats.setEnemyHp(argInt(a, 0), argInt(a, 1)) {
                     completeMessage(it, done)
                 }
+                "setEnemyMp" -> cheats.setEnemyMp(argInt(a, 0), argInt(a, 1)) {
+                    completeMessage(it, done)
+                }
                 "killAllEnemies" -> cheats.runAction("killEnemies") { completeMessage(it, done) }
                 "forceVictory" -> cheats.runAction("forceVictory") { completeMessage(it, done) }
                 "forceDefeat" -> cheats.runAction("forceDefeat") { completeMessage(it, done) }
@@ -760,8 +763,15 @@ class TyranorRgssCheatPanel(
                     val inBattle = enemies.isNotEmpty() || actors.isNotEmpty()
                     done(mapOf(
                         "inBattle" to inBattle,
-                        "enemies" to enemies.map { mapOf("index" to it.index, "name" to it.name, "hp" to it.hp, "mhp" to it.maxHp) },
-                        "actors" to actors.map { mapOf("index" to it.index, "name" to it.name, "hp" to it.hp, "mhp" to it.maxHp) },
+                        "enemies" to enemies.map { mapOf(
+                            "index" to it.index, "name" to it.name, "hp" to it.hp, "mhp" to it.maxHp,
+                            "mp" to it.mp, "mmp" to it.maxMp, "mpSupported" to (it.mp != null && it.maxMp != null),
+                        ) },
+                        "actors" to actors.map { mapOf(
+                            "index" to it.index, "actorId" to it.actorId, "name" to it.name,
+                            "hp" to it.hp, "mhp" to it.maxHp, "mp" to it.mp, "mmp" to it.maxMp,
+                            "mpSupported" to (it.mp != null && it.maxMp != null),
+                        ) },
                     ))
                 }
             }

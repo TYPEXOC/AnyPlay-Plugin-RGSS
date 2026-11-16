@@ -234,14 +234,19 @@ class TyranorCheatController(
         val index: Int,
         val name: String,
         val hp: Int,
-        val maxHp: Int
+        val maxHp: Int,
+        val mp: Int?,
+        val maxMp: Int?
     )
 
     data class BattleActor(
         val index: Int,
         val name: String,
         val hp: Int,
-        val maxHp: Int
+        val maxHp: Int,
+        val actorId: Int?,
+        val mp: Int?,
+        val maxMp: Int?
     )
 
     data class ActorCollectionEntry(
@@ -546,6 +551,10 @@ class TyranorCheatController(
 
     fun setEnemyHp(index: Int, hp: Int, onResult: (String) -> Unit) {
         send("battle_enemy_hp\t$index\t$hp", onResult)
+    }
+
+    fun setEnemyMp(index: Int, mp: Int, onResult: (String) -> Unit) {
+        send("battle_enemy_mp\t$index\t$mp", onResult)
     }
 
     fun setSystemSwitch(id: Int, enabled: Boolean, onResult: (String) -> Unit) {
@@ -980,10 +989,14 @@ class TyranorCheatController(
         send("list\tbattle", 30_000L) { raw ->
             val out = mutableListOf<BattleEnemy>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 5)
-                if (p.size != 5 || p[0] != "B") return@forEach
+                val p = line.split('\t', limit = 7)
+                if (p.size < 5 || p[0] != "B") return@forEach
                 val index = p[1].toIntOrNull() ?: return@forEach
-                out.add(BattleEnemy(index, p[2], p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0))
+                out.add(BattleEnemy(
+                    index, p[2], p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0,
+                    p.getOrNull(5)?.toIntOrNull()?.takeIf { it >= 0 },
+                    p.getOrNull(6)?.toIntOrNull()?.takeIf { it >= 0 },
+                ))
             }
             onResult(out)
         }
@@ -993,10 +1006,15 @@ class TyranorCheatController(
         send("list\tbattle_actors", 30_000L) { raw ->
             val out = mutableListOf<BattleActor>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 5)
-                if (p.size != 5 || p[0] != "L") return@forEach
+                val p = line.split('\t', limit = 8)
+                if (p.size < 5 || p[0] != "L") return@forEach
                 val index = p[1].toIntOrNull() ?: return@forEach
-                out.add(BattleActor(index, p[2], p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0))
+                out.add(BattleActor(
+                    index, p[2], p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0,
+                    p.getOrNull(5)?.toIntOrNull()?.takeIf { it > 0 },
+                    p.getOrNull(6)?.toIntOrNull()?.takeIf { it >= 0 },
+                    p.getOrNull(7)?.toIntOrNull()?.takeIf { it >= 0 },
+                ))
             }
             onResult(out)
         }

@@ -1022,8 +1022,19 @@
       button("强制胜利", "victory", "primary", actionDisabled) +
       button("强制战败", "defeat", "danger", actionDisabled) +
       button("强制逃跑", "escape", "", actionDisabled) + '</div>';
-    var enemies = snapshot.enemies.filter(function (enemy) { return !context.hideEmptyBattleEnemies || String(enemy.name || "").trim().length > 0; }).map(function (enemy) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(enemy.name) + ' HP ' + enemy.hp + '/' + enemy.mhp + '</span>' + textInput("tm-enemy-" + enemy.index, enemy.hp, "number", 'style="width:86px"') + button("设置", "set-enemy", "", 'data-index="' + enemy.index + '"') + '</div>'; }).join("");
-    var actors = snapshot.actors.filter(function (actor) { return !context.hideEmptyBattleActors || String(actor.name || "").trim().length > 0; }).map(function (actor) { return '<div class="tm-item"><span class="tm-name">' + escapeHtml(actor.name) + '</span><span class="tm-badge">HP ' + actor.hp + '/' + actor.mhp + '</span></div>'; }).join("");
+    function battleValueRow(side, unit, field, label, current, maximum) {
+      var inputId = "tm-battle-" + side + "-" + unit.index + "-" + field;
+      var actorId = unit.actorId == null ? "" : ' data-actor-id="' + escapeHtml(unit.actorId) + '"';
+      return '<div class="tm-battle-stat-row"><span>' + label + '</span>' + textInput(inputId, current, "number", 'min="0" max="' + escapeHtml(maximum) + '"') +
+        button("设置", "set-battle-vital", "", 'data-side="' + side + '" data-index="' + escapeHtml(unit.index) + '" data-field="' + field + '" data-input="' + inputId + '"' + actorId) + '</div>';
+    }
+    function battleUnitHtml(unit, side) {
+      var stats = battleValueRow(side, unit, "hp", "HP", unit.hp, unit.mhp);
+      if (unit.mpSupported && unit.mp != null && unit.mmp != null) stats += battleValueRow(side, unit, "mp", "MP", unit.mp, unit.mmp);
+      return '<div class="tm-item tm-battle-unit"><span class="tm-name">' + escapeHtml(unit.name) + '</span><div class="tm-battle-vitals">' + stats + '</div></div>';
+    }
+    var enemies = snapshot.enemies.filter(function (enemy) { return !context.hideEmptyBattleEnemies || String(enemy.name || "").trim().length > 0; }).map(function (enemy) { return battleUnitHtml(enemy, "enemy"); }).join("");
+    var actors = snapshot.actors.filter(function (actor) { return !context.hideEmptyBattleActors || String(actor.name || "").trim().length > 0; }).map(function (actor) { return battleUnitHtml(actor, "actor"); }).join("");
     if (!snapshot.inBattle) {
       enemies = '<div class="tm-note">当前不在战斗中</div>';
       actors = '<div class="tm-note">当前不在战斗中</div>';
@@ -1335,7 +1346,19 @@
     if (action === "show-event-interpreter") return showEventInterpreterDialog(node.dataset.page);
     if (action === "close-interpreter") { var interpreter = node.closest(".tm-modal"); if (interpreter) interpreter.remove(); return; }
     if (action === "teleport") return run(function () { return mod.teleport(inputValue("tm-map-id"), inputValue("tm-map-x"), inputValue("tm-map-y"), 2, 0); }, function () { toast("已预约传送"); close(); });
-    if (action === "set-enemy") { if (!isInBattleNow()) return; return run(function () { mod.setEnemyHp(node.dataset.index, inputValue("tm-enemy-" + node.dataset.index)); }, render); }
+    if (action === "set-battle-vital") {
+      if (!isInBattleNow()) return;
+      var vital = node.dataset.field === "mp" ? "mp" : "hp";
+      var amount = Number(inputValue(node.dataset.input));
+      if (!Number.isInteger(amount) || amount < 0) return toast("请输入有效的非负整数", true);
+      var setter = node.dataset.side === "enemy"
+        ? function () { return vital === "mp" ? mod.setEnemyMp(Number(node.dataset.index), amount) : mod.setEnemyHp(Number(node.dataset.index), amount); }
+        : function () { return mod.setActorStat(Number(node.dataset.actorId), vital, amount); };
+      return run(setter, function () {
+        toast((node.dataset.side === "enemy" ? "敌方" : "我方") + vital.toUpperCase() + "已修改");
+        renderBattle(root.querySelector(".tm-content"));
+      });
+    }
     if (action === "kill-enemies") { if (!isInBattleNow()) return; return run(mod.killAllEnemies, render); }
     if (action === "victory") { if (!isInBattleNow()) return; return run(mod.forceVictory, close); }
     if (action === "defeat") { if (!isInBattleNow()) return; return run(mod.forceDefeat, close); }
