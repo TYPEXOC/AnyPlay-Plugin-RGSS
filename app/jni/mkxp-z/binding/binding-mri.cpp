@@ -4121,6 +4121,7 @@ module TyranorCheats
       when 'event_switch' then set_event_switch(a, b)
       when 'map_event_switches' then set_map_event_switches(a, b)
       when 'battle_enemy_hp' then set_enemy_hp(a, b)
+      when 'battle_unit_hp' then set_battle_unit_hp(a, b)
       when 'battle_enemy_mp' then set_enemy_mp(a, b)
       when 'battle_action' then battle_action(a, b)
       when 'save_slot' then select_save_slot(a)
@@ -7576,6 +7577,26 @@ module TyranorCheats
       "Enemy HP updated"
     rescue Exception => e
       "Couldn't change enemy HP: #{e.class}: #{e.message}"
+    end
+
+    def set_battle_unit_hp(side_text, payload)
+      return NEED_BATTLE unless in_battle?
+      side = side_text.to_s
+      return "Choose a valid battle side." unless %w[actor enemy].include?(side)
+      index_text, hp_text = payload.to_s.split("\t", 2)
+      return "Choose a valid battle unit and HP." unless index_text.to_s =~ /\A\d+\z/ && hp_text.to_s =~ /\A\d+\z/
+      unit = battle_side_units(side).find { |entry| entry[0] == index_text.to_i }
+      return "That battle unit isn't in the current battle." unless unit
+      battler = unit[1]
+      maximum = battle_max_hp(battler)
+      return "Couldn't change this battle unit's HP." unless maximum && battler.respond_to?(:hp=)
+      target = [[hp_text.to_i, 0].max, maximum].min
+      return "Couldn't change battle unit HP." unless battle_set_hp(battler, target)
+      name = battler.respond_to?(:name) ? battler.name.to_s : ""
+      name = side == 'enemy' ? "Enemy" : "Pokémon" if name.empty?
+      "#{wire_text(name)} HP set to #{target}."
+    rescue Exception => e
+      "Couldn't change battle unit HP: #{e.class}: #{e.message}"
     end
 
     def set_enemy_mp(index_text, mp_text)

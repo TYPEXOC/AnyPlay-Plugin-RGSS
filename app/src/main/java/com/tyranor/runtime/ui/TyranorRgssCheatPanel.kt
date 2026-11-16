@@ -509,6 +509,9 @@ class TyranorRgssCheatPanel(
                 "setEnemyHp" -> cheats.setEnemyHp(argInt(a, 0), argInt(a, 1)) {
                     completeMessage(it, done)
                 }
+                "setBattleUnitHp" -> cheats.setBattleUnitHp(argString(a, 0), argInt(a, 1), argInt(a, 2)) {
+                    completeMessage(it, done)
+                }
                 "setEnemyMp" -> cheats.setEnemyMp(argInt(a, 0), argInt(a, 1)) {
                     completeMessage(it, done)
                 }

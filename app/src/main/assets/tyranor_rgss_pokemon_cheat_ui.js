@@ -906,23 +906,47 @@
     try { snapshot = mod.battleSnapshot() || {}; } catch (_) {}
     if (snapshot.loading) { content.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     var inBattle = !!snapshot.inBattle;
-    var enemies = (snapshot.enemies || []).map(function (enemy) {
-      var id = "tm-pokemon-enemy-" + safeId(enemy.index);
-      return '<div class="tm-item"><span class="tm-name">' + esc(enemy.name || ("#" + enemy.index)) + ' HP ' + esc(enemy.hp) + '/' + esc(enemy.mhp) + '</span>' +
-        input(id, enemy.hp, "number", 'min="0" max="' + esc(enemy.mhp) + '"') + button("设置", "set-enemy-hp", "", 'data-index="' + esc(enemy.index) + '" data-input="' + id + '"') + '</div>';
-    }).join("");
-    var allies = (snapshot.actors || []).map(function (actor) {
-      return '<div class="tm-item"><span class="tm-name">' + esc(actor.name || "") + '</span><span class="tm-badge">HP ' + esc(actor.hp) + '/' + esc(actor.mhp) + '</span></div>';
-    }).join("");
-    var battleAction = function (label, action, extra) {
-      return inBattle ? button(label, action, extra) : button(label, "unsupported-option", "unsupported", 'data-reason="当前不在战斗中" aria-disabled="true"');
-    };
-    content.innerHTML = '<div class="tm-grid">' + card("战斗状态", '<div class="tm-pokemon-actions">' +
-      battleAction("消灭全部敌人", "kill-enemies", "danger") + battleAction("强制胜利", "force-victory", "primary") +
-      battleAction("强制战败", "force-defeat", "danger") + battleAction("强制逃跑", "force-escape") + '</div>' +
-      (inBattle ? '' : '<div class="tm-note">' + esc(tr("当前不在战斗中")) + '</div>')) +
-      card("我方宝可梦", '<div class="tm-list">' + (allies || '<div class="tm-note">' + esc(tr("当前不在战斗中")) + '</div>') + '</div>') +
-      card("对手宝可梦", '<div class="tm-list">' + (enemies || '<div class="tm-note">' + esc(tr("当前不在战斗中")) + '</div>') + '</div>') + '</div>';
+    var disabled = inBattle ? "" : "disabled";
+    var outcomes = '<div class="tm-battle-outcomes">' +
+      button("胜利", "force-victory", "tm-battle-outcome-victory", disabled) +
+      button("战败", "force-defeat", "tm-battle-outcome-defeat", disabled) +
+      button("逃跑", "force-escape", "tm-battle-outcome-escape", disabled) + '</div>' +
+      (inBattle ? "" : '<div class="tm-note">' + esc(tr("当前不在战斗中")) + '</div>');
+
+    function sideAction(label, side, operation, extra, index) {
+      var attributes = 'data-side="' + side + '" data-operation="' + operation + '"';
+      if (index != null) attributes += ' data-index="' + esc(index) + '"';
+      if (!inBattle) attributes += " disabled";
+      return button(label, index == null ? "battle-side-action" : "battle-unit-action", extra || "", attributes);
+    }
+    function unitRow(unit, side) {
+      var index = Number(unit.index);
+      var id = "tm-pokemon-battle-hp-" + side + "-" + safeId(index);
+      var status = unit.status && unit.status !== "正常" ? unit.status : tr("正常");
+      return '<div class="tm-item tm-battle-unit"><div class="tm-battle-unit-heading"><div class="tm-battle-unit-name"><strong>' +
+        esc(unit.name || ("#" + index)) + '</strong><span>' + esc(tr("状态：") + status) + '</span></div>' +
+        sideAction("战斗单位恢复", side, "recover", "tm-battle-restore", index) + '</div>' +
+        '<div class="tm-battle-vitals"><div class="tm-battle-stat tm-pokemon-battle-stat"><span><strong>HP</strong><small>' +
+        esc(unit.hp) + ' / ' + esc(unit.mhp) + '</small></span><div class="tm-pokemon-battle-hp-control">' +
+        input(id, unit.hp, "number", 'min="0" max="' + esc(unit.mhp) + '" inputmode="numeric" aria-label="HP ' + esc(unit.name || index) + '"' + (inBattle ? "" : " disabled")) +
+        button("设置", "set-battle-unit-hp", "", 'data-side="' + side + '" data-index="' + esc(index) + '" data-input="' + id + '"' + (inBattle ? "" : " disabled")) +
+        '</div></div></div>';
+    }
+    function sideCard(title, side, units) {
+      var actions = '<div class="tm-battle-side-actions tm-pokemon-battle-side-actions">' +
+        sideAction("完全恢复", side, "recover") +
+        sideAction("清除状态", side, "clear") +
+        sideAction("HP 设为 1", side, "hp-one", "tm-battle-side-danger") + '</div>';
+      var unitRows = units.map(function (unit) { return unitRow(unit, side); }).join("");
+      if (!unitRows) unitRows = '<div class="tm-note">' + esc(tr("当前不在战斗中")) + '</div>';
+      return card(title, '<div class="tm-battle-side-toolbar">' + actions + '</div><div class="tm-list tm-battle-unit-list">' + unitRows + '</div>',
+        "tm-battle-side-card", '<span class="tm-battle-count">' + esc(tr("数量：")) + ' ' + (inBattle ? units.length : 0) + '</span>');
+    }
+    var allies = snapshot.actors || [];
+    var enemies = snapshot.enemies || [];
+    content.innerHTML = '<div class="tm-battle-page">' +
+      card("战斗状态", outcomes, "tm-battle-outcome-card") +
+      '<div class="tm-grid tm-battle-grid">' + sideCard("我方宝可梦", "actor", allies) + sideCard("对手宝可梦", "enemy", enemies) + '</div></div>';
   }
   function renderSave(content) {
     var slots = [];
@@ -1599,6 +1623,19 @@
       var enemyHp = Number(value(node.dataset.input));
       if (!Number.isInteger(enemyHp) || enemyHp < 0) return toast(tr("请输入有效的非负整数"), true);
       return run(function () { return mod.setEnemyHp(Number(node.dataset.index), enemyHp); }, function () { toast(tr("宝可梦 HP 已修改")); renderBattle(panel.querySelector(".tm-content")); });
+    }
+    if (action === "set-battle-unit-hp") {
+      var battleHp = Number(value(node.dataset.input));
+      if (!Number.isInteger(battleHp) || battleHp < 0) return toast(tr("请输入有效的非负整数"), true);
+      return run(function () { return mod.setBattleUnitHp(node.dataset.side, Number(node.dataset.index), battleHp); }, function () {
+        toast(tr("宝可梦 HP 已修改")); renderBattle(panel.querySelector(".tm-content"));
+      });
+    }
+    if (action === "battle-side-action" || action === "battle-unit-action") {
+      var unitIndex = node.dataset.index === undefined ? null : Number(node.dataset.index);
+      return run(function () { return mod.battleAction(node.dataset.side, node.dataset.operation, unitIndex); }, function () {
+        toast(tr("战斗操作已执行")); renderBattle(panel.querySelector(".tm-content"));
+      });
     }
     if (action === "kill-enemies" || action === "force-victory" || action === "force-defeat" || action === "force-escape") {
       var battleAction = action === "kill-enemies" ? "killAllEnemies" : action === "force-victory" ? "forceVictory" : action === "force-defeat" ? "forceDefeat" : "forceEscape";

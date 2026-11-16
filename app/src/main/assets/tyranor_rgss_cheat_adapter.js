@@ -211,7 +211,7 @@
       setEventSelfSwitch: ["listEvents", "eventDetail", "minimapData"],
       setEventSelfSwitches: ["listEvents", "eventDetail", "minimapData"],
       setMapEventSelfSwitches: ["listEvents", "eventDetail", "minimapData"],
-      setEnemyHp: ["battleSnapshot"], setEnemyMp: ["battleSnapshot"], battleAction: ["battleSnapshot"], killAllEnemies: ["battleSnapshot"],
+      setEnemyHp: ["battleSnapshot"], setBattleUnitHp: ["battleSnapshot"], setEnemyMp: ["battleSnapshot"], battleAction: ["battleSnapshot"], killAllEnemies: ["battleSnapshot"],
       forceVictory: ["battleSnapshot"], forceDefeat: ["battleSnapshot"], forceEscape: ["battleSnapshot"],
       saveGame: ["listSaveSlots"], loadGame: ["isReady", "getState", "listSaveSlots", "getGold", "getCoins", "listDatabase", "itemCount", "listBagCategories", "listActors", "actorClasses", "actorSkills", "actorStates", "actorEquips", "listPokemon", "listPokemonStorage", "listPokemonProgress", "listPokemonMoves", "listPokemonTraits", "listPokemonStatuses", "listPokemonStats", "listCapabilities", "listSystem", "currentPosition", "listEvents", "eventDetail", "eventInterpreter", "battleSnapshot", "minimapData"],
       deleteSave: ["listSaveSlots"]
@@ -377,6 +377,7 @@
     },
     battleSnapshot: function () { return cachedRead("battleSnapshot", [], { inBattle: false, actors: [], enemies: [] }, 500); },
     setEnemyHp: function (index, hp) { return invoke("setEnemyHp", [index, hp]); },
+    setBattleUnitHp: function (side, index, hp) { return invoke("setBattleUnitHp", [side, index, hp]); },
     setEnemyMp: function (index, mp) { return invoke("setEnemyMp", [index, mp]); },
     battleAction: function (side, operation, index) { return invoke("battleAction", [side, operation, index == null ? -1 : index]); },
     killAllEnemies: function () { return invoke("killAllEnemies"); },

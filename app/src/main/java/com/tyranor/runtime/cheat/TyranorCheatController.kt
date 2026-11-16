@@ -566,6 +566,10 @@ class TyranorCheatController(
         send("battle_enemy_hp\t$index\t$hp", onResult)
     }
 
+    fun setBattleUnitHp(side: String, index: Int, hp: Int, onResult: (String) -> Unit) {
+        send("battle_unit_hp\t$side\t$index\t$hp", onResult)
+    }
+
     fun setEnemyMp(index: Int, mp: Int, onResult: (String) -> Unit) {
         send("battle_enemy_mp\t$index\t$mp", onResult)
     }
