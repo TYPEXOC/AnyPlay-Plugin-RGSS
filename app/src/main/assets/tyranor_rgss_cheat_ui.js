@@ -14,7 +14,7 @@
   var activeTab = "quick";
   var goldCommitPending = null;
   var pendingEquipScroll = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, mapViewInitialized: false, mapQuery: "", currentMapId: 0, selectedMapId: 0, eventId: 0, eventLoading: false, selectedEventDetail: null, mapEntries: [], pendingMinimapMapId: null, capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, mapViewInitialized: false, mapQuery: "", currentMapId: 0, selectedMapId: 0, eventId: 0, eventLoading: false, selectedEventDetail: null, mapEntries: [], pendingMinimapMapId: null, pendingMinimapEvent: null, capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "队伍"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -214,6 +214,7 @@
         }
       }
     }
+    finishPendingMinimapEvent();
   }
   function renderQuick(content, refreshGold) {
     if (refreshGold === undefined) refreshGold = true;
@@ -820,6 +821,7 @@
       zoomValue: modal.querySelector(".tm-minimap-zoom-value"),
       data: data,
       onCell: function (x, y, events) {
+        context.pendingMinimapEvent = null;
         context.minimapSelection = { mapId: Number(data.mapId) || context.currentMapId, x: x, y: y, events: events || [] };
         var selectionLabel = modal.querySelector("#tm-minimap-selection");
         var actions = modal.querySelectorAll(".tm-minimap-actions [data-action]");
@@ -838,6 +840,7 @@
   }
   function closeMinimapModal(modal) {
     if (!modal) return;
+    context.pendingMinimapEvent = null;
     if (modal._miniMapRenderer) modal._miniMapRenderer.destroy();
     modal.remove();
     renderEventPanel();
@@ -860,7 +863,9 @@
       chooser.innerHTML = '<div class="tm-modal-box tm-map-cell-modal-box"><div class="tm-modal-head"><strong>'
         + escapeHtml(translated("选择事件")) + '</strong>' + button("×", "close-cell-actions", "") + '</div>'
         + '<div class="tm-modal-body tm-map-event-picker">' + eventRows + '</div></div>';
-      chooser.addEventListener("click", function (event) { if (event.target === chooser) chooser.remove(); });
+      chooser.addEventListener("click", function (event) {
+        if (event.target === chooser) { context.pendingMinimapEvent = null; chooser.remove(); }
+      });
       root.appendChild(chooser);
       return;
     }
@@ -868,9 +873,35 @@
     var selectedId = Number(candidates[0].id);
     var detail;
     try { detail = mod.eventDetail(selectedId, selection.mapId); } catch (error) { toast(error.message || String(error), true); return; }
-    if (!detail || !detail.pages || !detail.pages.length) { toast(translated("事件没有可显示的页面"), true); return; }
+    if (detail && detail.loading) {
+      context.pendingMinimapEvent = { eventId: selectedId, mapId: selection.mapId };
+      toast(translated("正在读取事件详情…"));
+      return;
+    }
+    showMinimapEventDetail(selectedId, selection.mapId, detail);
+  }
+  function finishPendingMinimapEvent() {
+    var pending = context.pendingMinimapEvent;
+    if (!pending) return;
+    if (!root.querySelector(".tm-minimap-modal")) { context.pendingMinimapEvent = null; return; }
+    var detail;
+    try { detail = mod.eventDetail(pending.eventId, pending.mapId); }
+    catch (error) {
+      context.pendingMinimapEvent = null;
+      toast(error.message || String(error), true);
+      return;
+    }
+    if (detail && detail.loading) return;
+    context.pendingMinimapEvent = null;
+    showMinimapEventDetail(pending.eventId, pending.mapId, detail);
+  }
+  function showMinimapEventDetail(selectedId, mapId, detail) {
+    if (!detail || detail.error || !detail.pages || !detail.pages.length) {
+      toast(translated("事件没有可显示的页面"), true);
+      return;
+    }
     context.eventId = selectedId;
-    context.selectedMapId = selection.mapId;
+    context.selectedMapId = mapId;
     context.selectedEventDetail = detail;
     context.mapListExpanded = false;
     if (detail.pages.length === 1) return showEventInterpreterDialog(detail.pages[0].index);
@@ -884,7 +915,9 @@
     pagePicker.innerHTML = '<div class="tm-modal-box tm-map-cell-modal-box"><div class="tm-modal-head"><strong>'
       + escapeHtml(translated("事件解释器") + " · #" + detail.id + " " + (detail.name || "")) + '</strong>' + button("×", "close-cell-actions", "") + '</div>'
       + '<div class="tm-modal-body tm-map-event-picker">' + pageRows + '</div></div>';
-    pagePicker.addEventListener("click", function (event) { if (event.target === pagePicker) pagePicker.remove(); });
+    pagePicker.addEventListener("click", function (event) {
+      if (event.target === pagePicker) { context.pendingMinimapEvent = null; pagePicker.remove(); }
+    });
     root.appendChild(pagePicker);
   }
   function eventCommandName(code) {
@@ -1243,7 +1276,11 @@
     }
     if (action === "show-minimap") return showMinimapDialog();
     if (action === "close-minimap") { var minimap = node.closest(".tm-minimap-modal"); if (minimap) closeMinimapModal(minimap); return; }
-    if (action === "close-cell-actions") { var cellDialog = node.closest(".tm-map-cell-modal"); if (cellDialog) cellDialog.remove(); return; }
+    if (action === "close-cell-actions") {
+      context.pendingMinimapEvent = null;
+      var cellDialog = node.closest(".tm-map-cell-modal"); if (cellDialog) cellDialog.remove();
+      return;
+    }
     if (action === "minimap-cell-teleport") {
       var selection = context.minimapSelection;
       if (!selection) return;
@@ -1418,6 +1455,7 @@
   function close(restoreGameFocus) {
     if (!root) return false;
     context.pendingMinimapMapId = null;
+    context.pendingMinimapEvent = null;
     root.querySelectorAll(".tm-minimap-modal").forEach(function (modal) {
       if (modal._miniMapRenderer) modal._miniMapRenderer.destroy();
     });
@@ -1428,6 +1466,7 @@
   function closeForEngineSwitch() {
     if (!root) return false;
     context.pendingMinimapMapId = null;
+    context.pendingMinimapEvent = null;
     root.querySelectorAll(".tm-minimap-modal").forEach(function (modal) {
       if (modal._miniMapRenderer) modal._miniMapRenderer.destroy();
     });
