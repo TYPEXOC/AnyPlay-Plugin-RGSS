@@ -33,6 +33,10 @@
     ["godMode", "无敌"], ["oneHit", "一击必杀"], ["alwaysCrit", "必定暴击"],
     ["escape", "必定逃跑成功"], ["freeSkill", "技能不消耗"]
   ];
+  var gameSceneShortcuts = [
+    ["status", "状态"], ["equip", "装备"], ["skill", "技能"], ["item", "物品"],
+    ["menu", "菜单"], ["load", "加载"], ["save", "保存"], ["debug", "调试"]
+  ];
   function escapeHtml(value) { return String(value == null ? "" : value).replace(/[&<>'"]/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]; }); }
   function inputValue(id) { var node = root && root.querySelector("#" + id); return node ? node.value : ""; }
   function checked(id) { var node = root && root.querySelector("#" + id); return !!(node && node.checked); }
@@ -228,9 +232,10 @@
       });
       return { id: group[0], label: group[0], entries: entries };
     }).filter(function (group) {
-      return group.entries.length > 0 || group.id === "探索" || (group.id === "角色与资源" &&
+      return group.entries.length > 0 || group.id === "探索" || group.id === "打开场景" || (group.id === "角色与资源" &&
         (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0 || supportedValues.indexOf("dropMultiplier") >= 0));
     });
+    groups.push({ id: "打开场景", label: "打开场景", entries: [] });
     if (!groups.length) groups.push({ id: "队伍", label: "队伍", entries: [] });
     var sections = groups;
     if (!sections.some(function (section) { return section.id === context.quickSection; })) context.quickSection = sections[0].id;
@@ -240,7 +245,12 @@
       textInput("tm-gold", cachedGold, "number", 'min="0"') +
       button("拉满", "max-gold") + '</div>';
     var sectionBody;
-    if (selectedGroup) {
+    if (selectedGroup && selectedGroup.id === "打开场景") {
+      var sceneButtons = gameSceneShortcuts.map(function (scene) {
+        return button(scene[1], "open-game-scene", "", 'data-scene="' + scene[0] + '"');
+      }).join("");
+      sectionBody = card("游戏内场景", '<div class="tm-scene-shortcuts">' + sceneButtons + '</div>');
+    } else if (selectedGroup) {
       var toggles = selectedGroup.entries.map(function (entry) {
         return row(entry[1], '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '>');
       }).join("");
@@ -1084,6 +1094,7 @@
     if (action === "close") return close();
     if (action === "render") { mod.refreshReads(); return render(); }
     if (action === "quick-section") { context.quickSection = node.dataset.section; return renderQuick(root.querySelector(".tm-content"), false); }
+    if (action === "open-game-scene") return run(function () { return mod.openGameScene(node.dataset.scene); }, function () { close(); });
     if (action === "flag") {
       var flagOn = node.type === "checkbox" ? node.checked : !mod.getState()[node.dataset.flag];
       return run(function () { return mod.setFlag(node.dataset.flag, flagOn); }, function () { toast("设置已保存"); renderEventPanel(); })

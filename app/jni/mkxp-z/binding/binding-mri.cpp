@@ -7379,6 +7379,7 @@ module TyranorCheats
         return load_slot($1)
       end
       return warp_map(name.to_s.split(':', 2)[1], options) if name.to_s.index('warp:') == 0
+      return open_native_scene(name.to_s.split(':', 2)[1]) if name.to_s.index('scene:') == 0
       case name
       when 'maxExp'        then max_exp
       when 'instantWin'    then instant_win
@@ -7888,6 +7889,32 @@ module TyranorCheats
       "ok"
     rescue Exception => e
       "Couldn't open the game's #{kind} screen: #{e.class}: #{e.message}"
+    end
+
+    def open_native_scene(name)
+      return NOPE unless rpgm?
+      return "The current battle prevents opening game scenes." if in_battle?
+      return open_native_screen(:save) if name == 'save'
+      return open_native_screen(:load) if name == 'load'
+      scene_class = case name
+                    when 'status' then (Scene_Status if defined?(Scene_Status))
+                    when 'equip' then (Scene_Equip if defined?(Scene_Equip))
+                    when 'skill' then (Scene_Skill if defined?(Scene_Skill))
+                    when 'item' then (Scene_Item if defined?(Scene_Item))
+                    when 'menu' then (Scene_Menu if defined?(Scene_Menu))
+                    when 'debug' then (Scene_Debug if defined?(Scene_Debug))
+                    else nil
+                    end
+      return NOPE unless scene_class
+      if engine == :ace
+        return NOPE unless defined?(SceneManager)
+        SceneManager.call(scene_class)
+      else
+        $scene = scene_class.new
+      end
+      "ok"
+    rescue Exception => e
+      "Couldn't open the game's #{name} screen: #{e.class}: #{e.message}"
     end
 
     def max_exp

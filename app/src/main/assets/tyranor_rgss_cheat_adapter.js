@@ -357,6 +357,7 @@
     forceVictory: function () { return invoke("forceVictory"); },
     forceDefeat: function () { return invoke("forceDefeat"); },
     forceEscape: function () { return invoke("forceEscape"); },
+    openGameScene: function (scene) { return invoke("openGameScene", [scene]); },
     listSaveSlots: function () { return cachedRead("listSaveSlots", [], [], 5000) || []; },
     saveGame: function (id) { return invoke("saveGame", [id]); },
     loadGame: function (id) { return invoke("loadGame", [id]); },
