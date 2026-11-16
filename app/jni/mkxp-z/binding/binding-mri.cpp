@@ -8036,6 +8036,17 @@ module TyranorCheats
       false
     end
 
+    def prepare_xp_load_window_compatibility
+      return unless engine == :xp && defined?(Window_Base)
+      Window_Base.class_eval do
+        attr_reader :selected unless method_defined?(:selected)
+        attr_writer :selected unless method_defined?(:selected=)
+      end
+      AnyPlayLog.write("Prepared RGSS1 load-screen Window_Base selection compatibility") rescue nil
+    rescue Exception => e
+      AnyPlayLog.error("RGSS1 load-screen compatibility failed: #{e.class}: #{e.message}") rescue nil
+    end
+
     def open_native_screen(kind)
       if ess?
         if kind == :save
@@ -8055,6 +8066,7 @@ module TyranorCheats
       else
         scene_class = kind == :save ? Scene_Save : Scene_Load
         return NOPE unless scene_class
+        prepare_xp_load_window_compatibility if kind == :load
         $scene = if engine == :vx
                    kind == :save ? scene_class.new(true, false, false) : scene_class.new(false, false, false)
                  else
