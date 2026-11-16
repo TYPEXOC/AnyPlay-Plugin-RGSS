@@ -303,9 +303,31 @@ html[data-theme="dark"] .tm-quick-speed-list{border-color:#343c37}
 .tm-pokemon-quick-speed-row>label{font-size:11px;font-weight:600;white-space:nowrap}
 .tm-pokemon-quick-speed-row>.tm-input{height:31px;padding:0 8px;font-size:12px}
 .tm-pokemon-quick-speed-row>.tm-btn{min-height:31px;padding:5px 8px;font-size:11px}
+.tm-tab.unsupported{opacity:.5}.tm-tab.checking{opacity:.72}
+.tm-pokemon-quick-scene-button.checking{opacity:.72}
+.tm-pokemon-quick-toggle.unsupported,.tm-pokemon-quick-currency.unsupported{background:#ecefed;color:#929b95}
+.tm-pokemon-quick-toggle.checking,.tm-pokemon-quick-currency.checking{opacity:.78}
+.tm-pokemon-quick-toggle.unsupported .tm-switch{opacity:.5}
+.tm-pokemon-quick-speed-row>.tm-btn.unsupported{border:1px solid #dfe5e1;background:#ecefed;color:#929b95;opacity:1}
+.tm-pokemon-quick-currency>.tm-btn.unsupported{border:1px solid #dfe5e1;background:#ecefed;color:#929b95;opacity:1}
+.tm-pokemon-quick-speed-row>.tm-input:disabled,.tm-pokemon-quick-currency>.tm-input[readonly]{background:#edf1ee;color:#929b95}
+.tm-pokemon-quick-recovery.unsupported{color:#929b95}
+.tm-btn.unsupported,.tm-segmented-tab.unsupported{border:1px solid #dfe5e1;background:#ecefed;color:#929b95;opacity:1}
+.tm-segmented-tab.unsupported{cursor:pointer}
+.tm-pokemon-toggle.unsupported{opacity:.62}
+.tm-pokemon-value.unsupported{color:#929b95}.tm-pokemon-value.unsupported>.tm-input{background:#edf1ee;color:#929b95}
+.tm-pokemon-move-row.unsupported{color:#929b95}.tm-pokemon-move-row.unsupported .tm-input{background:#edf1ee;color:#929b95}
 html[data-theme="dark"] .tm-pokemon-quick-toggle{background:#29312c}
 html[data-theme="dark"] .tm-pokemon-quick-note,html[data-theme="dark"] .tm-pokemon-quick-recovery{color:#aab4ae}
 html[data-theme="dark"] .tm-pokemon-quick-scene-button.unsupported,html[data-theme="dark"] .tm-pokemon-quick-multiplier-row>.tm-btn.unsupported{border-color:#343c36;background:#282e2a;color:#77827a}
+html[data-theme="dark"] .tm-tab.unsupported{opacity:.46}html[data-theme="dark"] .tm-pokemon-quick-toggle.unsupported,html[data-theme="dark"] .tm-pokemon-quick-currency.unsupported{background:#282e2a;color:#77827a}
+html[data-theme="dark"] .tm-pokemon-quick-speed-row>.tm-btn.unsupported{border-color:#343c36;background:#282e2a;color:#77827a}
+html[data-theme="dark"] .tm-pokemon-quick-currency>.tm-btn.unsupported{border-color:#343c36;background:#282e2a;color:#77827a}
+html[data-theme="dark"] .tm-pokemon-quick-speed-row>.tm-input:disabled,html[data-theme="dark"] .tm-pokemon-quick-currency>.tm-input[readonly]{background:#282e2a;color:#77827a}
+html[data-theme="dark"] .tm-btn.unsupported,html[data-theme="dark"] .tm-segmented-tab.unsupported{border-color:#343c36;background:#282e2a;color:#77827a}
+html[data-theme="dark"] .tm-pokemon-toggle.unsupported{opacity:.56}
+html[data-theme="dark"] .tm-pokemon-value.unsupported,html[data-theme="dark"] .tm-pokemon-value.unsupported>.tm-input{color:#77827a;background:#282e2a}
+html[data-theme="dark"] .tm-pokemon-move-row.unsupported,html[data-theme="dark"] .tm-pokemon-move-row.unsupported .tm-input{color:#77827a;background:#282e2a}
 html[data-theme="dark"] .tm-pokemon-quick-currency-list,html[data-theme="dark"] .tm-pokemon-quick-drop-note,html[data-theme="dark"] .tm-pokemon-quick-recovery{border-color:#343c37}
 html[data-theme="dark"] .tm-pokemon-quick-multiplier-row>.tm-input:disabled{background:#282e2a;color:#77827a}
 html[data-theme="dark"] .tm-pokemon-quick-speed-list{border-color:#343c37}

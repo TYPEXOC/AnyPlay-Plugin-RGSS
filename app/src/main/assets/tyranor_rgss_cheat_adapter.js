@@ -143,6 +143,16 @@
     return entry.hasValue && !entry.invalidated ? entry.value : loadingValue(fallback);
   }
 
+  function cachedReadSnapshot(method, args, fallback, ttlMs) {
+    cachedRead(method, args, fallback, ttlMs);
+    var key = method + "|" + JSON.stringify(args || []);
+    var entry = readCache[key];
+    return {
+      value: entry && entry.hasValue && !entry.invalidated ? entry.value : null,
+      loading: !entry || entry.pending || !entry.hasValue || entry.invalidated
+    };
+  }
+
   function invalidateMethods(methods) {
     var affected = Object.create(null);
     methods.forEach(function (method) { affected[method] = true; });
@@ -169,6 +179,7 @@
 
   function invalidateAfterMutation(method, args) {
     var affected = {
+      setFlag: ["getState"], setSpeed: ["getState"], setGameSpeed: ["getState"], setRewardMultiplier: ["getState"],
       setGold: ["getGold"], setCoins: ["getCoins"],
       give: ["listDatabase", "itemCount", "listBagCategories"],
       setItemCount: ["listDatabase", "itemCount"], setItemLock: ["listDatabase"],
@@ -192,7 +203,7 @@
       setMapEventSelfSwitches: ["listEvents", "eventDetail", "minimapData"],
       setEnemyHp: ["battleSnapshot"], setEnemyMp: ["battleSnapshot"], battleAction: ["battleSnapshot"], killAllEnemies: ["battleSnapshot"],
       forceVictory: ["battleSnapshot"], forceDefeat: ["battleSnapshot"], forceEscape: ["battleSnapshot"],
-      saveGame: ["listSaveSlots"], loadGame: ["listSaveSlots", "getGold", "getCoins", "listDatabase", "itemCount", "listBagCategories", "listActors", "actorClasses", "actorSkills", "actorStates", "actorEquips", "listPokemon", "listPokemonStorage", "listPokemonProgress", "listPokemonMoves", "listPokemonTraits", "listPokemonStatuses", "listPokemonStats", "listCapabilities", "listSystem", "currentPosition", "listEvents", "eventDetail", "eventInterpreter", "battleSnapshot", "minimapData"],
+      saveGame: ["listSaveSlots"], loadGame: ["isReady", "getState", "listSaveSlots", "getGold", "getCoins", "listDatabase", "itemCount", "listBagCategories", "listActors", "actorClasses", "actorSkills", "actorStates", "actorEquips", "listPokemon", "listPokemonStorage", "listPokemonProgress", "listPokemonMoves", "listPokemonTraits", "listPokemonStatuses", "listPokemonStats", "listCapabilities", "listSystem", "currentPosition", "listEvents", "eventDetail", "eventInterpreter", "battleSnapshot", "minimapData"],
       deleteSave: ["listSaveSlots"]
     }[method];
     if (!affected) return;
@@ -236,7 +247,9 @@
       } catch (_) { return "unknown"; }
     })(),
     isReady: function () { return !!invoke("isReady"); },
+    isReadySnapshot: function () { return cachedReadSnapshot("isReady", [], false, 1000); },
     getState: function () { return invoke("getState") || {}; },
+    getStateSnapshot: function () { return cachedReadSnapshot("getState", [], {}, 5000); },
     refreshReads: refreshReads,
     listCapabilities: function () { return cachedRead("listCapabilities", [], { engine: "unknown", toggles: [], values: [], features: [], actorValues: [] }, 1500); },
     setFlag: function (name, enabled) { return invoke("setFlag", [name, !!enabled]); },
@@ -245,6 +258,8 @@
     setRewardMultiplier: function (name, value) { return invoke("setRewardMultiplier", [name, value]); },
     getGold: function () { return Number(cachedRead("getGold", [], 0, 1000) || 0); },
     getCoins: function () { return Number(cachedRead("getCoins", [], 0, 1000) || 0); },
+    getGoldSnapshot: function () { return cachedReadSnapshot("getGold", [], 0, 1000); },
+    getCoinsSnapshot: function () { return cachedReadSnapshot("getCoins", [], 0, 1000); },
     setGold: function (value) { return invoke("setGold", [value]); },
     setCoins: function (value) { return invoke("setCoins", [value]); },
     listDatabase: function (kind, query, offset, limit, category) {

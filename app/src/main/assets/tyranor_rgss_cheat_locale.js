@@ -57,6 +57,7 @@
       "游戏内场景": "In-game scenes", "临时作弊开关": "Temporary cheats", "成长倍率": "Growth multipliers", "修改后立即生效": "Takes effect immediately",
       "移动与事件": "Movement & events", "快捷开关": "Quick toggles", "当前游戏不支持此场景": "This scene is not supported in this game",
       "灰色入口点按查看原因": "Tap a gray shortcut to see why it is unavailable",
+      "正在读取当前游戏能力…": "Checking this game's available features…",
       "Essentials 标准战斗没有通用物品掉落倍率": "Standard Essentials battles have no universal item drop multiplier",
       "恢复当前队伍中的所有宝可梦 HP 与招式 PP。": "Restore HP and move PP for every Pokémon in the current party.",
       "战斗结算倍率": "Battle settlement multipliers", "努力值倍率": "EV multiplier", "努力值倍率已设置": "EV multiplier updated",
@@ -126,7 +127,7 @@
       "释放": "Release", "宝可梦已释放": "Pokémon released", "确定释放这只宝可梦吗？此操作无法撤销。": "Release this Pokémon? This cannot be undone.",
       "这个盒子是空的": "This box is empty", "无法读取 PC 盒子": "Couldn't read PC storage", "徽章与图鉴": "Badges and Pokédex",
       "徽章": "Badge", "获得全部徽章": "Obtain all badges", "移除全部徽章": "Remove all badges", "徽章已更新": "Badges updated",
-      "拥有图鉴": "Own the Pokédex", "当前游戏没有公开徽章或图鉴接口": "This game exposes no badge or Pokédex controls",
+      "拥有图鉴": "Own the Pokédex", "地区图鉴": "Regional Pokédex", "当前游戏没有公开徽章或图鉴接口": "This game exposes no badge or Pokédex controls",
       "进度已更新": "Progress updated", "修改昵称": "Edit nickname", "昵称已修改": "Nickname updated", "留空或输入原物种名称可清除昵称": "Leave blank or enter the species name to clear the nickname",
       "剩余孵化步数": "Steps until hatch", "快速孵化": "Quick hatch", "蛋只能调整孵化进度": "Eggs can only have their hatch progress changed",
       "蛋只需再走一步即可孵化": "This egg will hatch after one more step"
@@ -183,6 +184,7 @@
       "游戏内场景": "ゲーム内画面", "临时作弊开关": "一時チート", "成长倍率": "成長倍率", "修改后立即生效": "変更後すぐ有効",
       "移动与事件": "移動とイベント", "快捷开关": "クイック設定", "当前游戏不支持此场景": "このゲームではこの画面を開けません",
       "灰色入口点按查看原因": "灰色の項目をタップすると理由を表示",
+      "正在读取当前游戏能力…": "このゲームで使える機能を確認中…",
       "Essentials 标准战斗没有通用物品掉落倍率": "Essentials標準の戦闘には共通のアイテムドロップ倍率がありません",
       "恢复当前队伍中的所有宝可梦 HP 与招式 PP。": "現在のパーティ全員のHPとわざPPを回復します。",
       "战斗结算倍率": "戦闘報酬倍率", "努力值倍率": "努力値倍率", "努力值倍率已设置": "努力値倍率を変更しました",
@@ -252,7 +254,7 @@
       "释放": "逃がす", "宝可梦已释放": "ポケモンを逃がしました", "确定释放这只宝可梦吗？此操作无法撤销。": "このポケモンを逃がしますか？元に戻せません。",
       "这个盒子是空的": "このボックスは空です", "无法读取 PC 盒子": "PC ボックスを読み取れません", "徽章与图鉴": "バッジと図鑑",
       "徽章": "バッジ", "获得全部徽章": "すべてのバッジを入手", "移除全部徽章": "すべてのバッジを削除", "徽章已更新": "バッジを更新しました",
-      "拥有图鉴": "図鑑を所持", "当前游戏没有公开徽章或图鉴接口": "このゲームはバッジまたは図鑑の操作に対応していません",
+      "拥有图鉴": "図鑑を所持", "地区图鉴": "地方図鑑", "当前游戏没有公开徽章或图鉴接口": "このゲームはバッジまたは図鑑の操作に対応していません",
       "进度已更新": "進行状況を更新しました", "修改昵称": "ニックネームを変更", "昵称已修改": "ニックネームを変更しました", "留空或输入原物种名称可清除昵称": "空欄または種族名を入力するとニックネームを解除します",
       "剩余孵化步数": "孵化までの歩数", "快速孵化": "すぐに孵化", "蛋只能调整孵化进度": "タマゴは孵化までの歩数のみ変更できます",
       "蛋只需再走一步即可孵化": "あと 1 歩で孵化します"
