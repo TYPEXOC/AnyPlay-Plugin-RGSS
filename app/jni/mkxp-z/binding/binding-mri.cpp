@@ -3184,6 +3184,7 @@ module TyranorCheats
   @game_speed = 1
   @exp_multiplier = 1.0
   @drop_multiplier = 1.0
+  @ev_multiplier = 1.0
   @engine = nil
   @ess21 = false
   @tick = 0
@@ -3329,9 +3330,12 @@ module TyranorCheats
 
     def on?(name); @on[name] ? true : false; end
     def speed_on?; @on['speed'] ? true : false; end
+    def exp_multiplier; @exp_multiplier.to_f; end
+    def drop_multiplier; @drop_multiplier.to_f; end
+    def ev_multiplier; @ev_multiplier.to_f; end
     def write_state
       File.open(STATE + ".tmp", "wb") do |file|
-        file.write("#{@speed}\t#{@on.keys.join(',')}\t#{@exp_multiplier}\t#{@drop_multiplier}\t#{@game_speed}")
+        file.write("#{@speed}\t#{@on.keys.join(',')}\t#{@exp_multiplier}\t#{@drop_multiplier}\t#{@game_speed}\t#{@ev_multiplier}")
       end
       File.rename(STATE + ".tmp", STATE)
     rescue Exception
@@ -3345,6 +3349,13 @@ module TyranorCheats
       fallback
     end
     def reward_multiplier_supported?(name)
+      if ess?
+        return essentials_battle_exp_supported? if name == 'expMultiplier'
+        return essentials_battle_ev_supported? if name == 'evMultiplier'
+        # Essentials has no shared battle item-drop reward method. Games that
+        # add their own drops need a game-specific integration.
+        return false
+      end
       return false unless rpgm?
       if engine == :xp
         return xp_battle_exp_supported? if name == 'expMultiplier'
@@ -3385,6 +3396,210 @@ module TyranorCheats
         xp_scene_exp_supported? || xp_abs_exp_supported?
     rescue Exception
       false
+    end
+    def essentials_battle_exp_class
+      return nil unless ess?
+      candidates = []
+      candidates << Battle if ess21? && defined?(Battle)
+      candidates << Battle::Scene if ess21? && defined?(Battle::Scene)
+      candidates << PokeBattle_Battle if defined?(PokeBattle_Battle)
+      candidates.find do |klass|
+        class_method?(klass, :pbGainExp) || class_method?(klass, :pbGainEXP)
+      end
+    rescue Exception
+      nil
+    end
+    def essentials_battle_exp_method
+      klass = essentials_battle_exp_class
+      return :pbGainExp if klass && class_method?(klass, :pbGainExp)
+      return :pbGainEXP if klass && class_method?(klass, :pbGainEXP)
+      nil
+    rescue Exception
+      nil
+    end
+    def essentials_pokemon_exp_class
+      return nil unless ess?
+      candidates = []
+      candidates << Pokemon if defined?(Pokemon)
+      candidates << PokeBattle_Pokemon if defined?(PokeBattle_Pokemon)
+      candidates.find do |klass|
+        class_method?(klass, :exp) && class_method?(klass, :exp=)
+      end
+    rescue Exception
+      nil
+    end
+    def essentials_battle_exp_supported?
+      essentials_battle_exp_class && essentials_battle_exp_method && essentials_pokemon_exp_class
+    rescue Exception
+      false
+    end
+    def essentials_battle_ev_class
+      return nil unless ess?
+      candidates = []
+      candidates << Battle if ess21? && defined?(Battle)
+      candidates << Battle::Scene if ess21? && defined?(Battle::Scene)
+      candidates << PokeBattle_Battle if defined?(PokeBattle_Battle)
+      candidates.find do |klass|
+        class_method?(klass, :pbGainEvs) || class_method?(klass, :pbGainEVs)
+      end
+    rescue Exception
+      nil
+    end
+    def essentials_battle_ev_method
+      klass = essentials_battle_ev_class
+      return :pbGainEvs if klass && class_method?(klass, :pbGainEvs)
+      return :pbGainEVs if klass && class_method?(klass, :pbGainEVs)
+      nil
+    rescue Exception
+      nil
+    end
+    def essentials_battle_ev_pokemon
+      pokes.find { |pokemon| pokemon && pokemon.respond_to?(:ev) && pokemon.ev.is_a?(Array) }
+    rescue Exception
+      nil
+    end
+    def essentials_battle_ev_supported?
+      essentials_battle_ev_class && essentials_battle_ev_method && essentials_battle_ev_pokemon
+    rescue Exception
+      false
+    end
+    def essentials_ev_stat_limit
+      return Settings::MAX_EV_STAT.to_i if defined?(Settings::MAX_EV_STAT)
+      252
+    rescue Exception
+      252
+    end
+    def essentials_ev_total_limit
+      return Settings::MAX_TOTAL_EV.to_i if defined?(Settings::MAX_TOTAL_EV)
+      510
+    rescue Exception
+      510
+    end
+    def essentials_ev_total_cap_enabled?
+      return false if defined?($game_switches) && $game_switches && $game_switches[:No_Total_EV_Cap]
+      true
+    rescue Exception
+      true
+    end
+    def scale_essentials_ev_gain(pokemon, previous, multiplier)
+      return unless pokemon && previous.is_a?(Array) && pokemon.respond_to?(:ev)
+      current = pokemon.ev
+      return unless current.is_a?(Array) && current.length == previous.length
+      stat_limit = [essentials_ev_stat_limit, 0].max
+      total_limit = [essentials_ev_total_limit, 0].max
+      remaining_total = total_limit - previous.inject(0) { |total, value| total + value.to_i }
+      remaining_total = 0 if remaining_total < 0
+      previous.each_index do |index|
+        before = previous[index].to_i
+        gained = current[index].to_i - before
+        next if gained <= 0
+        scaled_gain = [[(gained * multiplier).round, 0].max, [stat_limit - before, 0].max].min
+        if essentials_ev_total_cap_enabled?
+          scaled_gain = [scaled_gain, remaining_total].min
+          remaining_total -= scaled_gain
+        end
+        current[index] = before + scaled_gain
+      end
+      nil
+    rescue Exception
+      nil
+    end
+
+    def essentials_class(*names)
+      names.each do |name|
+        key = name.to_sym
+        return Object.const_get(key) if Object.const_defined?(key)
+      end
+      nil
+    rescue Exception
+      nil
+    end
+    def essentials_party_screen_supported?
+      scene = essentials_class('PokemonParty_Scene', 'PokemonPartyScene', 'PokemonScreen_Scene')
+      screen = essentials_class('PokemonPartyScreen', 'PokemonScreen')
+      ess? && trainer && trainer.respond_to?(:party) && trainer.party.is_a?(Array) &&
+        !trainer.party.empty? && scene && screen && class_method?(screen, :pbPokemonScreen)
+    rescue Exception
+      false
+    end
+    def essentials_summary_screen_supported?
+      scene = essentials_class('PokemonSummary_Scene', 'PokemonSummaryScene')
+      screen = essentials_class('PokemonSummaryScreen', 'PokemonSummary')
+      party = trainer && trainer.respond_to?(:party) ? trainer.party : nil
+      ess? && party.is_a?(Array) && party.any? { |pokemon| pokemon && !(pokemon.respond_to?(:egg?) && pokemon.egg?) } &&
+        scene && screen && class_method?(screen, :pbStartScreen)
+    rescue Exception
+      false
+    end
+    def essentials_bag_screen_supported?
+      scene = essentials_class('PokemonBag_Scene', 'PokemonBagScene')
+      screen = essentials_class('PokemonBagScreen')
+      ess? && bag && scene && screen && class_method?(screen, :pbStartScreen)
+    rescue Exception
+      false
+    end
+    def essentials_menu_screen_supported?
+      scene = essentials_class('PokemonPauseMenu_Scene', 'PokemonPauseMenuScene', 'PokemonMenu_Scene', 'PokemonMenuScene')
+      screen = essentials_class('PokemonPauseMenu', 'PokemonMenu')
+      ess? && scene && screen && class_method?(screen, :pbStartPokemonMenu)
+    rescue Exception
+      false
+    end
+    def essentials_debug_screen_supported?
+      ess? && defined?($DEBUG) && $DEBUG &&
+        (Object.private_method_defined?(:pbDebugMenu) || Object.method_defined?(:pbDebugMenu))
+    rescue Exception
+      false
+    end
+
+    def essentials_scene_supported?(name)
+      case name
+      when 'status' then essentials_summary_screen_supported?
+      when 'equip', 'skill' then essentials_party_screen_supported?
+      when 'item' then essentials_bag_screen_supported?
+      when 'menu' then essentials_menu_screen_supported?
+      when 'save' then essentials_class('PokemonSaveScene') && essentials_class('PokemonSave') &&
+        class_method?(essentials_class('PokemonSave'), :pbSaveScreen)
+      when 'load' then essentials_class('PokemonLoadScene') && essentials_class('PokemonLoad') &&
+        class_method?(essentials_class('PokemonLoad'), :pbStartLoadScreen)
+      when 'debug' then essentials_debug_screen_supported?
+      else false
+      end
+    rescue Exception
+      false
+    end
+
+    def open_essentials_scene(name)
+      return NOPE unless essentials_scene_supported?(name)
+      case name
+      when 'save' then return open_native_screen(:save)
+      when 'load' then return open_native_screen(:load)
+      when 'status'
+        party = trainer.party
+        index = party.index { |pokemon| pokemon && !(pokemon.respond_to?(:egg?) && pokemon.egg?) }
+        scene_class = essentials_class('PokemonSummary_Scene', 'PokemonSummaryScene')
+        screen_class = essentials_class('PokemonSummaryScreen', 'PokemonSummary')
+        screen_class.new(scene_class.new).pbStartScreen(party, index)
+      when 'equip', 'skill'
+        scene_class = essentials_class('PokemonParty_Scene', 'PokemonPartyScene', 'PokemonScreen_Scene')
+        screen_class = essentials_class('PokemonPartyScreen', 'PokemonScreen')
+        screen_class.new(scene_class.new, trainer.party).pbPokemonScreen
+      when 'item'
+        scene_class = essentials_class('PokemonBag_Scene', 'PokemonBagScene')
+        screen_class = essentials_class('PokemonBagScreen')
+        screen_class.new(scene_class.new, bag).pbStartScreen
+      when 'menu'
+        scene_class = essentials_class('PokemonPauseMenu_Scene', 'PokemonPauseMenuScene', 'PokemonMenu_Scene', 'PokemonMenuScene')
+        screen_class = essentials_class('PokemonPauseMenu', 'PokemonMenu')
+        screen_class.new(scene_class.new).pbStartPokemonMenu
+      when 'debug'
+        Object.new.send(:pbDebugMenu)
+      else
+        return NOPE
+      end
+      "ok"
+    rescue Exception => e
+      "Couldn't open the game's #{name} screen: #{e.class}: #{e.message}"
     end
     def xp_scene_drop_supported?
       xp_scene_exp_supported? && defined?(Game_Party) &&
@@ -3914,6 +4129,7 @@ module TyranorCheats
       restore_game_speed(saved_game_speed)
       @exp_multiplier = restored_multiplier(fields[2], 1.0)
       @drop_multiplier = restored_multiplier(fields[3], 1.0)
+      @ev_multiplier = restored_multiplier(fields[5], 1.0)
       @item_snap = nil
       @points_snap = nil
       @coins_snap = nil
@@ -4150,15 +4366,18 @@ module TyranorCheats
         write_state
         return "Game speed x#{@game_speed}"
       end
-      if name == 'expMultiplier' || name == 'dropMultiplier'
+      if name == 'expMultiplier' || name == 'dropMultiplier' || name == 'evMultiplier'
         value = v.to_s.strip
         return "Enter a number from 0 to 100." unless value =~ /\A(?:\d+(?:\.\d*)?|\.\d+)\z/
         multiplier = value.to_f
         return "Enter a number from 0 to 100." unless multiplier >= 0 && multiplier <= 100
-        return NOPE unless rpgm? && reward_multiplier_supported?(name)
+        return NOPE unless reward_multiplier_supported?(name)
         if name == 'expMultiplier'
           @exp_multiplier = multiplier
           label = "EXP"
+        elsif name == 'evMultiplier'
+          @ev_multiplier = multiplier
+          label = "EV"
         else
           @drop_multiplier = multiplier
           label = "Drop"
@@ -4662,6 +4881,9 @@ module TyranorCheats
       elsif rpgm? && defined?(Game_Troop)
         out << "V\texpMultiplier" if class_method?(Game_Troop, :exp_total)
         out << "V\tdropMultiplier" if class_method?(Game_Troop, :make_drop_items)
+      elsif ess?
+        out << "V\texpMultiplier" if essentials_battle_exp_supported?
+        out << "V\tevMultiplier" if essentials_battle_ev_supported?
       end
       out << "F\tevents" if $game_map && $game_map.respond_to?(:events)
       out << "F\teventSelfSwitches" if event_switches && event_switches.respond_to?(:[]=)
@@ -4670,6 +4892,20 @@ module TyranorCheats
       out << "F\tbattle" if ess? || $game_troop
       out << "F\tbattleEscape" if toggle_supported?('escape')
       out << "F\tsaveSlots" if save_slots_supported?
+      if ess?
+        %w[status equip skill item menu load save debug].each do |name|
+          out << "F\tscene#{name[0, 1].upcase}#{name[1..-1]}" if essentials_scene_supported?(name)
+        end
+      else
+        out << "F\tsceneStatus" if defined?(Scene_Status)
+        out << "F\tsceneEquip" if defined?(Scene_Equip)
+        out << "F\tsceneSkill" if defined?(Scene_Skill)
+        out << "F\tsceneItem" if defined?(Scene_Item)
+        out << "F\tsceneMenu" if defined?(Scene_Menu)
+        out << "F\tsceneLoad" if defined?(Scene_Load)
+        out << "F\tsceneSave" if defined?(Scene_Save)
+        out << "F\tsceneDebug" if defined?(Scene_Debug)
+      end
       # Report Essentials data domains independently of whether a save has
       # initialized its live objects yet. The Web panel can then keep the
       # Party and Bag tabs visible during title/new-game setup, while the
@@ -8079,6 +8315,10 @@ module TyranorCheats
     end
 
     def open_native_scene(name)
+      if ess?
+        return "The current battle prevents opening game scenes." if in_battle?
+        return open_essentials_scene(name)
+      end
       return NOPE unless rpgm?
       return "The current battle prevents opening game scenes." if in_battle?
       return open_native_screen(:save) if name == 'save'
@@ -8511,6 +8751,75 @@ module TyranorCheats
             end
           end
         end
+      end
+
+      # Essentials awards battle EXP from its battle-level pbGainExp method.
+      # Mark only that call as a reward transaction, then scale positive EXP
+      # changes on Pokemon#exp= so other EXP changes remain untouched.
+      if ess? && essentials_battle_exp_supported?
+        battle_class = essentials_battle_exp_class
+        battle_exp_method = essentials_battle_exp_method
+        battle_class.class_eval do
+          unless TyranorCheats.class_method?(self, :__ap_cheat_ess_gain_exp)
+            alias_method :__ap_cheat_ess_gain_exp, battle_exp_method
+            define_method(battle_exp_method) do |*args, &block|
+              TyranorCheats.with_battle_reward do
+                __send__(:__ap_cheat_ess_gain_exp, *args, &block)
+              end
+            end
+          end
+        end
+        preserve_keyword_forwarding(battle_class, battle_exp_method)
+
+        pokemon_class = essentials_pokemon_exp_class
+        pokemon_class.class_eval do
+          unless TyranorCheats.class_method?(self, :__ap_cheat_ess_exp_set)
+            alias_method :__ap_cheat_ess_exp_set, :exp=
+            define_method(:exp=) do |*args, &block|
+              if TyranorCheats.battle_reward_active? && !args.empty? && args[0].is_a?(Numeric) &&
+                  respond_to?(:exp) && args[0] > exp
+                previous = exp.to_f
+                multiplier = TyranorCheats.exp_multiplier
+                args[0] = (previous + (args[0].to_f - previous) * multiplier).round if multiplier != 1.0
+              end
+              __send__(:__ap_cheat_ess_exp_set, *args, &block)
+            end
+          end
+        end
+        preserve_keyword_forwarding(pokemon_class, :exp=)
+      end
+
+      # Essentials EVs are awarded through a game battle method such as
+      # pbGainEvs. Scale the actual positive EV delta after the game's own
+      # reward calculation, then reapply its normal battle stat refresh.
+      if ess? && essentials_battle_ev_supported?
+        battle_class = essentials_battle_ev_class
+        battle_ev_method = essentials_battle_ev_method
+        battle_class.class_eval do
+          unless TyranorCheats.class_method?(self, :__ap_cheat_ess_gain_evs)
+            alias_method :__ap_cheat_ess_gain_evs, battle_ev_method
+            define_method(battle_ev_method) do |*args, &block|
+              pokemon = args[0]
+              previous = pokemon.ev.dup if pokemon && pokemon.respond_to?(:ev) && pokemon.ev.is_a?(Array)
+              result = __send__(:__ap_cheat_ess_gain_evs, *args, &block)
+              if TyranorCheats.battle_reward_active? && previous
+                multiplier = TyranorCheats.ev_multiplier
+                if multiplier != 1.0
+                  TyranorCheats.scale_essentials_ev_gain(pokemon, previous, multiplier)
+                  battlers = instance_variable_get(:@battlers) rescue nil
+                  battler = battlers.find { |entry| entry && entry.respond_to?(:pokemon) && entry.pokemon.equal?(pokemon) } if battlers.respond_to?(:find)
+                  if battler && battler.respond_to?(:pbUpdate)
+                    battler.pbUpdate
+                  elsif pokemon.respond_to?(:calcStats)
+                    pokemon.calcStats
+                  end
+                end
+              end
+              result
+            end
+          end
+        end
+        preserve_keyword_forwarding(battle_class, battle_ev_method)
       end
 
       if engine == :xp && xp_scene_drop_supported? && defined?(Game_Party) &&

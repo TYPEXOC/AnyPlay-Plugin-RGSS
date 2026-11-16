@@ -295,6 +295,7 @@ class TyranorRgssCheatPanel(
                     "gameSpeedMultiplier" to cheats.gameSpeedMultiplier(),
                     "expMultiplier" to cheats.expMultiplier(),
                     "dropMultiplier" to cheats.dropMultiplier(),
+                    "evMultiplier" to cheats.evMultiplier(),
                     "fastText" to cheats.isEnabled(TyranorCheatToggle.FAST_TEXT),
                     "eventSpeed" to cheats.isEnabled(TyranorCheatToggle.EVENT_SPEED),
                     "msgSkip" to cheats.isEnabled(TyranorCheatToggle.MESSAGE_SKIP),

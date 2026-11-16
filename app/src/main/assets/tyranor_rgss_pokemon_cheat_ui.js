@@ -55,6 +55,12 @@
     noEncounter: "无野生遇敌", noclip: "穿墙", fastText: "快速文字", eventSpeed: "事件加速",
     msgSkip: "对话快进", invincible: "无敌", oneHit: "一击必杀", crit: "必定暴击", escape: "必定逃跑成功", freeSkill: "招式PP不减"
   };
+  var gameSceneShortcuts = [
+    ["status", "状态", "sceneStatus"], ["equip", "装备", "sceneEquip"],
+    ["skill", "技能", "sceneSkill"], ["item", "物品", "sceneItem"],
+    ["menu", "菜单", "sceneMenu"], ["load", "加载", "sceneLoad"],
+    ["save", "保存", "sceneSave"], ["debug", "调试", "sceneDebug"]
+  ];
 
   function tr(value) { return window.TyranorCheatTranslate ? window.TyranorCheatTranslate(value) : value; }
   function esc(value) {
@@ -162,44 +168,90 @@
   }
   function renderQuick(content) {
     var state = mod.getState() || {};
-    var groups = [
-      { id: "resources", label: "队伍与资源", toggles: ["hpmp", "gold", "status", "items", "coins"], currencies: true },
-      { id: "explore", label: "探索与对话", toggles: ["noEncounter", "noclip", "fastText", "eventSpeed", "msgSkip"], speed: true },
-      { id: "battle", label: "战斗", toggles: ["invincible", "oneHit", "crit", "escape", "freeSkill"] }
-    ].map(function (group) {
-      group.toggles = group.toggles.filter(hasToggle);
-      group.available = group.toggles.length > 0 || (group.currencies && (hasValue("gold") || hasValue("coins") ||
-        (hasFeature("pokemonRecover") && hasFeature("pokemonPartyReady")))) ||
-        (group.speed && (hasValue("speed") || hasFeature("pokemonGameSpeed")));
-      return group;
-    }).filter(function (group) { return group.available; });
-    if (!groups.length) { content.innerHTML = '<div class="tm-note">' + esc(tr("当前没有可用的快捷功能")) + '</div>'; return; }
-    if (!groups.some(function (group) { return group.id === quickSection; })) quickSection = groups[0].id;
-    var selected = groups.filter(function (group) { return group.id === quickSection; })[0];
-    var body = selected.toggles.map(function (key) {
-        return '<label class="tm-pokemon-toggle"><span>' + esc(tr(flagLabels[key] || key)) + '</span>' +
+    var sections = [
+      { id: "resources", label: "队伍与资源" },
+      { id: "explore-battle", label: "探索与战斗" }
+    ];
+    if (!sections.some(function (section) { return section.id === quickSection; })) quickSection = "resources";
+    function available(keys) { return keys.filter(hasToggle); }
+    function toggleGrid(keys, emptyMessage) {
+      var rows = keys.map(function (key) {
+        return '<label class="tm-pokemon-quick-toggle"><span>' + esc(tr(flagLabels[key] || key)) + '</span>' +
           '<input class="tm-switch" type="checkbox" data-action="flag" data-name="' + key + '" ' + (state[key] ? "checked" : "") + '></label>';
       }).join("");
-    if (selected.currencies) {
+      return '<div class="tm-pokemon-quick-toggle-grid">' + (rows || '<div class="tm-note">' + esc(tr(emptyMessage || "当前没有可用的快捷功能")) + '</div>') + '</div>';
+    }
+    function quickCard(title, body, cls, headerControl) {
+      return card(title, body, "tm-pokemon-quick-card " + (cls || ""), headerControl);
+    }
+    var pageBody;
+    if (quickSection === "resources") {
+      var sceneButtons = gameSceneShortcuts.map(function (scene) {
+        var unavailable = !hasFeature(scene[2]);
+        return button(scene[1], "open-game-scene", "tm-pokemon-quick-scene-button" + (unavailable ? " unsupported" : ""),
+          'data-scene="' + scene[0] + '" data-feature="' + scene[2] + '"' + (unavailable ? ' aria-disabled="true"' : ""));
+      }).join("");
+      var sceneCard = quickCard("游戏内场景", '<div class="tm-pokemon-quick-scene-grid">' + sceneButtons + '</div>', "tm-pokemon-quick-scene-card",
+        '<span class="tm-pokemon-quick-note">' + esc(tr("灰色入口点按查看原因")) + '</span>');
+      var resourceBody = toggleGrid(available(["hpmp", "gold", "status", "items", "coins"]), "当前游戏没有可用的角色资源开关");
+      var currencyRows = "";
       if (hasValue("gold")) {
         var money = 0; try { money = mod.getGold(); } catch (_) {}
-        body += '<div class="tm-row tm-gold-row"><label>' + esc(tr("金钱")) + '：<strong>' + esc(money) + '</strong></label>' +
-          input("tm-pokemon-gold", money, "number", 'min="0" inputmode="numeric"') + button("设置", "set-gold", "primary") + button("拉满", "max-gold") + '</div>';
+        currencyRows += '<div class="tm-pokemon-quick-currency"><label>' + esc(tr("金钱")) + '：<strong>' + esc(money) + '</strong></label>' +
+          input("tm-pokemon-gold", money, "number", 'data-currency-kind="gold" min="0" inputmode="numeric"') + button("拉满", "max-gold") + '</div>';
       }
       if (hasValue("coins")) {
         var coins = 0; try { coins = mod.getCoins(); } catch (_) {}
-        body += '<div class="tm-row"><label class="tm-grow">' + esc(tr("游戏币")) + '：<strong>' + esc(coins) + '</strong></label>' +
-          input("tm-pokemon-coins", coins, "number", 'min="0" inputmode="numeric"') + button("设置", "set-coins", "primary") + button("拉满", "max-coins") + '</div>';
+        currencyRows += '<div class="tm-pokemon-quick-currency"><label>' + esc(tr("游戏币")) + '：<strong>' + esc(coins) + '</strong></label>' +
+          input("tm-pokemon-coins", coins, "number", 'data-currency-kind="coins" min="0" inputmode="numeric"') + button("拉满", "max-coins") + '</div>';
       }
-      if (hasFeature("pokemonRecover") && hasFeature("pokemonPartyReady")) body += '<div class="tm-row">' + button("恢复全队宝可梦", "recover-party", "primary") + '</div>';
-    }
-    if (selected.speed) {
-      if (hasValue("speed")) body += '<div class="tm-row"><label class="tm-grow">' + esc(tr("移动速度")) + '</label>' +
+      if (currencyRows) resourceBody += '<div class="tm-pokemon-quick-currency-list">' + currencyRows + '</div>';
+
+      var multiplierRows = "";
+      var expSupported = hasValue("expMultiplier");
+      multiplierRows += '<div class="tm-pokemon-quick-multiplier-row"><label for="tm-pokemon-exp-multiplier">' + esc(tr("经验倍率")) + '</label>' +
+        input("tm-pokemon-exp-multiplier", state.expMultiplier == null ? 1 : state.expMultiplier, "number",
+          'min="0" max="100" step="0.1"' + (expSupported ? "" : " disabled")) +
+        button("设置", "set-exp-multiplier", expSupported ? "primary" : "unsupported", expSupported ? "" : 'aria-disabled="true" data-support="exp"') + '</div>';
+      var evSupported = hasValue("evMultiplier");
+      multiplierRows += '<div class="tm-pokemon-quick-multiplier-row"><label for="tm-pokemon-ev-multiplier">' + esc(tr("努力值倍率")) + '</label>' +
+        input("tm-pokemon-ev-multiplier", state.evMultiplier == null ? 1 : state.evMultiplier, "number",
+          'min="0" max="100" step="0.1"' + (evSupported ? "" : " disabled")) +
+        button("设置", "set-ev-multiplier", evSupported ? "primary" : "unsupported", evSupported ? "" : 'aria-disabled="true" data-support="ev"') + '</div>';
+      multiplierRows += '<div class="tm-pokemon-quick-multiplier-row"><label for="tm-pokemon-drop-multiplier">' + esc(tr("掉落倍率")) + '</label>' +
+        input("tm-pokemon-drop-multiplier", state.dropMultiplier == null ? 1 : state.dropMultiplier, "number",
+          'min="0" max="100" step="0.1" disabled') +
+        button("设置", "set-drop-multiplier", "unsupported", 'aria-disabled="true" data-support="drop"') + '</div>';
+      var growthBody = '<div class="tm-pokemon-quick-multiplier-list">' + multiplierRows + '</div>' +
+        '<p class="tm-pokemon-quick-note tm-pokemon-quick-drop-note">' + esc(tr("Essentials 标准战斗没有通用物品掉落倍率")) + '</p>' +
+        (!expSupported ? '<p class="tm-pokemon-quick-note">' + esc(tr("当前游戏没有可用的战斗经验结算接口")) + '</p>' : "") +
+        (!evSupported ? '<p class="tm-pokemon-quick-note">' + esc(tr("当前游戏没有可用的努力值结算接口")) + '</p>' : "");
+      var recoveryBody = hasFeature("pokemonRecover") && hasFeature("pokemonPartyReady")
+        ? '<div class="tm-pokemon-quick-recovery">' +
+          '<span>' + esc(tr("恢复当前队伍中的所有宝可梦 HP 与招式 PP。")) + '</span>' +
+          button("恢复全队宝可梦", "recover-party", "primary") + '</div>'
+        : '';
+      pageBody = '<div class="tm-pokemon-quick-resource-page">' + sceneCard +
+        '<div class="tm-pokemon-quick-resource-grid">' +
+        quickCard("队伍与资源", resourceBody, "tm-pokemon-quick-resource-card") +
+        quickCard("战斗结算倍率", growthBody + recoveryBody, "tm-pokemon-quick-growth-card", '<span class="tm-pokemon-quick-note">' + esc(tr("修改后立即生效")) + '</span>') +
+        '</div></div>';
+    } else {
+      var exploration = available(["noEncounter", "noclip", "fastText", "eventSpeed", "msgSkip"]);
+      var battle = available(["invincible", "oneHit", "crit", "escape", "freeSkill"]);
+      var speedRows = "";
+      if (hasValue("speed")) speedRows += '<div class="tm-pokemon-quick-speed-row"><label>' + esc(tr("移动速度")) + '</label>' +
         input("tm-pokemon-speed", state.speedMultiplier || 2, "number", 'min="0.25" max="8" step="0.25"') + button("设置", "set-speed", "primary") + '</div>';
-      if (hasFeature("pokemonGameSpeed")) body += '<div class="tm-row"><label class="tm-grow">' + esc(tr("游戏倍速")) + '</label>' +
+      if (hasFeature("pokemonGameSpeed")) speedRows += '<div class="tm-pokemon-quick-speed-row"><label>' + esc(tr("游戏倍速")) + '</label>' +
         input("tm-pokemon-game-speed", state.gameSpeedMultiplier || 1, "number", 'min="1" max="9" step="1"') + button("设置", "set-game-speed", "primary") + '</div>';
+      var speedControls = speedRows ? '<div class="tm-pokemon-quick-speed-list">' + speedRows + '</div>' : '';
+      pageBody = '<div class="tm-pokemon-quick-control-grid">' +
+        quickCard("探索", toggleGrid(exploration, "当前游戏没有可用的探索开关") + speedControls, "tm-pokemon-quick-exploration-card") +
+        quickCard("战斗", toggleGrid(battle, "当前游戏没有可用的战斗开关"), "tm-pokemon-quick-battle-card") + '</div>';
     }
-    content.innerHTML = segmentedTabs(groups, quickSection, "quick-section") + card(selected.label, body || '<div class="tm-note">' + esc(tr("当前没有可用的快捷功能")) + '</div>');
+    content.innerHTML = '<div class="tm-pokemon-quick-layout">' +
+      segmentedTabs(sections, quickSection, "quick-section") +
+      '<div class="tm-pokemon-quick-page" id="tm-quick-section">' + pageBody + '</div></div>';
   }
   function renderTeam(content) {
     if (!hasFeature("pokemonParty")) { content.innerHTML = '<div class="tm-note">' + esc(tr("宝可梦队伍能力正在初始化")) + '</div>'; return; }
@@ -495,7 +547,7 @@
         (hasFeature("events") ? '<div class="tm-list" id="tm-browse-list"></div>' : '') +
         (hasFeature("mapControl") ? '<div class="tm-list tm-map-dropdown" id="tm-map-list" style="display:none"></div>' : '') + '</section>' : '') +
       (mapControls ? card("地图操作", mapControls) : '') +
-      (hasFeature("events") ? card("事件详情", '<div id="tm-event-panel">' + eventPanelHtml() + '</div>') : '') + '</div>';
+      (hasFeature("events") ? card("事件详情", '<div class="tm-card-body" id="tm-event-panel">' + eventPanelHtml() + '</div>') : '') + '</div>';
     loadEventsForMap(mapId);
     loadBrowse();
     renderEventPanel();
@@ -1117,6 +1169,21 @@
       return;
     }
     if (action === "quick-section") { quickSection = node.dataset.section || "resources"; return renderQuick(panel.querySelector(".tm-content")); }
+    if (action === "open-game-scene") {
+      if (!hasFeature(node.dataset.feature)) return toast(tr("此功能对当前宝可梦游戏不可用"), true);
+      return run(function () { return mod.openGameScene(node.dataset.scene); }, function () { close(true); });
+    }
+    if (action === "set-exp-multiplier" || action === "set-drop-multiplier" || action === "set-ev-multiplier") {
+      var rewardName = action === "set-exp-multiplier" ? "expMultiplier" : action === "set-ev-multiplier" ? "evMultiplier" : "dropMultiplier";
+      if (action === "set-drop-multiplier") return toast(tr("Essentials 标准战斗没有通用物品掉落倍率"), true);
+      if (!hasValue(rewardName)) return toast(tr(rewardName === "evMultiplier" ? "当前游戏没有可用的努力值结算接口" : "当前游戏没有可用的战斗经验结算接口"), true);
+      var rewardInputId = rewardName === "evMultiplier" ? "tm-pokemon-ev-multiplier" : "tm-pokemon-exp-multiplier";
+      var rewardValue = Number(value(rewardInputId));
+      if (!Number.isFinite(rewardValue) || rewardValue < 0 || rewardValue > 100) return toast(tr("倍率必须在 0 到 100 之间"), true);
+      return run(function () { return mod.setRewardMultiplier(rewardName, rewardValue); }, function () {
+        toast(tr(rewardName === "evMultiplier" ? "努力值倍率已设置" : "经验倍率已设置")); renderQuick(panel.querySelector(".tm-content"));
+      });
+    }
     if (action === "set-speed") {
       var movementSpeed = Number(value("tm-pokemon-speed"));
       if (!Number.isFinite(movementSpeed) || movementSpeed < 0.25 || movementSpeed > 8) return toast(tr("移动速度必须在 0.25 到 8 之间"), true);
@@ -1379,6 +1446,14 @@
   }
   function handleChange(event) {
     var node = event.target; var action = node.dataset.action;
+    if (node.dataset.currencyKind === "gold" || node.dataset.currencyKind === "coins") {
+      var currency = Number(node.value);
+      if (!Number.isFinite(currency) || currency < 0) return toast(tr("请输入有效金额"), true);
+      var settingCoins = node.dataset.currencyKind === "coins";
+      return run(function () { return settingCoins ? mod.setCoins(currency) : mod.setGold(currency); }, function () {
+        toast(tr(settingCoins ? "游戏币已修改" : "金钱已修改")); renderQuick(panel.querySelector(".tm-content"));
+      });
+    }
     if (action === "flag") return run(function () { return mod.setFlag(node.dataset.name, node.checked); }, function () { toast(tr("设置已更新")); });
     if (action === "pokemon-progress") return run(function () {
       return mod.setPokemonProgress(node.dataset.kind, Number(node.dataset.index), node.checked);

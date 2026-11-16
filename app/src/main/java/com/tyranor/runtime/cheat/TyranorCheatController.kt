@@ -309,6 +309,7 @@ class TyranorCheatController(
     private var activeGameSpeedMultiplier = 1
     private var activeExpMultiplier = 1f
     private var activeDropMultiplier = 1f
+    private var activeEvMultiplier = 1f
 
     private val pollRunnable = object : Runnable {
         override fun run() {
@@ -358,11 +359,11 @@ class TyranorCheatController(
         replyFile.delete()
         runtimeStateFile.delete()
         // Start every game session with cheats off and neutral multipliers.
-        enqueue("restore\t2.0\t\t1\t1.0\t1.0", 0L) { ready = true }
+        enqueue("restore\t2.0\t\t1\t1.0\t1.0\t1.0", 0L) { ready = true }
     }
 
     private fun syncRuntimeState() {
-        val fields = runCatching { runtimeStateFile.readText().split('\t', limit = 5) }.getOrNull() ?: return
+        val fields = runCatching { runtimeStateFile.readText().split('\t', limit = 6) }.getOrNull() ?: return
         if (fields.size < 2) return
         val speed = fields[0].toFloatOrNull()?.takeIf { it > 0f } ?: return
         val enabled = fields[1].split(',').filter { it.isNotBlank() }.toMutableSet()
@@ -371,6 +372,7 @@ class TyranorCheatController(
         fields.getOrNull(2)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let { activeExpMultiplier = it }
         fields.getOrNull(3)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let { activeDropMultiplier = it }
         fields.getOrNull(4)?.toIntOrNull()?.takeIf { it in 1..9 }?.let { activeGameSpeedMultiplier = it }
+        fields.getOrNull(5)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let { activeEvMultiplier = it }
     }
 
     private fun enabledNames(): Set<String> {
@@ -403,8 +405,13 @@ class TyranorCheatController(
         return activeDropMultiplier
     }
 
+    fun evMultiplier(): Float {
+        syncRuntimeState()
+        return activeEvMultiplier
+    }
+
     fun setRewardMultiplier(name: String, value: String, onResult: (String) -> Unit) {
-        if (name != "expMultiplier" && name != "dropMultiplier") {
+        if (name != "expMultiplier" && name != "dropMultiplier" && name != "evMultiplier") {
             onResult("Unknown reward multiplier.")
             return
         }
