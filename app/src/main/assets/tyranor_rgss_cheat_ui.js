@@ -14,7 +14,7 @@
   var activeTab = "quick";
   var goldCommitPending = null;
   var pendingEquipScroll = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, mapViewInitialized: false, mapQuery: "", currentMapId: 0, selectedMapId: 0, eventId: 0, eventLoading: false, selectedEventDetail: null, mapEntries: [], pendingMinimapMapId: null, pendingMinimapEvent: null, capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, mapViewInitialized: false, mapQuery: "", currentMapId: 0, selectedMapId: 0, teleportDestination: null, eventId: 0, eventLoading: false, selectedEventDetail: null, mapEntries: [], pendingMinimapMapId: null, pendingMinimapEvent: null, capabilities: null, capabilitiesLoading: false };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "队伍"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -596,13 +596,15 @@
         context.selectedMapId = context.currentMapId;
         context.eventId = 0;
         context.mapListExpanded = false;
+        context.teleportDestination = { mapId: pos.mapId, x: pos.x, y: pos.y };
         context.mapViewInitialized = true;
       }
     }
+    var destination = context.teleportDestination || pos || { mapId: 0, x: 0, y: 0 };
     var currentMapLabel = mapLabel(context.selectedMapId);
     var mapPicker = '<button class="tm-btn tm-map-picker" data-action="toggle-map-list" title="' + escapeHtml(currentMapLabel) + '"><span class="tm-map-picker-label">' + escapeHtml(currentMapLabel) + '</span><span class="tm-map-picker-arrow" aria-hidden="true">▾</span></button>';
     var browseRow = '<div class="tm-map-picker-row">' + mapPicker + '</div><div class="tm-row">' + textInput("tm-browse-query", context.mapQuery, "search", 'placeholder="搜索"') + button("搜索", "render-browse", "primary") + '</div>';
-    var mapControls = '<div class="tm-row tm-map-teleport-row">' + textInput("tm-map-id", pos && pos.mapId, "number", 'placeholder="地图 ID"') + textInput("tm-map-x", pos && pos.x, "number", 'placeholder="X"') + textInput("tm-map-y", pos && pos.y, "number", 'placeholder="Y"') + button("传送", "teleport", "primary") + '</div>'
+    var mapControls = '<div class="tm-row tm-map-teleport-row">' + textInput("tm-map-id", destination.mapId, "number", 'placeholder="地图 ID"') + textInput("tm-map-x", destination.x, "number", 'placeholder="X"') + textInput("tm-map-y", destination.y, "number", 'placeholder="Y"') + button("传送", "teleport", "primary") + '</div>'
       + '<div class="tm-map-action-buttons">' + button("迷你地图", "show-minimap") + button("事件开关全开", "map-selfswitches", "", 'data-enabled="1"') + button("事件开关全关", "map-selfswitches", "", 'data-enabled="0"') + '</div>';
     var teleportCard = card("地图操作", mapControls);
     var eventCard = card("事件详情", '<div class="tm-card-body" id="tm-event-panel">' + eventPanelHtml() + '</div>');
@@ -654,6 +656,11 @@
     }).join("") + '</div>';
   }
   function fillTeleport(mapId, x, y) {
+    context.teleportDestination = Object.assign({}, context.teleportDestination || {}, {
+      mapId: mapId == null ? (context.teleportDestination || {}).mapId : mapId,
+      x: x == null ? (context.teleportDestination || {}).x : x,
+      y: y == null ? (context.teleportDestination || {}).y : y
+    });
     var mi = root.querySelector("#tm-map-id"), xi = root.querySelector("#tm-map-x"), yi = root.querySelector("#tm-map-y");
     if (mi && mapId != null) mi.value = mapId;
     if (xi && x != null) xi.value = x;
@@ -1447,6 +1454,12 @@
       else if (event.target.id === "tm-skill-query") { context.skillQuery = event.target.value; renderActorCollectionList("skills"); }
       else if (event.target.id === "tm-state-query") { context.stateQuery = event.target.value; renderActorCollectionList("states"); }
       else if (event.target.id === "tm-browse-query") context.mapQuery = event.target.value;
+      else if (event.target.id === "tm-map-id" || event.target.id === "tm-map-x" || event.target.id === "tm-map-y") {
+        var destination = context.teleportDestination || (context.teleportDestination = { mapId: 0, x: 0, y: 0 });
+        if (event.target.id === "tm-map-id") destination.mapId = event.target.value;
+        else if (event.target.id === "tm-map-x") destination.x = event.target.value;
+        else destination.y = event.target.value;
+      }
       else if (event.target.id === "tm-system-query") loadSystem();
     });
     ["touchstart","touchmove","touchend","pointerdown","pointerup","mousedown","mouseup","keydown","keyup","wheel"].forEach(function (name) { root.addEventListener(name, block); });

@@ -34,6 +34,7 @@
   var mapId = 0;
   var currentMapId = 0;
   var mapViewInitialized = false;
+  var teleportDestination = null;
   var mapListExpanded = false;
   var browseQuery = "";
   var mapEntries = [];
@@ -471,17 +472,19 @@
         eventId = 0;
         selectedEventDetail = null;
         mapListExpanded = false;
+        teleportDestination = { mapId: position.mapId, x: position.x, y: position.y };
         mapViewInitialized = true;
       }
     }
+    var destination = teleportDestination || position || { mapId: 0, x: 0, y: 0 };
     var currentMapLabel = mapLabel(mapId);
     var mapPicker = '<button class="tm-btn tm-map-picker" data-action="toggle-map-list" title="' + esc(currentMapLabel) + '"><span class="tm-map-picker-label">' + esc(currentMapLabel) + '</span><span class="tm-map-picker-arrow" aria-hidden="true">▾</span></button>';
     var browseRow = (hasFeature("mapControl") ? '<div class="tm-map-picker-row">' + mapPicker + '</div>' : '') +
       ((hasFeature("mapControl") || hasFeature("events")) ? '<div class="tm-row">' +
         input("tm-browse-query", browseQuery, "search", 'placeholder="' + esc(tr("搜索")) + '"') + button("搜索", "render-browse", "primary") + '</div>' : '');
     var mapControls = (hasFeature("mapControl") ? '<div class="tm-row tm-map-teleport-row">' +
-      input("tm-pokemon-map-id", position.mapId, "number", 'placeholder="' + esc(tr("地图 ID")) + '"') +
-      input("tm-pokemon-map-x", position.x, "number", 'placeholder="X"') + input("tm-pokemon-map-y", position.y, "number", 'placeholder="Y"') +
+      input("tm-pokemon-map-id", destination.mapId, "number", 'placeholder="' + esc(tr("地图 ID")) + '"') +
+      input("tm-pokemon-map-x", destination.x, "number", 'placeholder="X"') + input("tm-pokemon-map-y", destination.y, "number", 'placeholder="Y"') +
       button("传送", "teleport", "primary") + '</div>' : '') +
       ((hasFeature("minimap") || hasFeature("eventSelfSwitches")) ? '<div class="tm-map-action-buttons">' +
         (hasFeature("minimap") ? button("迷你地图", "show-minimap") : '') +
@@ -519,6 +522,11 @@
     } catch (_) {}
   }
   function fillTeleport(targetMapId, x, y) {
+    teleportDestination = Object.assign({}, teleportDestination || {}, {
+      mapId: targetMapId == null ? (teleportDestination || {}).mapId : targetMapId,
+      x: x == null ? (teleportDestination || {}).x : x,
+      y: y == null ? (teleportDestination || {}).y : y
+    });
     var mapInput = panel && panel.querySelector("#tm-pokemon-map-id");
     var xInput = panel && panel.querySelector("#tm-pokemon-map-x");
     var yInput = panel && panel.querySelector("#tm-pokemon-map-y");
@@ -886,6 +894,12 @@
       }
       if (event.target.id === "tm-system-query") loadSystem();
       if (event.target.id === "tm-browse-query") { browseQuery = event.target.value; loadBrowse(); }
+      if (event.target.id === "tm-pokemon-map-id" || event.target.id === "tm-pokemon-map-x" || event.target.id === "tm-pokemon-map-y") {
+        var destination = teleportDestination || (teleportDestination = { mapId: 0, x: 0, y: 0 });
+        if (event.target.id === "tm-pokemon-map-id") destination.mapId = event.target.value;
+        else if (event.target.id === "tm-pokemon-map-x") destination.x = event.target.value;
+        else destination.y = event.target.value;
+      }
     });
     panel.addEventListener("keydown", function (event) {
       if (event.key === "Escape") { event.preventDefault(); closePokemon(true); }
