@@ -1026,37 +1026,41 @@
     if (snapshot && snapshot.loading) { content.innerHTML = '<div class="tm-note">' + escapeHtml(translated("加载中…")) + '</div>'; ensureCapabilities(); return; }
     context.inBattle = !!snapshot.inBattle;
     var actionDisabled = snapshot.inBattle ? "" : "disabled";
-    var actions = '<div class="tm-battle-actions">' +
-      button("全体恢复", "recover-party", "primary") +
-      button("消灭全部敌人", "kill-enemies", "danger", actionDisabled) +
-      button("强制胜利", "victory", "primary", actionDisabled) +
-      button("强制战败", "defeat", "danger", actionDisabled) +
-      button("强制逃跑", "escape", "", actionDisabled) + '</div>';
+    var actions = '<div class="tm-battle-outcomes">' +
+      button(translated("胜利"), "victory", "tm-battle-outcome-victory", actionDisabled) +
+      button(translated("战败"), "defeat", "tm-battle-outcome-defeat", actionDisabled) +
+      button(translated("逃跑"), "escape", "tm-battle-outcome-escape", actionDisabled) + '</div>';
     function battleValueRow(side, unit, field, label, current, maximum) {
-      var inputId = "tm-battle-" + side + "-" + unit.index + "-" + field;
       var actorId = unit.actorId == null ? "" : ' data-actor-id="' + escapeHtml(unit.actorId) + '"';
-      return '<div class="tm-battle-stat-row"><span>' + label + '</span>' + textInput(inputId, current, "number", 'min="0" max="' + escapeHtml(maximum) + '"') +
-        button("设置", "set-battle-vital", "", 'data-side="' + side + '" data-index="' + escapeHtml(unit.index) + '" data-field="' + field + '" data-input="' + inputId + '"' + actorId) + '</div>';
+      var attrs = 'min="0" max="' + escapeHtml(maximum) + '" inputmode="numeric" aria-label="' + escapeHtml(translated(label) + " " + unit.name) + '" data-battle-vital="1" data-side="' + side + '" data-index="' + escapeHtml(unit.index) + '" data-field="' + field + '"' + actorId;
+      return '<label class="tm-battle-stat"><span><strong>' + escapeHtml(translated(label)) + '</strong><small>/ ' + escapeHtml(maximum) + '</small></span>' + textInput("", current, "number", attrs) + '</label>';
     }
     function battleUnitHtml(unit, side) {
       var stats = battleValueRow(side, unit, "hp", "HP", unit.hp, unit.mhp);
       if (unit.mpSupported && unit.mp != null && unit.mmp != null) stats += battleValueRow(side, unit, "mp", "MP", unit.mp, unit.mmp);
-      return '<div class="tm-item tm-battle-unit"><span class="tm-name">' + escapeHtml(unit.name) + '</span><div class="tm-battle-vitals">' + stats + '</div></div>';
+      var status = unit.status && unit.status !== "正常" ? unit.status : translated("正常");
+      return '<div class="tm-item tm-battle-unit"><div class="tm-battle-unit-heading"><div class="tm-battle-unit-name"><strong>' + escapeHtml(unit.name) + '</strong><span>' + escapeHtml(translated("状态：") + status) + '</span></div>' +
+        button(translated("战斗单位恢复"), "battle-unit-action", "tm-battle-restore", 'data-side="' + side + '" data-index="' + escapeHtml(unit.index) + '"') + '</div><div class="tm-battle-vitals">' + stats + '</div></div>';
     }
-    var enemies = snapshot.enemies.filter(function (enemy) { return !context.hideEmptyBattleEnemies || String(enemy.name || "").trim().length > 0; }).map(function (enemy) { return battleUnitHtml(enemy, "enemy"); }).join("");
-    var actors = snapshot.actors.filter(function (actor) { return !context.hideEmptyBattleActors || String(actor.name || "").trim().length > 0; }).map(function (actor) { return battleUnitHtml(actor, "actor"); }).join("");
-    if (!snapshot.inBattle) {
-      enemies = '<div class="tm-note">当前不在战斗中</div>';
-      actors = '<div class="tm-note">当前不在战斗中</div>';
+    function sideCard(title, side, units) {
+      var unitRows = units.map(function (unit) { return battleUnitHtml(unit, side); }).join("");
+      var noUnits = units.length ? "" : "disabled";
+      var mpButton = units.some(function (unit) { return !!unit.mpSupported; })
+        ? button(translated("MP 补满"), "battle-side-action", "", 'data-side="' + side + '" data-operation="mp" ' + noUnits) : "";
+      var tpButton = units.some(function (unit) { return !!unit.tpSupported; })
+        ? button(translated("TP 补满"), "battle-side-action", "", 'data-side="' + side + '" data-operation="tp" ' + noUnits) : "";
+      var bulkActions = '<div class="tm-battle-side-actions">' +
+        button(translated("完全恢复"), "battle-side-action", "", 'data-side="' + side + '" data-operation="recover" ' + noUnits) + mpButton + tpButton +
+        button(translated("战斗清除状态"), "battle-side-action", "", 'data-side="' + side + '" data-operation="clear" ' + noUnits) +
+        button(translated("HP 设为 1"), "battle-side-action", "tm-battle-side-danger", 'data-side="' + side + '" data-operation="hp-one" ' + noUnits) + '</div>';
+      return card(translated(title), '<div class="tm-battle-side-toolbar">' + bulkActions + '</div><div class="tm-list tm-battle-unit-list">' + unitRows + '</div>', "tm-battle-side-card", '<span class="tm-battle-count">' + escapeHtml(translated("数量：")) + ' ' + units.length + '</span>');
     }
-    if (snapshot.inBattle && !enemies) enemies = '<div class="tm-note">没有匹配项目</div>';
-    if (snapshot.inBattle && !actors) actors = '<div class="tm-note">没有匹配项目</div>';
+    var idle = snapshot.inBattle ? "" : '<div class="tm-card tm-battle-idle"><div class="tm-note">' + escapeHtml(translated("当前不在战斗中")) + '</div></div>';
+    var sides = snapshot.inBattle
+      ? '<div class="tm-grid tm-battle-grid">' + sideCard("队伍", "actor", snapshot.actors || []) + sideCard("敌方", "enemy", snapshot.enemies || []) + '</div>'
+      : idle;
     content.innerHTML = '<div class="tm-battle-page">' +
-      '<div class="tm-grid tm-battle-controls">' + card("战斗操作", actions) + '</div>' +
-      '<div class="tm-grid tm-battle-grid">' +
-      card("我方队伍", '<div class="tm-list">' + actors + '</div>', "", snapshot.inBattle ? hideEmptyToggle("toggle-hide-empty-battle-actors", context.hideEmptyBattleActors) : "") +
-      card("敌方", '<div class="tm-list">' + enemies + '</div>', "", snapshot.inBattle ? hideEmptyToggle("toggle-hide-empty-battle-enemies", context.hideEmptyBattleEnemies) : "") + '</div>' +
-      '</div>';
+      card("快捷操作", actions, "tm-battle-outcome-card") + sides + '</div>';
     ensureCapabilities();
   }
   function renderSave(content) {
@@ -1357,10 +1361,20 @@
     if (action === "show-event-interpreter") return showEventInterpreterDialog(node.dataset.page);
     if (action === "close-interpreter") { var interpreter = node.closest(".tm-modal"); if (interpreter) interpreter.remove(); return; }
     if (action === "teleport") return run(function () { return mod.teleport(inputValue("tm-map-id"), inputValue("tm-map-x"), inputValue("tm-map-y"), 2, 0); }, function () { toast("已预约传送"); close(); });
+    if (action === "battle-side-action" || action === "battle-unit-action") {
+      if (!isInBattleNow()) { toast("当前不在战斗中", true); return renderBattle(root.querySelector(".tm-content")); }
+      var side = node.dataset.side === "enemy" ? "enemy" : "actor";
+      var operation = action === "battle-unit-action" ? "recover" : node.dataset.operation;
+      var unitIndex = action === "battle-unit-action" ? Number(node.dataset.index) : null;
+      return run(function () { return mod.battleAction(side, operation, unitIndex); }, function () {
+        toast(translated(action === "battle-unit-action" ? "单位已恢复" : "战斗操作已执行"));
+        renderBattle(root.querySelector(".tm-content"));
+      });
+    }
     if (action === "set-battle-vital") {
       if (!isInBattleNow()) return;
       var vital = node.dataset.field === "mp" ? "mp" : "hp";
-      var amount = Number(inputValue(node.dataset.input));
+      var amount = Number(node.value);
       if (!Number.isInteger(amount) || amount < 0) return toast("请输入有效的非负整数", true);
       var setter = node.dataset.side === "enemy"
         ? function () { return vital === "mp" ? mod.setEnemyMp(Number(node.dataset.index), amount) : mod.setEnemyHp(Number(node.dataset.index), amount); }
@@ -1469,6 +1483,7 @@
         return;
       }
       if (event.target.id === "tm-gold") applyGoldInput(event.target);
+      else if (event.target.dataset && event.target.dataset.battleVital === "1") handleAction("set-battle-vital", event.target);
       else { var action = event.target.closest("[data-action]"); if (action) handleAction(action.dataset.action, action); }
       event.stopPropagation();
     });

@@ -236,7 +236,10 @@ class TyranorCheatController(
         val hp: Int,
         val maxHp: Int,
         val mp: Int?,
-        val maxMp: Int?
+        val maxMp: Int?,
+        val tp: Int?,
+        val maxTp: Int?,
+        val status: String
     )
 
     data class BattleActor(
@@ -246,7 +249,10 @@ class TyranorCheatController(
         val maxHp: Int,
         val actorId: Int?,
         val mp: Int?,
-        val maxMp: Int?
+        val maxMp: Int?,
+        val tp: Int?,
+        val maxTp: Int?,
+        val status: String
     )
 
     data class ActorCollectionEntry(
@@ -555,6 +561,11 @@ class TyranorCheatController(
 
     fun setEnemyMp(index: Int, mp: Int, onResult: (String) -> Unit) {
         send("battle_enemy_mp\t$index\t$mp", onResult)
+    }
+
+    fun battleAction(side: String, operation: String, index: Int? = null, onResult: (String) -> Unit) {
+        val target = index?.toString().orEmpty()
+        send("battle_action\t$side\t$operation\t$target", onResult)
     }
 
     fun setSystemSwitch(id: Int, enabled: Boolean, onResult: (String) -> Unit) {
@@ -989,13 +1000,16 @@ class TyranorCheatController(
         send("list\tbattle", 30_000L) { raw ->
             val out = mutableListOf<BattleEnemy>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 7)
+                val p = line.split('\t', limit = 10)
                 if (p.size < 5 || p[0] != "B") return@forEach
                 val index = p[1].toIntOrNull() ?: return@forEach
                 out.add(BattleEnemy(
                     index, p[2], p[3].toIntOrNull() ?: 0, p[4].toIntOrNull() ?: 0,
                     p.getOrNull(5)?.toIntOrNull()?.takeIf { it >= 0 },
                     p.getOrNull(6)?.toIntOrNull()?.takeIf { it >= 0 },
+                    p.getOrNull(7)?.toIntOrNull()?.takeIf { it >= 0 },
+                    p.getOrNull(8)?.toIntOrNull()?.takeIf { it >= 0 },
+                    p.getOrNull(9).orEmpty(),
                 ))
             }
             onResult(out)
@@ -1006,7 +1020,7 @@ class TyranorCheatController(
         send("list\tbattle_actors", 30_000L) { raw ->
             val out = mutableListOf<BattleActor>()
             raw.lineSequence().forEach { line ->
-                val p = line.split('\t', limit = 8)
+                val p = line.split('\t', limit = 11)
                 if (p.size < 5 || p[0] != "L") return@forEach
                 val index = p[1].toIntOrNull() ?: return@forEach
                 out.add(BattleActor(
@@ -1014,6 +1028,9 @@ class TyranorCheatController(
                     p.getOrNull(5)?.toIntOrNull()?.takeIf { it > 0 },
                     p.getOrNull(6)?.toIntOrNull()?.takeIf { it >= 0 },
                     p.getOrNull(7)?.toIntOrNull()?.takeIf { it >= 0 },
+                    p.getOrNull(8)?.toIntOrNull()?.takeIf { it >= 0 },
+                    p.getOrNull(9)?.toIntOrNull()?.takeIf { it >= 0 },
+                    p.getOrNull(10).orEmpty(),
                 ))
             }
             onResult(out)

@@ -3889,6 +3889,7 @@ module TyranorCheats
       when 'map_event_switches' then set_map_event_switches(a, b)
       when 'battle_enemy_hp' then set_enemy_hp(a, b)
       when 'battle_enemy_mp' then set_enemy_mp(a, b)
+      when 'battle_action' then battle_action(a, b)
       when 'save_slot' then select_save_slot(a)
       when 'delete_save' then delete_save_slot(a)
       when 'give'    then give(a, b)
@@ -7066,21 +7067,192 @@ module TyranorCheats
       [nil, nil]
     end
 
+    def battle_tp_values(battler)
+      return [nil, nil] unless battler && battler.respond_to?(:tp) && battler.respond_to?(:tp=)
+      maximum = if battler.respond_to?(:max_tp)
+                  battler.max_tp
+                elsif battler.respond_to?(:max_tp=)
+                  100
+                else
+                  nil
+                end
+      return [nil, nil] if maximum.nil?
+      [battler.tp.to_i, maximum.to_i]
+    rescue Exception
+      [nil, nil]
+    end
+
+    def battle_state_names(battler)
+      return [] unless battler && battler.respond_to?(:states)
+      battler.states.to_a.compact.map do |state|
+        name = state.respond_to?(:name) ? state.name.to_s : ""
+        if name.empty?
+          id = state.respond_to?(:id) ? state.id.to_i : (state.to_i rescue 0)
+          data = defined?($data_states) && $data_states.respond_to?(:[]) ? $data_states[id] : nil
+          name = data.name.to_s if data && data.respond_to?(:name)
+        end
+        wire_text(name)
+      end.reject { |name| name.empty? }
+    rescue Exception
+      []
+    end
+
+    def battle_status_text(battler)
+      names = battle_state_names(battler)
+      names.empty? ? "正常" : names.join(', ')
+    rescue Exception
+      "正常"
+    end
+
+    def battle_side_units(side)
+      opposing = side.to_s == 'enemy'
+      if ess? && @battle
+        battlers = @battle.respond_to?(:battlers) ? @battle.battlers : []
+        return battlers.compact.select { |battler| foe?(@battle, battler.index) == opposing }.map { |battler| [battler.index.to_i, battler] }
+      end
+      if opposing
+        list = $game_troop && ($game_troop.respond_to?(:enemies) ? $game_troop.enemies : ($game_troop.respond_to?(:members) ? $game_troop.members : []))
+      else
+        list = $game_party && $game_party.respond_to?(:battle_members) ? $game_party.battle_members : actors
+      end
+      list.to_a.each_with_index.map { |battler, index| [index, battler] }
+    rescue Exception
+      []
+    end
+
+    def battle_max_hp(battler)
+      return battler.totalhp.to_i if battler.respond_to?(:totalhp)
+      return battler.mhp.to_i if battler.respond_to?(:mhp)
+      return battler.maxhp.to_i if battler.respond_to?(:maxhp)
+      nil
+    rescue Exception
+      nil
+    end
+
+    def battle_set_hp(battler, value)
+      maximum = battle_max_hp(battler)
+      return false unless maximum && battler.respond_to?(:hp=)
+      target = [[value.to_i, 0].max, maximum].min
+      battler.hp = target
+      battler.pbFaint(true) if target == 0 && battler.respond_to?(:pbFaint)
+      battler.refresh if battler.respond_to?(:refresh)
+      true
+    rescue Exception
+      false
+    end
+
+    def battle_set_mp(battler, value)
+      current, maximum = battle_mp_values(battler)
+      return false if current.nil? || maximum.nil?
+      target = [[value.to_i, 0].max, maximum].min
+      if battler.respond_to?(:mp=)
+        battler.mp = target
+      elsif battler.respond_to?(:sp=)
+        battler.sp = target
+      else
+        return false
+      end
+      battler.refresh if battler.respond_to?(:refresh)
+      true
+    rescue Exception
+      false
+    end
+
+    def battle_set_tp(battler, value)
+      current, maximum = battle_tp_values(battler)
+      return false if current.nil? || maximum.nil?
+      battler.tp = [[value.to_i, 0].max, maximum].min
+      battler.refresh if battler.respond_to?(:refresh)
+      true
+    rescue Exception
+      false
+    end
+
+    def battle_clear_states(battler)
+      return false unless battler
+      if battler.respond_to?(:clear_states)
+        battler.clear_states
+      elsif battler.respond_to?(:states) && battler.respond_to?(:remove_state)
+        battler.states.to_a.dup.each do |state|
+          state_id = state.respond_to?(:id) ? state.id : state
+          battler.remove_state(state_id.to_i)
+        end
+      else
+        return false
+      end
+      battler.refresh if battler.respond_to?(:refresh)
+      true
+    rescue Exception
+      false
+    end
+
+    def battle_action(side_text, payload)
+      return NEED_BATTLE unless in_battle?
+      operation, index_text = payload.to_s.split("\t", 2)
+      return NOPE unless %w[recover mp tp clear hp-one].include?(operation.to_s)
+      units = battle_side_units(side_text)
+      if !index_text.to_s.empty? && index_text.to_s =~ /\A\d+\z/
+        index = index_text.to_i
+        units = units.select { |unit| unit[0] == index }
+      end
+      return "That battle unit isn't available." if units.empty?
+      changed = 0
+      units.each do |_, battler|
+        success = case operation
+                  when 'recover'
+                    if battler.respond_to?(:recover_all)
+                      battler.recover_all
+                      true
+                    else
+                      hp_ok = battle_set_hp(battler, battle_max_hp(battler) || 0)
+                      mp, max_mp = battle_mp_values(battler)
+                      tp, max_tp = battle_tp_values(battler)
+                      mp_ok = max_mp.nil? || battle_set_mp(battler, max_mp)
+                      tp_ok = max_tp.nil? || battle_set_tp(battler, max_tp)
+                      battle_clear_states(battler) if battler.respond_to?(:states)
+                      hp_ok && mp_ok && tp_ok
+                    end
+                  when 'mp'
+                    _, maximum = battle_mp_values(battler)
+                    maximum && battle_set_mp(battler, maximum)
+                  when 'tp'
+                    _, maximum = battle_tp_values(battler)
+                    maximum && battle_set_tp(battler, maximum)
+                  when 'clear'
+                    battle_clear_states(battler)
+                  when 'hp-one'
+                    battle_set_hp(battler, 1)
+                  else
+                    false
+                  end
+        changed += 1 if success
+      end
+      return "This cheat doesn't work for the selected units in this game." if changed == 0
+      if operation == 'tp' && changed < units.length
+        return "TP updated for #{changed} of #{units.length} units."
+      end
+      operation == 'recover' ? "Battle units recovered" : "Battle action applied to #{changed} units"
+    rescue Exception => e
+      "Couldn't apply battle action: #{e.class}: #{e.message}"
+    end
+
     def battle_enemies
       if ess? && @battle
         battlers = @battle.respond_to?(:battlers) ? @battle.battlers : []
         return battlers.compact.select { |b| foe?(@battle, b.index) }.map do |battler|
           mp, max_mp = battle_mp_values(battler)
+          tp, max_tp = battle_tp_values(battler)
           [battler.index.to_i, battler.name.to_s, battler.hp.to_i,
-           (battler.respond_to?(:totalhp) ? battler.totalhp.to_i : battler.hp.to_i), mp, max_mp]
+           (battler.respond_to?(:totalhp) ? battler.totalhp.to_i : battler.hp.to_i), mp, max_mp, tp, max_tp, battle_status_text(battler)]
         end
       end
       return [] unless $game_troop
       values = $game_troop.respond_to?(:enemies) ? $game_troop.enemies : ($game_troop.respond_to?(:members) ? $game_troop.members : [])
       values.each_with_index.map do |enemy, index|
         mp, max_mp = battle_mp_values(enemy)
+        tp, max_tp = battle_tp_values(enemy)
         [index, (enemy.respond_to?(:name) ? enemy.name.to_s : "Enemy #{index + 1}"), enemy.respond_to?(:hp) ? enemy.hp.to_i : 0,
-         (enemy.respond_to?(:mhp) ? enemy.mhp.to_i : (enemy.respond_to?(:maxhp) ? enemy.maxhp.to_i : 0)), mp, max_mp]
+         (enemy.respond_to?(:mhp) ? enemy.mhp.to_i : (enemy.respond_to?(:maxhp) ? enemy.maxhp.to_i : 0)), mp, max_mp, tp, max_tp, battle_status_text(enemy)]
       end
     rescue Exception
       []
@@ -7088,7 +7260,7 @@ module TyranorCheats
 
     def list_battle
       return NEED_BATTLE unless in_battle?
-      battle_enemies.map { |row| "B\t#{row[0]}\t#{wire_text(row[1])}\t#{row[2]}\t#{row[3]}\t#{row[4].nil? ? -1 : row[4]}\t#{row[5].nil? ? -1 : row[5]}" }.join("\n")
+      battle_enemies.map { |row| "B\t#{row[0]}\t#{wire_text(row[1])}\t#{row[2]}\t#{row[3]}\t#{row[4].nil? ? -1 : row[4]}\t#{row[5].nil? ? -1 : row[5]}\t#{row[6].nil? ? -1 : row[6]}\t#{row[7].nil? ? -1 : row[7]}\t#{wire_text(row[8])}" }.join("\n")
     rescue Exception => e
       "Couldn't read battle: #{e.class}: #{e.message}"
     end
@@ -7098,21 +7270,23 @@ module TyranorCheats
       rows = if ess? && @battle
                @battle.battlers.compact.reject { |battler| foe?(@battle, battler.index) }.map do |battler|
                  mp, max_mp = battle_mp_values(battler)
+                 tp, max_tp = battle_tp_values(battler)
                  actor_id = battler.respond_to?(:id) ? battler.id.to_i : -1
                  [battler.index.to_i, actor_id, battler.name.to_s, battler.hp.to_i,
-                  (battler.respond_to?(:totalhp) ? battler.totalhp.to_i : battler.hp.to_i), mp, max_mp]
+                  (battler.respond_to?(:totalhp) ? battler.totalhp.to_i : battler.hp.to_i), mp, max_mp, tp, max_tp, battle_status_text(battler)]
                end
              else
                list = $game_party && $game_party.respond_to?(:battle_members) ? $game_party.battle_members : actors
                list.each_with_index.map do |actor, index|
                  mp, max_mp = battle_mp_values(actor)
+                 tp, max_tp = battle_tp_values(actor)
                  actor_id = actor.respond_to?(:id) ? actor.id.to_i : -1
                  [index, actor_id, actor.respond_to?(:name) ? actor.name.to_s : "Actor #{index + 1}",
                   actor.respond_to?(:hp) ? actor.hp.to_i : 0,
-                  actor.respond_to?(:mhp) ? actor.mhp.to_i : maxhp_of(actor).to_i, mp, max_mp]
+                  actor.respond_to?(:mhp) ? actor.mhp.to_i : maxhp_of(actor).to_i, mp, max_mp, tp, max_tp, battle_status_text(actor)]
                end
              end
-      rows.map { |row| "L\t#{row[0]}\t#{wire_text(row[2])}\t#{row[3]}\t#{row[4]}\t#{row[1]}\t#{row[5].nil? ? -1 : row[5]}\t#{row[6].nil? ? -1 : row[6]}" }.join("\n")
+      rows.map { |row| "L\t#{row[0]}\t#{wire_text(row[2])}\t#{row[3]}\t#{row[4]}\t#{row[1]}\t#{row[5].nil? ? -1 : row[5]}\t#{row[6].nil? ? -1 : row[6]}\t#{row[7].nil? ? -1 : row[7]}\t#{row[8].nil? ? -1 : row[8]}\t#{wire_text(row[9])}" }.join("\n")
     rescue Exception => e
       "Couldn't read party battle status: #{e.class}: #{e.message}"
     end

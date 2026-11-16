@@ -179,24 +179,48 @@ html[data-theme="dark"] .tm-pokemon-summary{color:#c9d2cc}html[data-theme="dark"
 html[data-theme="dark"] .tm-pokemon-toggle{border-color:#343c37}html[data-theme="dark"] .tm-pokemon-value>span{color:#aab4ae}
 @media(max-width:520px){.tm-pokemon-edit-row{grid-template-columns:1fr}.tm-pokemon-system-row{grid-template-columns:28px minmax(0,1fr) minmax(115px,48%)}.tm-pokemon-bag-row{grid-template-columns:26px minmax(0,1fr) 68px auto}}
 @media(max-width:420px){.tm-pokemon-values{grid-template-columns:1fr}.tm-pokemon-value-row{grid-template-columns:minmax(0,1fr) 88px auto}.tm-pokemon-value-row>label{grid-column:auto}.tm-pokemon-value-row>.tm-input{width:88px}}
-.tm-battle-page{display:flex;flex-direction:column;gap:10px;min-height:100%}
-.tm-battle-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
-.tm-battle-controls>.tm-card{min-width:0}
-.tm-battle-controls>.tm-battle-reward{grid-column:1/-1}
+.tm-battle-page{display:flex;flex-direction:column;gap:10px;height:100%;min-height:0}
+.tm-battle-outcome-card{text-align:center;padding:12px 14px}
+.tm-battle-outcome-card>h3{margin:0 0 8px;color:#66736c}
+.tm-battle-outcomes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tm-battle-outcomes>.tm-btn{height:64px;font-size:18px;font-weight:750;border-radius:12px}
+.tm-battle-outcome-victory{background:#dff0e9;color:#08796a}
+.tm-battle-outcome-defeat{background:#fff0ef;color:#c53333}
+.tm-battle-outcome-escape{background:#f0f4f1;color:#62736a;border:1px solid #d7e2db}
+.tm-battle-outcomes>.tm-btn:disabled{opacity:.52}
 .tm-reward-multipliers{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}
 .tm-reward-multipliers>.tm-row{min-width:0}
-.tm-battle-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto}
-.tm-battle-grid>.tm-card{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
-.tm-battle-grid>.tm-card>h3{flex:0 0 auto}
-.tm-battle-grid>.tm-card>.tm-list{max-height:min(34vh,280px);min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:12px;scroll-padding-bottom:12px}
-.tm-battle-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.tm-battle-actions>.tm-btn{min-width:0;white-space:normal}
-.tm-battle-unit{align-items:stretch;flex-direction:column}
-.tm-battle-unit>.tm-name{flex:0 0 auto;white-space:normal}
-.tm-battle-vitals{display:flex;flex-direction:column;gap:5px;width:100%}
-.tm-battle-stat-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:6px}
-.tm-battle-stat-row>.tm-input{height:36px;padding:6px 8px}
-.tm-battle-stat-row>.tm-btn{min-height:36px;padding:6px 10px}
+.tm-battle-grid{flex:1 1 auto;min-height:0;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1fr)}
+.tm-battle-side-card{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.tm-battle-side-card>.tm-card-heading{margin-bottom:8px}
+.tm-battle-count{flex:0 0 auto;color:#748079;font-size:12px;white-space:nowrap}
+.tm-battle-side-toolbar{flex:0 0 auto;margin:0 -2px 8px;padding:0 0 8px;border-bottom:1px solid #e4e9e6}
+.tm-battle-side-actions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.tm-battle-side-actions>.tm-btn{min-width:0;min-height:36px;padding:6px 3px;font-size:12px;white-space:normal;line-height:1.2}
+.tm-battle-side-actions>.tm-battle-side-danger{background:#fff0ef;color:#c53333}
+.tm-battle-unit-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 2px 10px 0;scroll-padding-bottom:10px}
+.tm-battle-unit{display:flex;flex:0 0 auto;flex-direction:column;align-items:stretch;gap:8px;padding:10px;border:1px solid #dce6df;background:#f1f5f2}
+.tm-battle-unit-heading{display:flex;align-items:center;gap:8px;min-width:0}
+.tm-battle-unit-name{display:flex;flex:1 1 auto;flex-direction:column;min-width:0;line-height:1.25}
+.tm-battle-unit-name>strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.tm-battle-unit-name>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#748079;font-size:11px}
+.tm-battle-restore{min-height:34px;padding:6px 10px}
+.tm-battle-vitals{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;width:100%}
+.tm-battle-stat{display:grid;grid-template-columns:62px minmax(0,1fr);align-items:center;gap:5px;min-width:0;padding:4px 6px;border:1px solid #dbe5de;border-radius:9px;background:#fff}
+.tm-battle-stat>span{display:flex;flex-direction:column;min-width:0;font-size:11px;line-height:1.15}
+.tm-battle-stat>span>strong{font-size:12px}
+.tm-battle-stat>span>small{color:#748079;font-size:10px}
+.tm-battle-stat>.tm-input{height:36px;padding:5px 8px;background:#f2f6f3;border-color:#d5e0d9}
+.tm-battle-idle{display:flex;flex:1 1 auto;align-items:center;justify-content:center;min-height:180px}
+.tm-battle-idle>.tm-note{font-size:16px}
+html[data-theme="dark"] .tm-battle-outcome-card>h3,html[data-theme="dark"] .tm-battle-count,html[data-theme="dark"] .tm-battle-unit-name>span,html[data-theme="dark"] .tm-battle-stat>span>small{color:#aab4ae}
+html[data-theme="dark"] .tm-battle-outcome-victory{background:#254438;color:#8fe0c4}
+html[data-theme="dark"] .tm-battle-outcome-defeat,html[data-theme="dark"] .tm-battle-side-actions>.tm-battle-side-danger{background:#482b2a;color:#ff9b94}
+html[data-theme="dark"] .tm-battle-outcome-escape{background:#29332e;color:#c3d0c8;border-color:#3d4a42}
+html[data-theme="dark"] .tm-battle-side-toolbar{border-color:#343c37}
+html[data-theme="dark"] .tm-battle-unit{background:#292f2b;border-color:#3b4740}
+html[data-theme="dark"] .tm-battle-stat{background:#202522;border-color:#3b4740}
+html[data-theme="dark"] .tm-battle-stat>.tm-input{background:#171b19;border-color:#4a554f}
 .tm-scene-shortcuts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .tm-scene-shortcuts>.tm-btn{min-width:0;min-height:42px;white-space:normal}
 .tm-gold-row>label{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -217,7 +241,7 @@ html[data-theme="dark"] .tm-pokemon-toggle{border-color:#343c37}html[data-theme=
 .tm-system-lock-row>.tm-name{font-size:14px;font-weight:550}
 .tm-system-lock-row>.tm-system-value{height:40px;padding:7px 9px}
 .tm-map-grid .tm-list{padding-bottom:12px;scroll-padding-bottom:12px}
-@media(max-width:620px){.tm-speed-controls,.tm-battle-controls,.tm-battle-grid,.tm-actor-layout{grid-template-columns:minmax(0,1fr)}.tm-actor-layout{height:auto}.tm-actor-roster{max-height:32vh}.tm-actor-list{max-height:24vh}.tm-actor-detail{max-height:60vh}.tm-battle-grid>.tm-card>.tm-list{max-height:28vh}.tm-equip-columns{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(80px,.7fr) minmax(100px,1.3fr)}.tm-equip-page{height:100%;max-height:none}}
+@media(max-width:620px){.tm-speed-controls,.tm-battle-grid,.tm-actor-layout{grid-template-columns:minmax(0,1fr)}.tm-battle-page{height:auto;min-height:100%}.tm-battle-grid{flex:0 0 auto;grid-template-rows:auto}.tm-actor-layout{height:auto}.tm-actor-roster{max-height:32vh}.tm-actor-list{max-height:24vh}.tm-actor-detail{max-height:60vh}.tm-battle-unit-list{max-height:32vh}.tm-battle-outcomes{gap:7px}.tm-battle-outcomes>.tm-btn{height:54px;font-size:16px}.tm-battle-side-actions{grid-template-columns:repeat(auto-fit,minmax(66px,1fr))}.tm-equip-columns{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(80px,.7fr) minmax(100px,1.3fr)}.tm-equip-page{height:100%;max-height:none}}
 @media(max-width:520px){.tm-scene-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:420px){.tm-system-lock-header,.tm-system-lock-row{grid-template-columns:28px minmax(0,1fr) minmax(72px,96px);gap:6px;padding:7px}.tm-system-switch-row{grid-template-columns:28px minmax(0,1fr) minmax(72px,96px)}.tm-system-switch-state{min-width:40px}}
 html[data-theme="dark"] .tm-system-switch-state{color:#aab4ae}html[data-theme="dark"] .tm-lock-list-header{color:#aab4ae}html[data-theme="dark"] .tm-system-lock-header,html[data-theme="dark"] .tm-system-lock-row{border-color:#3b4740}html[data-theme="dark"] .tm-system-lock-header{background:#334039;color:#c9d2cc}html[data-theme="dark"] .tm-system-lock-row{background:#292f2b}
