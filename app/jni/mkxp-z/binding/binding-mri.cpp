@@ -3805,9 +3805,27 @@ module TyranorCheats
       nil
     end
 
+    def pokemon_party_max
+      maximum = 0
+      storage = pokemon_storage
+      maximum = storage.maxPokemon(-1).to_i if storage && storage.respond_to?(:maxPokemon)
+      maximum = Settings::MAX_PARTY_SIZE.to_i if maximum.to_i <= 0 && defined?(Settings::MAX_PARTY_SIZE)
+      maximum = 6 if maximum.to_i <= 0
+      maximum
+    rescue Exception
+      6
+    end
+
+    def pokemon_party_full?
+      t = trainer
+      t && t.respond_to?(:party) && t.party && t.party.compact.length >= pokemon_party_max
+    rescue Exception
+      false
+    end
+
     def pokemon_storage_supported?
       storage = pokemon_storage
-      return false unless storage && !in_battle? && trainer && trainer.respond_to?(:party) &&
+      return false unless storage && trainer && trainer.respond_to?(:party) &&
         trainer.party.is_a?(Array)
       [:maxBoxes, :maxPokemon, :[], :pbMove, :pbDelete].all? { |name| storage.respond_to?(name) }
     rescue Exception
@@ -4579,6 +4597,7 @@ module TyranorCheats
         end
       when 'pokemon'
         return "Trainer data isn't ready yet. Start or load a game first." unless trainer
+        return "Your party is full." if pokemon_party_full?
         lv = [[qty, 1].max, max_level].min
         sp = gd? ? key.to_sym : key.to_i
         r = if Object.private_method_defined?(:pbAddPokemonSilent)
@@ -4912,7 +4931,9 @@ module TyranorCheats
       # Ready features below control access to their current data.
       out << "F\tpokemonParty" if ess?
       out << "F\tpokemonPartyReady" if ess? && trainer
+      out << "F\tpokemonPartyFull" if ess? && pokemon_party_full?
       out << "F\tpokemonStorage" if pokemon_storage_supported?
+      out << "F\tpokemonStorageManage" if pokemon_storage_supported? && !in_battle?
       out << "F\titemBag" if ess?
       out << "F\titemBagReady" if ess? && bag
       out << "F\tpokemonObtain" if pokemon_obtain_supported?
@@ -5147,9 +5168,7 @@ module TyranorCheats
       return "Choose a valid storage box." unless box < storage.maxBoxes.to_i
       pokemon = pokemon_storage_get(storage, box, slot)
       return "Couldn't find a Pokémon in that storage slot." unless pokemon
-      maximum = storage.maxPokemon(-1).to_i
-      maximum = Settings::MAX_PARTY_SIZE.to_i if maximum <= 0 && defined?(Settings::MAX_PARTY_SIZE)
-      maximum = 6 if maximum <= 0
+      maximum = pokemon_party_max
       return "Your party is full." if trainer.party.compact.length >= maximum
       return "Couldn't withdraw Pokémon from storage." if storage.pbMove(-1, -1, box, slot) == false
       "#{wire_text(pokemon_display_name(pokemon))} moved to your party."

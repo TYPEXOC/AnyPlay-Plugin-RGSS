@@ -17,6 +17,7 @@
   var teamPokemon = [];
   var quickSection = "resources";
   var storageBox = -1;
+  var storageBoxCount = 0;
   var pendingDepositIndex = null;
   var detectTimer = null;
   var engineDetectionTimer = null;
@@ -54,6 +55,8 @@
   var addPokemonQuery = "";
   var heldQueryTimer = null;
   var asyncRefreshTimer = null;
+  var asyncRefreshChanges = [];
+  var asyncRefreshUnknown = false;
   var runtimeReadyRetryTimer = null;
   var lastUserInteractionAt = 0;
   var statNames = ["HP", "攻击", "防御", "特攻", "特防", "速度"];
@@ -99,6 +102,13 @@
     var attributes = data || "";
     if (!supported) attributes += ' data-reason="此功能对当前宝可梦游戏不可用" aria-disabled="true"';
     return button(label, supported ? action : "unsupported-option", supported ? extra : "unsupported", attributes);
+  }
+  function pokemonStorageManageButton(label, action, extra, data) {
+    if (capabilitiesResolved && hasFeature("pokemonStorageManage")) return button(label, action, extra, data);
+    var reason = capabilitiesResolved && hasFeature("pokemonStorage")
+      ? tr("战斗中无法管理宝可梦仓库") : tr("此功能对当前宝可梦游戏不可用");
+    var attributes = (data || "") + ' data-reason="' + esc(reason) + '" aria-disabled="true"';
+    return button(label, "unsupported-option", (extra ? extra + " " : "") + "unsupported", attributes);
   }
   function input(id, value, type, attrs) {
     return '<input class="tm-input" id="' + id + '" type="' + (type || "text") + '" value="' + esc(value) + '" ' + (attrs || "") + '>';
@@ -388,8 +398,8 @@
       (pokemon.status ? '<span>' + esc(tr(statusName(pokemon.status))) + '</span>' : "") + (pokemon.heldItem ? '<span>' + esc(pokemon.heldItem) + '</span>' : "") + '</div>';
     var management = '<div class="tm-pokemon-actions">' +
       featureButton("修改昵称", "edit-nickname", "pokemonNickname", "", 'data-index="' + index + '" data-name="' + esc(pokemon.nickname || "") + '"') +
-      featureButton("存入仓库", "deposit-pokemon", "pokemonStorage", "", 'data-index="' + index + '"') +
-      featureButton("释放", "confirm-release-pokemon", "pokemonStorage", "danger", 'data-box="-1" data-slot="' + index + '" data-name="' + esc(pokemon.name) + '"') +
+      pokemonStorageManageButton("存入仓库", "deposit-pokemon", "", 'data-index="' + index + '"') +
+      pokemonStorageManageButton("释放", "confirm-release-pokemon", "danger", 'data-box="-1" data-slot="' + index + '" data-name="' + esc(pokemon.name) + '"') +
       (index > 0 ? featureButton("上移", "reorder-pokemon", "pokemonPartyOrder", "", 'data-index="' + index + '" data-target="' + (index - 1) + '"') : "") +
       (index < partyLength - 1 ? featureButton("下移", "reorder-pokemon", "pokemonPartyOrder", "", 'data-index="' + index + '" data-target="' + (index + 1) + '"') : "") + '</div>';
     detail.innerHTML = heading + management + (sections.length ? segmentedTabs(sections, teamSection, "pokemon-section") + '<div id="tm-actor-section"></div>' : '');
@@ -462,17 +472,24 @@
     }
   }
   function renderPokemonStorage(content) {
-    var box = mod.listPokemonStorage(storageBox);
-    if (box && box.loading) { content.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
-    if (!box) { content.innerHTML = '<div class="tm-note">' + esc(tr("无法读取宝可梦仓库")) + '</div>'; return; }
-    storageBox = Number(box.boxIndex) || 0;
     var views = segmentedTabs([{ id: "party", label: "队伍" }, { id: "storage", label: "宝可梦仓库" }], "storage", "team-view", "view");
+    content.innerHTML = views + card("宝可梦仓库", '<div id="tm-pokemon-storage-body" class="tm-pokemon-storage-body"></div>');
+    renderPokemonStorageBody();
+  }
+  function renderPokemonStorageBody() {
+    var body = panel && panel.querySelector("#tm-pokemon-storage-body");
+    if (!body) return;
+    var box = mod.listPokemonStorage(storageBox);
+    if (box && box.loading) { body.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
+    if (!box) { body.innerHTML = '<div class="tm-note">' + esc(tr("无法读取宝可梦仓库")) + '</div>'; return; }
+    storageBox = Number(box.boxIndex) || 0;
+    storageBoxCount = Number(box.boxCount) || 0;
     var navigation = '<div class="tm-row tm-pokemon-box-nav">' + button("上一盒", "storage-prev", "", 'data-box="' + storageBox + '"') +
       '<strong class="tm-grow">' + esc(box.name) + ' · ' + esc(storageBox + 1) + '/' + esc(box.boxCount) + '</strong>' +
       button("下一盒", "storage-next", "", 'data-box="' + storageBox + '"') + '</div>';
     var deposit = pendingDepositIndex == null ? '<div class="tm-note">' + esc(tr("从队伍选择宝可梦即可存入当前仓库盒")) + '</div>' :
       '<div class="tm-row"><span class="tm-grow">' + esc(tr("已选择队伍中的宝可梦")) + '</span>' +
-      button("存入当前盒子", "store-selected-pokemon", "primary", 'data-index="' + pendingDepositIndex + '" data-box="' + storageBox + '"') +
+      pokemonStorageManageButton("存入当前盒子", "store-selected-pokemon", "primary", 'data-index="' + pendingDepositIndex + '" data-box="' + storageBox + '"') +
       button("取消", "cancel-deposit-pokemon") + '</div>';
     var rows = (box.pokemon || []).map(function (pokemon) {
       var slot = Number(pokemon.index);
@@ -481,10 +498,10 @@
         '<span class="tm-badge">HP ' + esc(pokemon.hp) + '/' + esc(pokemon.mhp) + '</span>' +
         (pokemon.heldItem ? '<span class="tm-badge">' + esc(pokemon.heldItem) + '</span>' : "") +
         (pokemon.isEgg ? '<span class="tm-badge">' + esc(tr("蛋")) + '</span>' : "") +
-        '<div class="tm-pokemon-actions">' + button("取出到队伍", "withdraw-pokemon", "primary", 'data-box="' + storageBox + '" data-slot="' + slot + '"') +
-        button("释放", "confirm-release-pokemon", "danger", 'data-box="' + storageBox + '" data-slot="' + slot + '" data-name="' + esc(pokemon.name) + '"') + '</div></div>';
+        '<div class="tm-pokemon-actions">' + pokemonStorageManageButton("取出到队伍", "withdraw-pokemon", "primary", 'data-box="' + storageBox + '" data-slot="' + slot + '"') +
+        pokemonStorageManageButton("释放", "confirm-release-pokemon", "danger", 'data-box="' + storageBox + '" data-slot="' + slot + '" data-name="' + esc(pokemon.name) + '"') + '</div></div>';
     }).join("") || '<div class="tm-note">' + esc(tr("这个盒子是空的")) + '</div>';
-    content.innerHTML = views + card("宝可梦仓库", navigation + deposit + '<div class="tm-list">' + rows + '</div>');
+    body.innerHTML = navigation + deposit + '<div class="tm-list">' + rows + '</div>';
   }
   function renderProgress(content) {
     var progress = mod.listPokemonProgress() || { badges: [], dexes: [] };
@@ -525,10 +542,14 @@
     var list = panel && panel.querySelector("#tm-add-pokemon-list"); if (!list) return;
     var result = mod.listDatabase("pokemon", addPokemonQuery, 0, 100) || { values: [] };
     if (result.loading) { list.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
+    var partyFull = hasFeature("pokemonPartyFull");
     list.innerHTML = (result.values || []).map(function (entry) {
+      var addButton = button("获得", "add-pokemon", partyFull ? "unsupported" : "primary",
+        'data-key="' + esc(entry.id) + '"' + (partyFull ? ' disabled aria-disabled="true"' : ""));
       return '<div class="tm-item"><span class="tm-name">' + esc(entry.name || entry.id) + '</span><span class="tm-badge">#' + esc(entry.id) + '</span>' +
-        button("获得", "add-pokemon", "primary", 'data-key="' + esc(entry.id) + '"') + '</div>';
+        addButton + '</div>';
     }).join("") || '<div class="tm-note">' + esc(tr("没有匹配宝可梦")) + '</div>';
+    if (partyFull) list.insertAdjacentHTML("afterbegin", '<div class="tm-note tm-pokemon-party-full">' + esc(tr("队伍已满，无法继续获得宝可梦")) + '</div>');
   }
   function valueEditor(index, key, label, current, feature) {
     var id = "tm-pokemon-value-" + index + "-" + key;
@@ -1341,11 +1362,11 @@
     if (action === "pokemon-section") { teamSection = node.dataset.section || "stats"; return renderTeam(panel.querySelector(".tm-content")); }
     if (action === "team-view") { teamView = node.dataset.view === "storage" ? "storage" : "party"; return renderTeam(panel.querySelector(".tm-content")); }
     if (action === "storage-prev" || action === "storage-next") {
-      var currentBox = Number(node.dataset.box) || 0;
-      var storageInfo = mod.listPokemonStorage(currentBox);
-      if (!storageInfo) return toast(tr("无法读取宝可梦仓库"), true);
-      storageBox = Math.max(0, Math.min(Number(storageInfo.boxCount) - 1, currentBox + (action === "storage-next" ? 1 : -1)));
-      return renderTeam(panel.querySelector(".tm-content"));
+      var currentBox = storageBox;
+      var nextBox = Math.max(0, Math.min(storageBoxCount - 1, currentBox + (action === "storage-next" ? 1 : -1)));
+      if (nextBox === currentBox) return;
+      storageBox = nextBox;
+      return renderPokemonStorageBody();
     }
     if (action === "deposit-pokemon") {
       pendingDepositIndex = Number(node.dataset.index);
@@ -1401,9 +1422,10 @@
       var level = Number(value("tm-add-pokemon-level"));
       if (!Number.isInteger(level) || level < 1 || level > 100) return toast(tr("请输入 1 到 100 的等级"), true);
       return run(function () { return mod.give("pokemon", node.dataset.key, level); }, function () {
-        closeModal(); toast(tr("宝可梦已获得"));
+        toast(tr("宝可梦已获得"));
         try { refreshCapabilitiesCache(); } catch (_) {}
-        renderTabs(); renderTeam(panel.querySelector(".tm-content"));
+        renderTabs();
+        loadAddPokemonCandidates();
       });
     }
     if (action === "reorder-pokemon") return run(function () {
@@ -1743,9 +1765,18 @@
   }
   function toggle() { if (panel || probe || rpgUI.isOpen()) close(); else open(); }
   function isOpen() { return !!(panel || probe || rpgUI.isOpen()); }
-  function refreshPanelFromAsyncData() {
+  function refreshPanelFromAsyncData(changes, unknown) {
     if (!panel) return;
-    if (!capabilitiesResolved) {
+    if (!unknown && changes && changes.some(function (change) { return change && change.method === "listPokemonStorage"; }) &&
+        tab === "team" && teamView === "storage" &&
+        panel.querySelector("#tm-pokemon-storage-body")) {
+      renderPokemonStorageBody();
+      return;
+    }
+    var capabilitiesChanged = unknown || !capabilitiesResolved || (changes && changes.some(function (change) {
+      return change && change.method === "listCapabilities";
+    }));
+    if (capabilitiesChanged) {
       try { refreshCapabilitiesCache(); } catch (error) { console.warn("Essentials capability refresh failed", error); }
     }
     var content = panel.querySelector(".tm-content");
@@ -1816,7 +1847,9 @@
       }
     }
   }
-  function scheduleAsyncPanelRefresh() {
+  function scheduleAsyncPanelRefresh(changes, unknown) {
+    if (Array.isArray(changes)) asyncRefreshChanges = asyncRefreshChanges.concat(changes);
+    if (unknown || (!Array.isArray(changes) && !unknown)) asyncRefreshUnknown = true;
     if (asyncRefreshTimer != null) return;
     function scheduleFrame() {
       asyncRefreshTimer = null;
@@ -1827,7 +1860,11 @@
         return;
       }
       var requestFrame = window.requestAnimationFrame || function (callback) { return window.setTimeout(callback, 0); };
-      requestFrame(refreshPanelFromAsyncData);
+      var pendingChanges = asyncRefreshChanges;
+      var pendingUnknown = asyncRefreshUnknown;
+      asyncRefreshChanges = [];
+      asyncRefreshUnknown = false;
+      requestFrame(function () { refreshPanelFromAsyncData(pendingChanges, pendingUnknown); });
     }
     asyncRefreshTimer = setTimeout(scheduleFrame, 16);
   }
@@ -1836,12 +1873,12 @@
     close: close,
     toggle: toggle,
     isOpen: isOpen,
-    onAsyncDataUpdated: function () {
+    onAsyncDataUpdated: function (changes, unknown) {
       if (!panel) {
-        if (rpgUI && typeof rpgUI.onAsyncDataUpdated === "function") rpgUI.onAsyncDataUpdated();
+        if (rpgUI && typeof rpgUI.onAsyncDataUpdated === "function") rpgUI.onAsyncDataUpdated(changes, unknown);
         return;
       }
-      scheduleAsyncPanelRefresh();
+      scheduleAsyncPanelRefresh(changes, unknown);
     },
     onRuntimeEngineDetected: applyRuntimeEngine,
   };

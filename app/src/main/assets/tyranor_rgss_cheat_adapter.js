@@ -32,6 +32,8 @@
   var asyncRequests = Object.create(null);
   var readCache = Object.create(null);
   var refreshNotificationPending = false;
+  var refreshNotificationChanges = [];
+  var refreshNotificationUnknown = false;
 
   window.TyranorModBridgeResponse = function (requestId, responseJson) {
     var pending = asyncRequests[requestId];
@@ -86,13 +88,19 @@
     return fallback;
   }
 
-  function notifyAsyncDataUpdated() {
+  function notifyAsyncDataUpdated(change) {
+    if (change) refreshNotificationChanges.push(change);
+    else refreshNotificationUnknown = true;
     if (refreshNotificationPending) return;
     refreshNotificationPending = true;
     window.setTimeout(function () {
       refreshNotificationPending = false;
+      var changes = refreshNotificationChanges;
+      var unknown = refreshNotificationUnknown;
+      refreshNotificationChanges = [];
+      refreshNotificationUnknown = false;
       var ui = window.TyranorModUI;
-      if (ui && typeof ui.onAsyncDataUpdated === "function") ui.onAsyncDataUpdated();
+      if (ui && typeof ui.onAsyncDataUpdated === "function") ui.onAsyncDataUpdated(changes, unknown);
     }, 16);
   }
 
@@ -116,7 +124,7 @@
           entry.expiresAt = 0;
           entry.retryAt = 0;
           entry.invalidated = true;
-          notifyAsyncDataUpdated();
+          notifyAsyncDataUpdated({ method: method, args: args || [] });
           return;
         }
         entry.hasValue = true;
@@ -124,7 +132,7 @@
         entry.invalidated = false;
         entry.expiresAt = Date.now() + Math.max(0, ttlMs || 0);
         entry.retryAt = 0;
-        notifyAsyncDataUpdated();
+        notifyAsyncDataUpdated({ method: method, args: args || [] });
       }).catch(function (error) {
         entry.pending = false;
         var staleRequest = entry.version !== requestVersion;
@@ -136,8 +144,10 @@
           entry.invalidated = false;
         }
         console.warn("RGSS async query failed: " + method, error);
-        notifyAsyncDataUpdated();
-        if (!staleRequest) window.setTimeout(notifyAsyncDataUpdated, 2000);
+        notifyAsyncDataUpdated({ method: method, args: args || [] });
+        if (!staleRequest) window.setTimeout(function () {
+          notifyAsyncDataUpdated({ method: method, args: args || [] });
+        }, 2000);
       });
     }
     return entry.hasValue && !entry.invalidated ? entry.value : loadingValue(fallback);
@@ -189,8 +199,8 @@
       addState: ["actorStates", "listActors"], removeState: ["actorStates", "listActors"],
       changeEquip: ["actorEquips", "equipCandidates", "listActors"],
       setPokemonValue: ["listPokemon", "listPokemonStats"], setPokemonNickname: ["listPokemon"],
-      movePokemonToStorage: ["listPokemon", "listPokemonStorage"], withdrawPokemonFromStorage: ["listPokemon", "listPokemonStorage"],
-      releasePokemon: ["listPokemon", "listPokemonStorage"], setPokemonProgress: ["listPokemonProgress"],
+      movePokemonToStorage: ["listPokemon", "listPokemonStorage", "listCapabilities"], withdrawPokemonFromStorage: ["listPokemon", "listPokemonStorage", "listCapabilities"],
+      releasePokemon: ["listPokemon", "listPokemonStorage", "listCapabilities"], setPokemonProgress: ["listPokemonProgress"],
       recoverPokemon: ["listPokemon", "listPokemonMoves", "listPokemonStatuses"],
       setPokemonMove: ["listPokemonMoves", "listPokemon"], setPokemonMovePp: ["listPokemonMoves", "listPokemon"],
       setPokemonTrait: ["listPokemonTraits", "listPokemon"], setPokemonOrder: ["listPokemon"],
