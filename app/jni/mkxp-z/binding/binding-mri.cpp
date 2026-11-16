@@ -7051,7 +7051,7 @@ module TyranorCheats
                 elsif battler.respond_to?(:sp)
                   battler.sp
                 else
-                  return [nil, nil]
+                  nil
                 end
       maximum = if battler.respond_to?(:mmp)
                   battler.mmp
@@ -7060,8 +7060,9 @@ module TyranorCheats
                 elsif battler.respond_to?(:maxmp)
                   battler.maxmp
                 else
-                  return [nil, nil]
+                  nil
                 end
+      return [nil, nil] if current.nil? || maximum.nil?
       [current.to_i, maximum.to_i]
     rescue Exception
       [nil, nil]
