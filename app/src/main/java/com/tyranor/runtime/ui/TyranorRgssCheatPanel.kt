@@ -572,7 +572,12 @@ class TyranorRgssCheatPanel(
             val offset = argInt(a, 2).coerceAtLeast(0)
             val limit = argInt(a, 3, 100).coerceIn(1, 300)
             val category = argString(a, 4)
-            cheats.listPickables { entries ->
+            cheats.listPickablesResult { result ->
+                if (result.error != null) {
+                    done(mapOf("total" to 0, "values" to emptyList<Any>(), "error" to result.error))
+                    return@listPickablesResult
+                }
+                val entries = result.entries
                 val filtered = entries.asSequence()
                     .filter { it.kind == kind }
                     .filter { category.isBlank() || it.category == category }

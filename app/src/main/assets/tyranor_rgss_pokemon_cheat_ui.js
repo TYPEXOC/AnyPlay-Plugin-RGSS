@@ -28,6 +28,7 @@
   var itemOffset = 0;
   var bagCategory = "";
   var bagCategories = [];
+  var bagCategoryExpanded = false;
   var selectedItemId = null;
   var showEmptyItems = true;
   var systemKind = "switch";
@@ -545,9 +546,15 @@
     if (!hasFeature("itemBagReady")) { content.innerHTML = '<div class="tm-note">' + esc(tr("开始新游戏或载入存档后即可读取背包")) + '</div>'; return; }
     try { bagCategories = mod.listBagCategories() || []; } catch (_) { bagCategories = []; }
     if (bagCategory && !bagCategories.some(function (entry) { return entry.id === bagCategory; })) bagCategory = "";
-    var categoryButtons = '<button class="tm-btn ' + (!bagCategory ? "primary" : "") + '" data-action="bag-category" data-category="">' + esc(tr("全部")) + '</button>' +
-      bagCategories.map(function (entry) { return '<button class="tm-btn ' + (bagCategory === entry.id ? "primary" : "") + '" data-action="bag-category" data-category="' + esc(entry.id) + '">' + esc(entry.name) + '</button>'; }).join("");
-    var controls = '<div class="tm-pokemon-categories">' + categoryButtons + '</div><div class="tm-row">' + input("tm-bag-query", itemQuery, "search", 'placeholder="' + esc(tr("搜索物品名称或编号")) + '"') +
+    var selectedCategory = bagCategories.filter(function (entry) { return entry.id === bagCategory; })[0];
+    var categoryLabel = selectedCategory ? selectedCategory.name : tr("全部");
+    var categoryOptions = [{ id: "", name: tr("全部") }].concat(bagCategories).map(function (entry) {
+      var active = bagCategory === entry.id;
+      return '<button type="button" class="tm-system-kind-option' + (active ? ' active' : '') + '" role="option" aria-selected="' + (active ? 'true' : 'false') + '" data-action="select-bag-category" data-category="' + esc(entry.id) + '">' + esc(entry.name) + '</button>';
+    }).join("");
+    var categoryPicker = '<div class="tm-system-kind-picker tm-item-kind-picker tm-bag-category-picker"><button type="button" class="tm-system-kind-trigger" data-action="toggle-bag-category" aria-haspopup="listbox" aria-expanded="' + (bagCategoryExpanded ? 'true' : 'false') + '"><span>' + esc(categoryLabel) + '</span><span class="tm-system-kind-arrow" aria-hidden="true">▾</span></button>' +
+      (bagCategoryExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + categoryOptions + '</div>' : '') + '</div>';
+    var controls = '<div class="tm-row">' + categoryPicker + input("tm-bag-query", itemQuery, "search", 'placeholder="' + esc(tr("搜索物品名称或编号")) + '"') +
       button("搜索", "search-bag", "primary") + '</div><div class="tm-row tm-pokemon-pager"><label><input class="tm-switch" type="checkbox" data-action="show-empty-items" ' +
       (showEmptyItems ? "checked" : "") + '> ' + esc(tr("显示未持有物品")) + '</label><span class="tm-grow" id="tm-bag-total"></span>' +
       button("上一页", "bag-prev") + button("下一页", "bag-next") + '</div>';
@@ -560,6 +567,12 @@
     var list = panel && panel.querySelector("#tm-bag-list"); if (!list) return;
     var result = mod.listDatabase("item", itemQuery, itemOffset, 100, bagCategory) || { total: 0, values: [] };
     if (result.loading) { list.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
+    if (result.error) {
+      list.innerHTML = '<div class="tm-note tm-error">' + esc(result.error) + '</div>';
+      var failedTotal = panel.querySelector("#tm-bag-total"); if (failedTotal) failedTotal.textContent = tr("读取失败");
+      renderBagDetail([]);
+      return;
+    }
     var entries = result.values || [];
     if (!showEmptyItems) entries = entries.filter(function (item) { return Number(item.count) > 0; });
     if (!entries.some(function (item) { return String(item.id) === String(selectedItemId); })) selectedItemId = entries.length ? String(entries[0].id) : null;
@@ -1071,6 +1084,13 @@
           loadBrowse();
         }
       }
+      if (bagCategoryExpanded && !event.target.closest(".tm-bag-category-picker")) {
+        bagCategoryExpanded = false;
+        var bagMenu = panel.querySelector(".tm-bag-category-picker .tm-system-kind-menu");
+        var bagTrigger = panel.querySelector(".tm-bag-category-picker .tm-system-kind-trigger");
+        if (bagMenu) bagMenu.remove();
+        if (bagTrigger) bagTrigger.setAttribute("aria-expanded", "false");
+      }
       if (systemKindExpanded && !event.target.closest(".tm-system-kind-picker")) {
         systemKindExpanded = false;
         var systemMenu = panel.querySelector(".tm-system-kind-menu");
@@ -1413,7 +1433,16 @@
     if (action === "set-held-item") return run(function () { return mod.setPokemonItem(selectedPokemon, node.dataset.key || ""); }, function () { closeModal(); toast(tr("携带物品已更新")); renderTeam(panel.querySelector(".tm-content")); });
     if (action === "edit-stats") return editStats(node.dataset.index);
     if (action === "search-bag") { itemQuery = value("tm-bag-query").trim(); itemOffset = 0; return loadBag(); }
-    if (action === "bag-category") { bagCategory = node.dataset.category || ""; itemOffset = 0; return renderBag(panel.querySelector(".tm-content")); }
+    if (action === "toggle-bag-category") {
+      bagCategoryExpanded = !bagCategoryExpanded;
+      return renderBag(panel.querySelector(".tm-content"));
+    }
+    if (action === "select-bag-category") {
+      bagCategory = node.dataset.category || "";
+      bagCategoryExpanded = false;
+      itemOffset = 0;
+      return renderBag(panel.querySelector(".tm-content"));
+    }
     if (action === "select-bag-item") { selectedItemId = String(node.dataset.id || ""); return loadBag(); }
     if (action === "bag-prev") { itemOffset = Math.max(0, itemOffset - 100); return loadBag(); }
     if (action === "bag-next") { itemOffset += 100; return loadBag(); }

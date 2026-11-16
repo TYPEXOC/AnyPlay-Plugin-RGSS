@@ -7704,24 +7704,83 @@ module TyranorCheats
       out = []
       case engine
       when :essentials
+        item_count_before = out.length
         if gd?
-          GameData::Item.each do |i|
-            n = i.name.to_s
-            description = i.respond_to?(:description) ? wire_text(i.description) : ""
-            pocket = wire_text(essentials_item_pocket_name(i.id))
-            out << "item\t#{i.id}\t#{quantity_of('item', i.id)}\t#{wire_text(n)}\t#{description}\t#{item_locked?('item', i.id) ? 1 : 0}\t#{pocket}" unless n.empty?
+          begin
+            GameData::Item.each do |i|
+              begin
+                id = i.respond_to?(:id) ? i.id : nil
+                next if id.nil?
+                n = i.respond_to?(:name) ? i.name.to_s : ""
+                next if n.strip.empty?
+                description = i.respond_to?(:description) ? wire_text(i.description) : ""
+                pocket = wire_text(essentials_item_pocket_name(id))
+                out << "item\t#{id}\t#{quantity_of('item', id)}\t#{wire_text(n)}\t#{description}\t#{item_locked?('item', id) ? 1 : 0}\t#{pocket}"
+              rescue Exception
+                next
+              end
+            end
+          rescue Exception => e
+            AnyPlayLog.error("cheat item catalog: GameData enumeration failed: #{e.class}: #{e.message}") rescue nil
           end
-          GameData::Species.each do |s|
-            next if s.form != 0
-            n = s.name.to_s
-            out << "pokemon\t#{s.species}\t0\t#{wire_text(n)}\t" unless n.empty?
-          end
-        else
+        end
+        # A few Essentials forks expose GameData but don't finish registering
+        # their item table until later. Fall back to the legacy database API;
+        # if neither catalog is ready, still expose items already in the bag.
+        if out.length == item_count_before && defined?(PBItems)
           (1..(PBItems.maxValue rescue 0)).each do |i|
-            n = (PBItems.getName(i) rescue "").to_s
-            pocket = wire_text(essentials_item_pocket_name(i))
-            out << "item\t#{i}\t#{quantity_of('item', i)}\t#{wire_text(n)}\t\t#{item_locked?('item', i) ? 1 : 0}\t#{pocket}" unless n.empty?
+            begin
+              n = (PBItems.getName(i) rescue "").to_s
+              next if n.strip.empty?
+              pocket = wire_text(essentials_item_pocket_name(i))
+              out << "item\t#{i}\t#{quantity_of('item', i)}\t#{wire_text(n)}\t\t#{item_locked?('item', i) ? 1 : 0}\t#{pocket}"
+            rescue Exception
+              next
+            end
           end
+        end
+        if out.length == item_count_before && bag && bag.respond_to?(:pockets)
+          begin
+            bag.pockets.each do |items|
+              next unless items.respond_to?(:each)
+              items.each do |entry|
+                begin
+                  id = entry && entry[0]
+                  next if id.nil?
+                  name = if gd? && defined?(GameData::Item)
+                           (GameData::Item.get(id).name rescue "").to_s
+                         elsif defined?(PBItems)
+                           (PBItems.getName(id.to_i) rescue "").to_s
+                         else
+                           ""
+                         end
+                  name = id.to_s if name.strip.empty?
+                  pocket = wire_text(essentials_item_pocket_name(id))
+                  out << "item\t#{id}\t#{quantity_of('item', id)}\t#{wire_text(name)}\t\t#{item_locked?('item', id) ? 1 : 0}\t#{pocket}"
+                rescue Exception
+                  next
+                end
+              end
+            end
+          rescue Exception => e
+            AnyPlayLog.error("cheat item catalog: bag fallback failed: #{e.class}: #{e.message}") rescue nil
+          end
+        end
+        if gd?
+          begin
+            GameData::Species.each do |s|
+              begin
+                next if s.respond_to?(:form) && s.form.to_i != 0
+                n = s.name.to_s
+                out << "pokemon\t#{s.species}\t0\t#{wire_text(n)}\t" unless n.strip.empty?
+              rescue Exception
+                next
+              end
+            end
+          rescue Exception => e
+            AnyPlayLog.error("cheat species catalog: GameData enumeration failed: #{e.class}: #{e.message}") rescue nil
+          end
+        elsif defined?(PBSpecies)
           (1..(PBSpecies.maxValue rescue 0)).each do |i|
             n = (PBSpecies.getName(i) rescue "").to_s
             out << "pokemon\t#{i}\t0\t#{wire_text(n)}\t" unless n.empty?

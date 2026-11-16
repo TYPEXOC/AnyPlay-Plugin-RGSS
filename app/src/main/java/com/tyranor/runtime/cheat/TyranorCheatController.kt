@@ -1072,12 +1072,21 @@ class TyranorCheatController(
         val category: String = ""
     )
 
+    data class PickablesResult(
+        val entries: List<Pickable>,
+        val error: String? = null,
+    )
+
     /**
      * Fetches everything this game can give (items, weapons, armor, and for
      * Pokemon games the Pokemon too) so the picker can show real names.
      * Empty list if the game isn't ready.
      */
     fun listPickables(onResult: (List<Pickable>) -> Unit) {
+        listPickablesResult { result -> onResult(result.entries) }
+    }
+
+    fun listPickablesResult(onResult: (PickablesResult) -> Unit) {
         send("list\t") { raw ->
             val out = mutableListOf<Pickable>()
             raw.lineSequence().forEach { line ->
@@ -1089,7 +1098,8 @@ class TyranorCheatController(
                     ))
                 }
             }
-            onResult(out)
+            val error = raw.takeIf { it.isNotBlank() && out.isEmpty() && '\t' !in it }
+            onResult(PickablesResult(out, error))
         }
     }
 
