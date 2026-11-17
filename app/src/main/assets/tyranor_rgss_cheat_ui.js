@@ -90,10 +90,6 @@
   function textInput(id, value, type, attrs) { return '<input class="tm-input" id="' + id + '" type="' + (type || "text") + '" value="' + escapeHtml(value == null ? "" : value) + '" ' + (attrs || "") + '>'; }
   function fitGoldInput(input) {
     if (!input) return;
-    if (input.closest && input.closest(".tm-quick-gold-row")) {
-      input.style.width = "";
-      return;
-    }
     var baseWidth = 104;
     var maxWidth = 220;
     var textWidth = 0;
@@ -1633,7 +1629,7 @@
   function open() {
     if (root) return;
     root = document.createElement("div"); root.id = "tyranor-mod-root";
-    root.innerHTML = '<div class="tm-panel tm-rpg-panel tm-quick-fit" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker RGSS 修改器</strong><button class="tm-refresh" data-action="render" title="刷新面板" aria-label="刷新面板">↻</button><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs">' + tabs.map(function (tab) { return '<button class="tm-tab" data-tab="' + tab[0] + '">' + tab[1] + '</button>'; }).join("") + '</div><main class="tm-content"></main></div>';
+    root.innerHTML = '<div class="tm-panel tm-rpg-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>RPG Maker RGSS 修改器</strong><button class="tm-refresh" data-action="render" title="刷新面板" aria-label="刷新面板">↻</button><button class="tm-close" data-action="close" aria-label="关闭">×</button></div><div class="tm-tabs">' + tabs.map(function (tab) { return '<button class="tm-tab" data-tab="' + tab[0] + '">' + tab[1] + '</button>'; }).join("") + '</div><main class="tm-content"></main></div>';
     document.documentElement.appendChild(root);
     root.addEventListener("pointerdown", function (event) {
       pendingEquipScroll = event.target.closest("[data-action='pick-equip-slot']") ? readEquipScroll() : null;
