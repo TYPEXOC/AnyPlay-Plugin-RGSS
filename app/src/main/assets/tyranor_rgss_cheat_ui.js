@@ -141,6 +141,8 @@
   function render() {
     if (!root) return;
     var content = root.querySelector(".tm-content");
+    var panel = root.querySelector(".tm-panel");
+    if (panel) panel.classList.toggle("tm-quick-fit", activeTab === "quick");
     root.querySelectorAll(".tm-tab").forEach(function (node) { node.classList.toggle("active", node.dataset.tab === activeTab); });
     var ready = !!mod.isReady();
     context.runtimeReady = ready;
@@ -366,7 +368,7 @@
       var gold = '<div class="tm-row tm-quick-gold-row"><label>' + escapeHtml(translated("金币：")) +
         '<span id="tm-gold-current">' + escapeHtml(cachedGold) + '</span></label>' +
         textInput("tm-gold", cachedGold, "number", 'min="0"') + button(translated("拉满"), "max-gold") + '</div>';
-      var resourceCard = quickCard("角色与资源", "临时作弊开关", gold +
+      var resourceCard = quickCard("角色与资源", "临时作弊开关", gold + '<div class="tm-quick-resource-divider" aria-hidden="true"></div>' +
         toggleGrid(availableFlags(resourceFlags), "当前游戏没有可用的角色资源开关"), "tm-quick-resource-card");
       var rewardRows = [];
       if (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0) {

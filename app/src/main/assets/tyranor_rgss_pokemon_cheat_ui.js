@@ -182,6 +182,8 @@
   }
   function render() {
     if (!panel) return;
+    var panelFrame = panel.querySelector(".tm-panel");
+    if (panelFrame) panelFrame.classList.toggle("tm-quick-fit", tab === "quick");
     renderTabs();
     var content = panel.querySelector(".tm-content");
     var readySnapshot = typeof mod.isReadySnapshot === "function" ? mod.isReadySnapshot() : { value: mod.isReady(), loading: false };
@@ -261,7 +263,10 @@
       return '<div class="tm-pokemon-quick-toggle-grid">' + rows + '</div>';
     }
     function quickCard(title, body, cls, headerControl) {
-      return card(title, body, "tm-pokemon-quick-card " + (cls || ""), headerControl);
+      var cardBody = String(cls || "").indexOf("tm-pokemon-quick-scene-card") >= 0
+        ? body
+        : '<div class="tm-pokemon-quick-card-body">' + body + '</div>';
+      return card(title, cardBody, "tm-pokemon-quick-card " + (cls || ""), headerControl);
     }
     function currencyRow(kind, label, snapshotMethod) {
       var supported = capabilitiesResolved ? hasValue(kind) : null;
@@ -306,12 +311,7 @@
         input("tm-pokemon-ev-multiplier", state.evMultiplier == null ? 1 : state.evMultiplier, "number",
           'min="0" max="100" step="0.1"' + (evSupported ? "" : " disabled")) +
         button("设置", "set-ev-multiplier", evSupported ? "primary" : "unsupported", evSupported ? "" : 'aria-disabled="true" data-support="ev"') + '</div>';
-      multiplierRows += '<div class="tm-pokemon-quick-multiplier-row"><label for="tm-pokemon-drop-multiplier">' + esc(tr("掉落倍率")) + '</label>' +
-        input("tm-pokemon-drop-multiplier", state.dropMultiplier == null ? 1 : state.dropMultiplier, "number",
-          'min="0" max="100" step="0.1" disabled') +
-        button("设置", "set-drop-multiplier", "unsupported", 'aria-disabled="true" data-support="drop"') + '</div>';
       var growthBody = '<div class="tm-pokemon-quick-multiplier-list">' + multiplierRows + '</div>' +
-        '<p class="tm-pokemon-quick-note tm-pokemon-quick-drop-note">' + esc(tr("Essentials 标准战斗没有通用物品掉落倍率")) + '</p>' +
         (capabilitiesResolved && !expSupported ? '<p class="tm-pokemon-quick-note">' + esc(tr("当前游戏没有可用的战斗经验结算接口")) + '</p>' : "") +
         (capabilitiesResolved && !evSupported ? '<p class="tm-pokemon-quick-note">' + esc(tr("当前游戏没有可用的努力值结算接口")) + '</p>' : "");
       var canRecover = capabilitiesResolved && hasFeature("pokemonRecover") && hasFeature("pokemonPartyReady");
@@ -417,7 +417,6 @@
     var fields = {
       expMultiplier: ["tm-pokemon-exp-multiplier", 1],
       evMultiplier: ["tm-pokemon-ev-multiplier", 1],
-      dropMultiplier: ["tm-pokemon-drop-multiplier", 1],
       speedMultiplier: ["tm-pokemon-speed"],
       gameSpeedMultiplier: ["tm-pokemon-game-speed"]
     };
@@ -1506,9 +1505,8 @@
         console.error("Could not open Pokémon game scene", error);
       });
     }
-    if (action === "set-exp-multiplier" || action === "set-drop-multiplier" || action === "set-ev-multiplier") {
-      var rewardName = action === "set-exp-multiplier" ? "expMultiplier" : action === "set-ev-multiplier" ? "evMultiplier" : "dropMultiplier";
-      if (action === "set-drop-multiplier") return toast(tr("Essentials 标准战斗没有通用物品掉落倍率"), true);
+    if (action === "set-exp-multiplier" || action === "set-ev-multiplier") {
+      var rewardName = action === "set-exp-multiplier" ? "expMultiplier" : "evMultiplier";
       if (!capabilitiesResolved) return toast(unavailableReason(), true);
       if (!hasValue(rewardName)) return toast(tr(rewardName === "evMultiplier" ? "当前游戏没有可用的努力值结算接口" : "当前游戏没有可用的战斗经验结算接口"), true);
       var rewardInputId = rewardName === "evMultiplier" ? "tm-pokemon-ev-multiplier" : "tm-pokemon-exp-multiplier";
