@@ -14,7 +14,7 @@
   var activeTab = "quick";
   var goldCommitPending = null;
   var pendingEquipScroll = null;
-  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, mapViewInitialized: false, mapQuery: "", currentMapId: 0, selectedMapId: 0, teleportDestination: null, eventId: 0, eventLoading: false, selectedEventDetail: null, mapEntries: [], pendingMinimapMapId: null, pendingMinimapEvent: null, capabilities: null, capabilitiesLoading: false };
+  var context = { actorId: 0, actorEntries: null, actorSection: "stats", actorQuery: "", actorSkillEntries: [], actorStateEntries: [], skillQuery: "", stateQuery: "", hideEmptySkills: false, hideEmptySystemEntries: false, hideEmptyEquipCandidates: false, hideEmptyBattleEnemies: false, hideEmptyBattleActors: false, equipSlot: null, equipKind: "", quickSection: "角色与资源", inBattle: false, itemKind: "item", itemQuery: "", itemKindExpanded: false, actorClassExpanded: false, itemEntries: [], selectedItemId: null, systemKind: "switch", systemQuery: "", systemKindExpanded: false, mapListExpanded: false, mapViewInitialized: false, mapQuery: "", currentMapId: 0, selectedMapId: 0, teleportDestination: null, eventId: 0, eventLoading: false, selectedEventDetail: null, mapEntries: [], pendingMinimapMapId: null, pendingMinimapEvent: null, capabilities: null, capabilitiesLoading: false, runtimeReady: null };
   var tabs = [
     ["quick", "快捷"], ["items", "物品"], ["actors", "队伍"], ["system", "系统"],
     ["map", "地图"], ["battle", "战斗"], ["save", "存档"], ["keys", "键盘"], ["about", "说明"]
@@ -142,7 +142,9 @@
     if (!root) return;
     var content = root.querySelector(".tm-content");
     root.querySelectorAll(".tm-tab").forEach(function (node) { node.classList.toggle("active", node.dataset.tab === activeTab); });
-    if (!mod.isReady()) { content.innerHTML = '<div class="tm-note">请先进入游戏存档或开始新游戏，修改器正在等待 RPG Maker 运行时就绪。</div>'; return; }
+    var ready = !!mod.isReady();
+    context.runtimeReady = ready;
+    if (!ready) { content.innerHTML = '<div class="tm-note">请先进入游戏存档或开始新游戏，修改器正在等待 RPG Maker 运行时就绪。</div>'; return; }
     if (activeTab === "quick") renderQuick(content);
     else if (activeTab === "items") renderItems(content);
     else if (activeTab === "actors") renderActors(content);
@@ -153,8 +155,105 @@
     else if (activeTab === "keys") renderKeys(content);
     else renderAbout(content);
   }
-  function onAsyncDataUpdated() {
+  function refreshQuickStateControls(changes) {
+    if (!root || activeTab !== "quick") return;
+    var stateMutations = Array.isArray(changes) ? changes.filter(function (change) {
+      return change && change.method === "getState" && change.mutation;
+    }) : [];
+    if (stateMutations.length) {
+      var fields = {
+        expMultiplier: "tm-exp-multiplier", dropMultiplier: "tm-drop-multiplier",
+        speedMultiplier: "tm-speed", gameSpeedMultiplier: "tm-game-speed"
+      };
+      var allHandled = stateMutations.every(function (change) {
+        var args = change.args || [];
+        if (change.mutation === "setFlag" && args.length > 1) {
+          root.querySelectorAll('input[data-action="flag"][data-flag]').forEach(function (node) {
+            if (node.dataset.flag === String(args[0])) node.checked = !!args[1];
+          });
+          return true;
+        }
+        var key = change.mutation === "setRewardMultiplier" ? args[0]
+          : change.mutation === "setSpeed" ? "speedMultiplier"
+          : change.mutation === "setGameSpeed" ? "gameSpeedMultiplier" : null;
+        var value = change.mutation === "setRewardMultiplier" ? args[1] : args[0];
+        var input = key && fields[key] ? root.querySelector("#" + fields[key]) : null;
+        if (!input || value == null) return false;
+        if (document.activeElement !== input) input.value = String(value);
+        return true;
+      });
+      if (allHandled) return;
+    }
+    var snapshot = typeof mod.getStateSnapshot === "function" ? mod.getStateSnapshot() : { value: mod.getState(), loading: false };
+    if (!snapshot || snapshot.loading || !snapshot.value || typeof snapshot.value !== "object") return;
+    var state = snapshot.value;
+    root.querySelectorAll('input[data-action="flag"][data-flag]').forEach(function (node) {
+      if (state[node.dataset.flag] != null) node.checked = !!state[node.dataset.flag];
+    });
+    var fields = {
+      expMultiplier: ["tm-exp-multiplier", 1], dropMultiplier: ["tm-drop-multiplier", 1],
+      speedMultiplier: ["tm-speed", 2], gameSpeedMultiplier: ["tm-game-speed", 1]
+    };
+    Object.keys(fields).forEach(function (key) {
+      var field = fields[key];
+      var input = root.querySelector("#" + field[0]);
+      if (!input || document.activeElement === input) return;
+      input.value = String(state[key] == null ? field[1] : state[key]);
+    });
+  }
+  function refreshQuickGold() {
+    if (!root || activeTab !== "quick" || context.quickSection !== "角色与资源") return;
+    var snapshot = typeof mod.getGoldSnapshot === "function" ? mod.getGoldSnapshot() : null;
+    if (snapshot && snapshot.value != null) context.gold = snapshot.value;
+    var amount = context.gold == null ? (snapshot && snapshot.loading ? "…" : null) : context.gold;
+    var current = root.querySelector("#tm-gold-current");
+    var input = root.querySelector("#tm-gold");
+    if (current) current.textContent = amount == null ? "—" : String(amount);
+    if (input && document.activeElement !== input) {
+      input.value = amount == null || amount === "…" ? "" : String(amount);
+      fitGoldInput(input);
+    }
+  }
+  function onAsyncDataUpdated(changes, unknown) {
     if (!root) return;
+    if (!unknown && Array.isArray(changes)) {
+      var methods = changes.map(function (change) { return change && change.method; }).filter(Boolean);
+      var hasMethod = function (method) { return methods.indexOf(method) >= 0; };
+      if (hasMethod("isReady")) {
+        var wasReady = context.runtimeReady;
+        var ready = !!mod.isReady();
+        context.runtimeReady = ready;
+        if (wasReady !== ready) render();
+        if (wasReady !== ready) return;
+      }
+      if (activeTab === "battle" && methods.length && methods.every(function (method) {
+        return method === "battleSnapshot" || method === "listActors" || method === "listCapabilities";
+      }) && hasMethod("battleSnapshot")) {
+        refreshBattleUnitLists();
+        return;
+      }
+      if (activeTab === "quick") {
+        if (hasMethod("getState")) refreshQuickStateControls(changes);
+        if (hasMethod("getGold")) refreshQuickGold();
+        if (hasMethod("listCapabilities")) {
+          var capabilities = mod.listCapabilities();
+          if (capabilities && !capabilities.loading && capabilities.engine !== "unknown") {
+            context.capabilities = capabilities;
+            renderQuick(root.querySelector(".tm-content"), false);
+          }
+        }
+        return;
+      }
+      var tabDataMethods = {
+        items: ["listDatabase", "itemCount", "listBagCategories"],
+        actors: ["listActors", "actorClasses", "actorSkills", "actorStates", "actorEquips", "equipCandidates", "listDatabase"],
+        system: ["listSystem", "eventDetail"],
+        map: ["currentPosition", "listMaps", "listEvents", "eventDetail", "eventInterpreter", "minimapData"],
+        battle: ["battleSnapshot", "listCapabilities"],
+        save: ["listSaveSlots"]
+      }[activeTab] || [];
+      if (!methods.some(function (method) { return tabDataMethods.indexOf(method) >= 0; })) return;
+    }
     var content = root.querySelector(".tm-content");
     var active = document.activeElement;
     var selectionStart = null;
@@ -311,7 +410,9 @@
     if (refreshGold) setTimeout(function () {
         if (!root || activeTab !== "quick") return;
         try {
-          var value = mod.getGold();
+          var snapshot = typeof mod.getGoldSnapshot === "function" ? mod.getGoldSnapshot() : null;
+          if (!snapshot || snapshot.loading || snapshot.value == null) return;
+          var value = snapshot.value;
           context.gold = value;
           var current = root.querySelector("#tm-gold-current");
           var input = root.querySelector("#tm-gold");
@@ -1042,8 +1143,8 @@
     modal.addEventListener("click", function (event) { if (event.target === modal) modal.remove(); });
     root.appendChild(modal);
   }
-  function renderBattle(content) {
-    var snapshot = mod.battleSnapshot();
+  function renderBattle(content, providedSnapshot) {
+    var snapshot = providedSnapshot || mod.battleSnapshot();
     if (snapshot && snapshot.loading) { content.innerHTML = '<div class="tm-note">' + escapeHtml(translated("加载中…")) + '</div>'; ensureCapabilities(); return; }
     context.inBattle = !!snapshot.inBattle;
     var actionDisabled = snapshot.inBattle ? "" : "disabled";
@@ -1083,6 +1184,51 @@
     content.innerHTML = '<div class="tm-battle-page">' +
       card("快捷操作", actions, "tm-battle-outcome-card") + sides + '</div>';
     ensureCapabilities();
+  }
+  function refreshBattleUnitLists() {
+    if (!root || activeTab !== "battle") return;
+    var content = root.querySelector(".tm-content");
+    if (!content) return;
+    var snapshot;
+    try { snapshot = mod.battleSnapshot(); } catch (error) { console.warn("RGSS battle refresh failed", error); return; }
+    if (snapshot && snapshot.loading) return;
+    if (!snapshot || !snapshot.inBattle) { renderBattle(content, snapshot); return; }
+    var refreshedContent = document.createElement("div");
+    renderBattle(refreshedContent, snapshot);
+    var currentLists = content.querySelectorAll(".tm-battle-unit-list");
+    var refreshedLists = refreshedContent.querySelectorAll(".tm-battle-unit-list");
+    var currentCards = content.querySelectorAll(".tm-battle-side-card");
+    var refreshedCards = refreshedContent.querySelectorAll(".tm-battle-side-card");
+    if (currentLists.length !== 2 || refreshedLists.length !== 2 || currentCards.length !== 2 || refreshedCards.length !== 2) {
+      renderBattle(content, snapshot);
+      return;
+    }
+    var active = document.activeElement;
+    var focused = active && active.dataset && active.dataset.battleVital === "1" ? {
+      side: active.dataset.side, index: active.dataset.index, field: active.dataset.field,
+      actorId: active.dataset.actorId, value: active.value
+    } : null;
+    for (var index = 0; index < currentLists.length; index++) {
+      var scrollTop = currentLists[index].scrollTop;
+      var scrollLeft = currentLists[index].scrollLeft;
+      currentLists[index].innerHTML = refreshedLists[index].innerHTML;
+      currentLists[index].scrollTop = scrollTop;
+      currentLists[index].scrollLeft = scrollLeft;
+      var currentCount = currentCards[index].querySelector(".tm-battle-count");
+      var refreshedCount = refreshedCards[index].querySelector(".tm-battle-count");
+      if (currentCount && refreshedCount) currentCount.textContent = refreshedCount.textContent;
+    }
+    if (focused) {
+      var inputs = content.querySelectorAll('[data-battle-vital="1"]');
+      for (var inputIndex = 0; inputIndex < inputs.length; inputIndex++) {
+        var input = inputs[inputIndex];
+        if (input.dataset.side !== focused.side || input.dataset.index !== focused.index || input.dataset.field !== focused.field ||
+            (input.dataset.actorId || "") !== (focused.actorId || "")) continue;
+        input.value = focused.value;
+        try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
+        break;
+      }
+    }
   }
   function renderSave(content) {
     content.innerHTML = card("存档管理", '<div id="tm-save-list" class="tm-list"><div class="tm-note">读取中…</div></div>');
@@ -1134,20 +1280,27 @@
     }
     if (action === "flag") {
       var flagOn = node.type === "checkbox" ? node.checked : !mod.getState()[node.dataset.flag];
-      return run(function () { return mod.setFlag(node.dataset.flag, flagOn); }, function () { toast("设置已保存"); renderEventPanel(); })
+      return run(function () { return mod.setFlag(node.dataset.flag, flagOn); }, function () { toast("设置已保存"); })
         .then(function (result) { if (result === undefined && node.type === "checkbox") node.checked = !flagOn; });
     }
-    if (action === "set-speed") return run(function () { return mod.setSpeed(inputValue("tm-speed")); }, function () { toast("移动速度已设置"); renderQuick(root.querySelector(".tm-content"), false); });
-    if (action === "set-game-speed") return run(function () { return mod.setGameSpeed(inputValue("tm-game-speed")); }, function () { toast("游戏倍速已设置"); renderQuick(root.querySelector(".tm-content"), false); });
-    if (action === "set-exp-multiplier") return run(function () { return mod.setRewardMultiplier("expMultiplier", inputValue("tm-exp-multiplier")); }, function () { toast("经验倍率已设置"); renderQuick(root.querySelector(".tm-content"), false); });
-    if (action === "set-drop-multiplier") return run(function () { return mod.setRewardMultiplier("dropMultiplier", inputValue("tm-drop-multiplier")); }, function () { toast("掉落倍率已设置"); renderQuick(root.querySelector(".tm-content"), false); });
-    if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () { toast("金币已拉满"); render(); });
+    if (action === "set-speed") return run(function () { return mod.setSpeed(inputValue("tm-speed")); }, function () { toast("移动速度已设置"); });
+    if (action === "set-game-speed") return run(function () { return mod.setGameSpeed(inputValue("tm-game-speed")); }, function () { toast("游戏倍速已设置"); });
+    if (action === "set-exp-multiplier") return run(function () { return mod.setRewardMultiplier("expMultiplier", inputValue("tm-exp-multiplier")); }, function () { toast("经验倍率已设置"); });
+    if (action === "set-drop-multiplier") return run(function () { return mod.setRewardMultiplier("dropMultiplier", inputValue("tm-drop-multiplier")); }, function () { toast("掉落倍率已设置"); });
+    if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () {
+      context.gold = 99999999;
+      var current = root.querySelector("#tm-gold-current");
+      var input = root.querySelector("#tm-gold");
+      if (current) current.textContent = String(context.gold);
+      if (input && document.activeElement !== input) { input.value = String(context.gold); fitGoldInput(input); }
+      toast("金币已拉满");
+    });
     if (action === "lock-item") {
       var itemLocked = node.checked;
       return run(function () { return mod.setItemLock(context.itemKind, node.dataset.id, itemLocked); }, function () { toast(itemLocked ? "物品已锁定" : "已取消锁定"); })
         .then(function (result) { if (result === undefined) node.checked = !itemLocked; });
     }
-    if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); render(); });
+    if (action === "recover-party") return run(mod.recoverParty, function () { toast("队伍已恢复"); });
     if (action === "toggle-item-kind") {
       context.itemKindExpanded = !context.itemKindExpanded;
       var picker = root.querySelector(".tm-item-kind-picker");
@@ -1401,7 +1554,7 @@
       var unitIndex = action === "battle-unit-action" ? Number(node.dataset.index) : null;
       return run(function () { return mod.battleAction(side, operation, unitIndex); }, function () {
         toast(translated(action === "battle-unit-action" ? "单位已恢复" : "战斗操作已执行"));
-        renderBattle(root.querySelector(".tm-content"));
+        refreshBattleUnitLists();
       });
     }
     if (action === "set-battle-vital") {
@@ -1414,7 +1567,7 @@
         : function () { return mod.setActorStat(Number(node.dataset.actorId), vital, amount); };
       return run(setter, function () {
         toast((node.dataset.side === "enemy" ? "敌方" : "我方") + vital.toUpperCase() + "已修改");
-        renderBattle(root.querySelector(".tm-content"));
+        refreshBattleUnitLists();
       });
     }
     if (action === "kill-enemies") { if (!isInBattleNow()) return; return run(mod.killAllEnemies, render); }

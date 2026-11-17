@@ -190,7 +190,12 @@
       content.innerHTML = '<div class="tm-note">' + esc(tr("请先进入游戏存档或开始新游戏，修改器正在等待游戏运行时就绪。")) + '</div>';
     } else if (tabSupported(tab) === false) {
       content.innerHTML = '<div class="tm-note">' + esc(unavailableReason()) + '</div>';
-    } else if (tab === "quick") renderQuick(content);
+    } else renderActiveTabContent(content);
+    if (runtimeReady !== true) scheduleRuntimeReadyRetry();
+    retryFeatures();
+  }
+  function renderActiveTabContent(content) {
+    if (tab === "quick") renderQuick(content);
     else if (tab === "bag") renderBag(content);
     else if (tab === "team") renderTeam(content);
     else if (tab === "progress") renderProgress(content);
@@ -200,8 +205,6 @@
     else if (tab === "save") renderSave(content);
     else if (tab === "keys") renderKeys(content);
     else renderAbout(content);
-    if (runtimeReady !== true) scheduleRuntimeReadyRetry();
-    retryFeatures();
   }
   function scheduleRuntimeReadyRetry() {
     if (!panel || runtimeReady === true || runtimeReadyRetryTimer) return;
@@ -225,12 +228,20 @@
       var previousFeatures = JSON.stringify(getCaps().features);
       try { refreshCapabilitiesCache(); }
       catch (error) { console.warn("Essentials capability refresh failed", error); }
-      if (wasResolved !== capabilitiesResolved || previousFeatures !== JSON.stringify(getCaps().features)) render();
+      if (wasResolved !== capabilitiesResolved || previousFeatures !== JSON.stringify(getCaps().features)) {
+        renderTabs();
+        if (runtimeReady === false) render();
+        else if (tab === "quick") renderQuick(panel.querySelector(".tm-content"), false);
+        else renderActiveTabContent(panel.querySelector(".tm-content"));
+      }
       else retryFeatures();
     }, featureAttempts < 12 ? 1800 : 5000);
   }
-  function renderQuick(content) {
-    var stateSnapshot = typeof mod.getStateSnapshot === "function" ? mod.getStateSnapshot() : { value: mod.getState(), loading: false };
+  function renderQuick(content, readSnapshots) {
+    readSnapshots = readSnapshots !== false;
+    var stateSnapshot = readSnapshots
+      ? (typeof mod.getStateSnapshot === "function" ? mod.getStateSnapshot() : { value: mod.getState(), loading: false })
+      : { value: quickStateCache, loading: false };
     if (stateSnapshot && stateSnapshot.value && !stateSnapshot.loading) quickStateCache = stateSnapshot.value;
     if (!quickStateCache) quickStateCache = {};
     var state = stateSnapshot && stateSnapshot.value ? stateSnapshot.value : quickStateCache;
@@ -254,7 +265,7 @@
     }
     function currencyRow(kind, label, snapshotMethod) {
       var supported = capabilitiesResolved ? hasValue(kind) : null;
-      var snapshot = supported && typeof mod[snapshotMethod] === "function" ? mod[snapshotMethod]() : null;
+      var snapshot = readSnapshots && supported && typeof mod[snapshotMethod] === "function" ? mod[snapshotMethod]() : null;
       if (supported === true && snapshot && snapshot.value != null) quickCurrencyCache[kind] = snapshot.value;
       var cachedAmount = supported === true ? quickCurrencyCache[kind] : null;
       var amount = cachedAmount != null ? cachedAmount : snapshot ? (snapshot.loading ? "…" : "—") : "—";
@@ -334,6 +345,89 @@
     content.innerHTML = '<div class="tm-pokemon-quick-layout">' +
       segmentedTabs(sections, quickSection, "quick-section") +
       '<div class="tm-pokemon-quick-page" id="tm-quick-section">' + pageBody + '</div></div>';
+  }
+  function updateQuickCurrencyDisplay(kind, amount) {
+    if (!panel || tab !== "quick" || quickSection !== "resources") return;
+    var currencyInput = panel.querySelector("#tm-pokemon-" + kind);
+    var row = currencyInput && currencyInput.closest(".tm-pokemon-quick-currency");
+    if (!row) return;
+    var current = row.querySelector("label strong");
+    if (current) current.textContent = String(amount == null ? "—" : amount);
+    if (currencyInput && document.activeElement !== currencyInput) {
+      currencyInput.value = amount == null || amount === "—" || amount === "…" ? "" : String(amount);
+    }
+  }
+  function refreshQuickCurrency(kind) {
+    if (!panel || tab !== "quick" || quickSection !== "resources") return;
+    var snapshotMethod = kind === "gold" ? "getGoldSnapshot" : "getCoinsSnapshot";
+    var snapshot = typeof mod[snapshotMethod] === "function" ? mod[snapshotMethod]() : null;
+    if (capabilitiesResolved && !hasValue(kind)) {
+      updateQuickCurrencyDisplay(kind, "—");
+      return;
+    }
+    if (snapshot && snapshot.value != null) quickCurrencyCache[kind] = snapshot.value;
+    var amount = quickCurrencyCache[kind] != null ? quickCurrencyCache[kind] : snapshot && snapshot.loading ? "…" : "—";
+    updateQuickCurrencyDisplay(kind, amount);
+  }
+  function refreshQuickStateControls(changes) {
+    if (!panel || tab !== "quick") return;
+    var stateMutations = Array.isArray(changes) ? changes.filter(function (change) {
+      return change && change.method === "getState" && change.mutation;
+    }) : [];
+    if (stateMutations.length) {
+      var stateFieldIds = {
+        expMultiplier: "tm-pokemon-exp-multiplier", evMultiplier: "tm-pokemon-ev-multiplier",
+        speedMultiplier: "tm-pokemon-speed", gameSpeedMultiplier: "tm-pokemon-game-speed"
+      };
+      quickStateCache = quickStateCache || {};
+      var allHandled = stateMutations.every(function (change) {
+        var args = change.args || [];
+        if (change.mutation === "setFlag" && args.length > 1) {
+          quickStateCache[args[0]] = !!args[1];
+          panel.querySelectorAll('input[data-action="flag"][data-name]').forEach(function (node) {
+            if (node.dataset.name === String(args[0])) {
+              node.checked = !!args[1];
+              node.dataset.current = args[1] ? "true" : "false";
+            }
+          });
+          return true;
+        }
+        var key = change.mutation === "setRewardMultiplier" ? args[0]
+          : change.mutation === "setSpeed" ? "speedMultiplier"
+          : change.mutation === "setGameSpeed" ? "gameSpeedMultiplier" : null;
+        var value = change.mutation === "setRewardMultiplier" ? args[1] : args[0];
+        if (!key || value == null) return false;
+        quickStateCache[key] = value;
+        var inputId = stateFieldIds[key];
+        var inputNode = inputId && panel.querySelector("#" + inputId);
+        if (inputNode && document.activeElement !== inputNode) inputNode.value = String(value);
+        return true;
+      });
+      if (allHandled) return;
+    }
+    var snapshot = typeof mod.getStateSnapshot === "function" ? mod.getStateSnapshot() : { value: mod.getState(), loading: false };
+    if (snapshot && snapshot.value && typeof snapshot.value === "object") quickStateCache = snapshot.value;
+    if (!quickStateCache) return;
+    panel.querySelectorAll('input[data-action="flag"][data-name]').forEach(function (node) {
+      var current = quickStateCache[node.dataset.name];
+      if (current == null) return;
+      node.checked = !!current;
+      node.dataset.current = current ? "true" : "false";
+    });
+    var fields = {
+      expMultiplier: ["tm-pokemon-exp-multiplier", 1],
+      evMultiplier: ["tm-pokemon-ev-multiplier", 1],
+      dropMultiplier: ["tm-pokemon-drop-multiplier", 1],
+      speedMultiplier: ["tm-pokemon-speed", 2],
+      gameSpeedMultiplier: ["tm-pokemon-game-speed", 1]
+    };
+    Object.keys(fields).forEach(function (key) {
+      var field = fields[key];
+      var node = panel.querySelector("#" + field[0]);
+      if (!node || document.activeElement === node) return;
+      var value = quickStateCache[key];
+      node.value = String(value == null ? field[1] : value);
+    });
   }
   function renderTeam(content) {
     if (!hasFeature("pokemonParty")) { content.innerHTML = '<div class="tm-note">' + esc(tr("宝可梦队伍能力正在初始化")) + '</div>'; return; }
@@ -1420,7 +1514,7 @@
       if (!Number.isFinite(rewardValue) || rewardValue < 0 || rewardValue > 100) return toast(tr("倍率必须在 0 到 100 之间"), true);
       return run(function () { return mod.setRewardMultiplier(rewardName, rewardValue); }, function () {
         if (quickStateCache) quickStateCache[rewardName] = rewardValue;
-        toast(tr(rewardName === "evMultiplier" ? "努力值倍率已设置" : "经验倍率已设置")); renderQuick(panel.querySelector(".tm-content"));
+        toast(tr(rewardName === "evMultiplier" ? "努力值倍率已设置" : "经验倍率已设置"));
       });
     }
     if (action === "set-speed") {
@@ -1428,7 +1522,7 @@
       if (!Number.isFinite(movementSpeed) || movementSpeed < 0.25 || movementSpeed > 8) return toast(tr("移动速度必须在 0.25 到 8 之间"), true);
       return run(function () { return mod.setSpeed(movementSpeed); }, function () {
         if (quickStateCache) quickStateCache.speedMultiplier = movementSpeed;
-        toast(tr("移动速度已设置")); renderQuick(panel.querySelector(".tm-content"));
+        toast(tr("移动速度已设置"));
       });
     }
     if (action === "set-game-speed") {
@@ -1436,7 +1530,7 @@
       if (!Number.isInteger(gameSpeed) || gameSpeed < 1 || gameSpeed > 9) return toast(tr("游戏倍速必须在 1 到 9 之间"), true);
       return run(function () { return mod.setGameSpeed(gameSpeed); }, function () {
         if (quickStateCache) quickStateCache.gameSpeedMultiplier = gameSpeed;
-        toast(tr("游戏倍速已设置")); renderQuick(panel.querySelector(".tm-content"));
+        toast(tr("游戏倍速已设置"));
       });
     }
     if (action === "flag") return;
@@ -1488,13 +1582,21 @@
       if (!capabilitiesResolved || !hasValue("gold")) return toast(unavailableReason(), true);
       var amount = action === "max-gold" ? 99999999 : Number(value("tm-pokemon-gold"));
       if (!Number.isFinite(amount) || amount < 0) return toast(tr("请输入有效金额"), true);
-      return run(function () { return mod.setGold(amount); }, function () { quickCurrencyCache.gold = amount; toast(tr("金钱已修改")); renderQuick(panel.querySelector(".tm-content")); });
+      return run(function () { return mod.setGold(amount); }, function () {
+        quickCurrencyCache.gold = amount;
+        updateQuickCurrencyDisplay("gold", amount);
+        toast(tr("金钱已修改"));
+      });
     }
     if (action === "set-coins" || action === "max-coins") {
       if (!capabilitiesResolved || !hasValue("coins")) return toast(unavailableReason(), true);
       var coinAmount = action === "max-coins" ? 999999 : Number(value("tm-pokemon-coins"));
       if (!Number.isFinite(coinAmount) || coinAmount < 0) return toast(tr("请输入有效金额"), true);
-      return run(function () { return mod.setCoins(coinAmount); }, function () { quickCurrencyCache.coins = coinAmount; toast(tr("游戏币已修改")); renderQuick(panel.querySelector(".tm-content")); });
+      return run(function () { return mod.setCoins(coinAmount); }, function () {
+        quickCurrencyCache.coins = coinAmount;
+        updateQuickCurrencyDisplay("coins", coinAmount);
+        toast(tr("游戏币已修改"));
+      });
     }
     if (action === "recover-pokemon") return run(function () { return mod.recoverPokemon(Number(node.dataset.index)); }, function () { toast(tr("宝可梦已恢复")); renderTeam(panel.querySelector(".tm-content")); });
     if (action === "recover-party") return run(function () { return mod.recoverParty(); }, function () { toast(tr("宝可梦队伍已恢复")); if (tab === "team") renderTeam(panel.querySelector(".tm-content")); });
@@ -1722,7 +1824,8 @@
       var settingCoins = node.dataset.currencyKind === "coins";
       return run(function () { return settingCoins ? mod.setCoins(currency) : mod.setGold(currency); }, function () {
         quickCurrencyCache[settingCoins ? "coins" : "gold"] = currency;
-        toast(tr(settingCoins ? "游戏币已修改" : "金钱已修改")); renderQuick(panel.querySelector(".tm-content"));
+        updateQuickCurrencyDisplay(settingCoins ? "coins" : "gold", currency);
+        toast(tr(settingCoins ? "游戏币已修改" : "金钱已修改"));
       });
     }
     if (action === "flag") {
@@ -1863,23 +1966,55 @@
   function isOpen() { return !!(panel || probe || rpgUI.isOpen()); }
   function refreshPanelFromAsyncData(changes, unknown) {
     if (!panel) return;
-    if (!unknown && changes && changes.length && changes.every(function (change) {
-      return change && change.method === "battleSnapshot";
-    })) {
-      if (tab === "battle") refreshBattleUnitLists();
+    var methods = !unknown && Array.isArray(changes) ? changes.map(function (change) { return change && change.method; }).filter(Boolean) : [];
+    var hasMethod = function (method) { return methods.indexOf(method) >= 0; };
+    var previousTabSupported = tabSupported(tab);
+    var capabilitiesChanged = !!unknown || hasMethod("listCapabilities");
+    if (capabilitiesChanged) {
+      try { refreshCapabilitiesCache(); } catch (error) { console.warn("Essentials capability refresh failed", error); }
+      if (!unknown) renderTabs();
+    }
+    var tabSupportChanged = previousTabSupported !== tabSupported(tab);
+    if (!unknown && hasMethod("isReady")) {
+      var readySnapshot = typeof mod.isReadySnapshot === "function" ? mod.isReadySnapshot() : { value: mod.isReady(), loading: false };
+      if (readySnapshot && !readySnapshot.loading) {
+        var previousReady = runtimeReady;
+        runtimeReady = !!readySnapshot.value;
+        if (previousReady !== runtimeReady) { render(); return; }
+      }
+    }
+    if (!unknown && tab === "quick") {
+      if (hasMethod("getState")) refreshQuickStateControls(changes);
+      if (hasMethod("getGold")) refreshQuickCurrency("gold");
+      if (hasMethod("getCoins")) refreshQuickCurrency("coins");
+      if (capabilitiesChanged && panel.querySelector(".tm-content")) renderQuick(panel.querySelector(".tm-content"), false);
       return;
     }
-    if (!unknown && changes && changes.some(function (change) { return change && change.method === "listPokemonStorage"; }) &&
+    if (!unknown && tab === "battle" && methods.length && methods.every(function (method) {
+      return method === "battleSnapshot" || method === "listCapabilities";
+    }) && hasMethod("battleSnapshot")) {
+      refreshBattleUnitLists();
+      return;
+    }
+    if (!unknown && methods.some(function (method) { return method === "listPokemonStorage"; }) &&
         tab === "team" && teamView === "storage" &&
         panel.querySelector("#tm-pokemon-storage-body")) {
       renderPokemonStorageBody();
       return;
     }
-    var capabilitiesChanged = unknown || !capabilitiesResolved || (changes && changes.some(function (change) {
-      return change && change.method === "listCapabilities";
-    }));
-    if (capabilitiesChanged) {
-      try { refreshCapabilitiesCache(); } catch (error) { console.warn("Essentials capability refresh failed", error); }
+    if (!unknown) {
+      var tabDataMethods = {
+        bag: ["listDatabase", "itemCount", "listBagCategories"],
+        team: ["listPokemon", "listPokemonStorage", "listPokemonMoves", "listPokemonTraits", "listPokemonStatuses", "listPokemonStats", "listPokemonMoveCandidates", "listCapabilities", "listDatabase"],
+        progress: ["listPokemonProgress"],
+        system: ["listSystem", "eventDetail"],
+        map: ["currentPosition", "listMaps", "listEvents", "eventDetail", "eventInterpreter", "minimapData"],
+        battle: ["battleSnapshot"],
+        save: ["listSaveSlots"]
+      }[tab] || [];
+      var relevantChange = methods.some(function (method) { return tabDataMethods.indexOf(method) >= 0; });
+      if (!relevantChange && !tabSupportChanged) return;
+      if (!relevantChange && tabSupportChanged) { render(); return; }
     }
     var content = panel.querySelector(".tm-content");
     var active = document.activeElement;
@@ -1908,7 +2043,8 @@
     });
     var contentScrollTop = content ? content.scrollTop : 0;
     var contentScrollLeft = content ? content.scrollLeft : 0;
-    render();
+    if (unknown || runtimeReady === false || tabSupported(tab) === false) render();
+    else renderActiveTabContent(content);
     if (panel.querySelector("#tm-move-list")) renderMoveCandidates();
     if (panel.querySelector("#tm-held-list")) renderHeldCandidates();
     if (panel.querySelector("#tm-add-pokemon-list")) loadAddPokemonCandidates();

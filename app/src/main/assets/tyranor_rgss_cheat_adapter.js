@@ -221,11 +221,13 @@
       affected.push("listPokemon", "listPokemonStorage", "listCapabilities");
     }
     invalidateMethods(affected);
-    if (method === "battleAction" || method === "setBattleUnitHp" || method === "setEnemyHp") {
-      notifyAsyncDataUpdated({ method: "battleSnapshot" });
-    } else {
+    if (method === "loadGame") {
       notifyAsyncDataUpdated();
+      return;
     }
+    affected.forEach(function (readMethod) {
+      notifyAsyncDataUpdated({ method: readMethod, args: args || [], mutation: method });
+    });
   }
 
   function refreshReads() {
