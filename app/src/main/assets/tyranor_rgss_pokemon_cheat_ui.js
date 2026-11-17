@@ -10,6 +10,7 @@
   var capabilitiesResolved = false;
   var runtimeReady = null;
   var quickStateCache = null;
+  var quickCurrencyCache = { gold: null, coins: null };
   var tab = "quick";
   var teamView = "party";
   var teamSection = "stats";
@@ -254,7 +255,9 @@
     function currencyRow(kind, label, snapshotMethod) {
       var supported = capabilitiesResolved ? hasValue(kind) : null;
       var snapshot = supported && typeof mod[snapshotMethod] === "function" ? mod[snapshotMethod]() : null;
-      var amount = snapshot ? (snapshot.loading ? "…" : snapshot.value) : "—";
+      if (supported === true && snapshot && snapshot.value != null) quickCurrencyCache[kind] = snapshot.value;
+      var cachedAmount = supported === true ? quickCurrencyCache[kind] : null;
+      var amount = cachedAmount != null ? cachedAmount : snapshot ? (snapshot.loading ? "…" : "—") : "—";
       var field = input("tm-pokemon-" + kind, amount, "number", 'data-currency-kind="' + kind + '" min="0" inputmode="numeric"' +
         (supported === true ? "" : ' readonly data-action="unsupported-option" data-reason="' + esc(unavailableReason()) + '" aria-disabled="true"'));
       var action = supported === true ? "max-" + kind : "unsupported-option";
@@ -901,9 +904,9 @@
       dialog._refreshAsync = null;
     };
   }
-  function renderBattle(content) {
-    var snapshot = {};
-    try { snapshot = mod.battleSnapshot() || {}; } catch (_) {}
+  function renderBattle(content, providedSnapshot) {
+    var snapshot = providedSnapshot || {};
+    if (!providedSnapshot) try { snapshot = mod.battleSnapshot() || {}; } catch (_) {}
     if (snapshot.loading) { content.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     var inBattle = !!snapshot.inBattle;
     var disabled = inBattle ? "" : "disabled";
@@ -923,7 +926,7 @@
       var index = Number(unit.index);
       var id = "tm-pokemon-battle-hp-" + side + "-" + safeId(index);
       var status = unit.status && unit.status !== "正常" ? unit.status : tr("正常");
-      return '<div class="tm-item tm-battle-unit"><div class="tm-battle-unit-heading"><div class="tm-battle-unit-name"><strong>' +
+      return '<div class="tm-item tm-battle-unit tm-pokemon-battle-unit"><div class="tm-battle-unit-heading"><div class="tm-battle-unit-name"><strong>' +
         esc(unit.name || ("#" + index)) + '</strong><span>' + esc(tr("状态：") + status) + '</span></div>' +
         sideAction("战斗单位恢复", side, "recover", "tm-battle-restore", index) + '</div>' +
         '<div class="tm-battle-vitals"><div class="tm-battle-stat tm-pokemon-battle-stat"><span><strong>HP</strong><small>' +
@@ -939,7 +942,7 @@
         sideAction("HP 设为 1", side, "hp-one", "tm-battle-side-danger") + '</div>';
       var unitRows = units.map(function (unit) { return unitRow(unit, side); }).join("");
       if (!unitRows) unitRows = '<div class="tm-note">' + esc(tr("当前不在战斗中")) + '</div>';
-      return card(title, '<div class="tm-battle-side-toolbar">' + actions + '</div><div class="tm-list tm-battle-unit-list">' + unitRows + '</div>',
+      return card(title, '<div class="tm-battle-side-toolbar">' + actions + '</div><div class="tm-list tm-battle-unit-list tm-pokemon-battle-unit-list">' + unitRows + '</div>',
         "tm-battle-side-card", '<span class="tm-battle-count">' + esc(tr("数量：")) + ' ' + (inBattle ? units.length : 0) + '</span>');
     }
     var allies = snapshot.actors || [];
@@ -947,6 +950,57 @@
     content.innerHTML = '<div class="tm-battle-page">' +
       card("战斗状态", outcomes, "tm-battle-outcome-card") +
       '<div class="tm-grid tm-battle-grid">' + sideCard("我方宝可梦", "actor", allies) + sideCard("对手宝可梦", "enemy", enemies) + '</div></div>';
+  }
+  function refreshBattleUnitLists() {
+    if (!panel || tab !== "battle") return;
+    var content = panel.querySelector(".tm-content");
+    if (!content) return;
+    var snapshot = {};
+    try { snapshot = mod.battleSnapshot() || {}; } catch (_) { return; }
+    if (snapshot.loading) return;
+    if (!snapshot.inBattle) { renderBattle(content, snapshot); return; }
+
+    var refreshedContent = document.createElement("div");
+    renderBattle(refreshedContent, snapshot);
+    var currentLists = content.querySelectorAll(".tm-battle-unit-list");
+    var refreshedLists = refreshedContent.querySelectorAll(".tm-battle-unit-list");
+    var currentCards = content.querySelectorAll(".tm-battle-side-card");
+    var refreshedCards = refreshedContent.querySelectorAll(".tm-battle-side-card");
+    if (currentLists.length !== 2 || refreshedLists.length !== 2 || currentCards.length !== 2 || refreshedCards.length !== 2) {
+      renderBattle(content, snapshot);
+      return;
+    }
+
+    var active = document.activeElement;
+    var selectionStart = null;
+    var selectionEnd = null;
+    if (active && active.setSelectionRange) {
+      try { selectionStart = active.selectionStart; selectionEnd = active.selectionEnd; } catch (_) {}
+    }
+    var focused = active && content.contains(active) && active.id ? {
+      id: active.id, value: active.value,
+      start: selectionStart, end: selectionEnd
+    } : null;
+    for (var index = 0; index < currentLists.length; index++) {
+      var scrollTop = currentLists[index].scrollTop;
+      var scrollLeft = currentLists[index].scrollLeft;
+      currentLists[index].innerHTML = refreshedLists[index].innerHTML;
+      currentLists[index].scrollTop = scrollTop;
+      currentLists[index].scrollLeft = scrollLeft;
+      var currentCount = currentCards[index].querySelector(".tm-battle-count");
+      var refreshedCount = refreshedCards[index].querySelector(".tm-battle-count");
+      if (currentCount && refreshedCount) currentCount.textContent = refreshedCount.textContent;
+    }
+    if (focused) {
+      var inputNode = document.getElementById(focused.id);
+      if (inputNode && content.contains(inputNode)) {
+        inputNode.value = focused.value;
+        try { inputNode.focus({ preventScroll: true }); } catch (_) { inputNode.focus(); }
+        if (focused.start != null && inputNode.setSelectionRange) {
+          try { inputNode.setSelectionRange(focused.start, focused.end); } catch (_) {}
+        }
+      }
+    }
   }
   function renderSave(content) {
     var slots = [];
@@ -1350,7 +1404,11 @@
     if (action === "unsupported-option") return toast(node.dataset.reason ? tr(node.dataset.reason) : unavailableReason(), true);
     if (action === "open-game-scene") {
       if (!capabilitiesResolved || !hasFeature(node.dataset.feature)) return toast(unavailableReason(), true);
-      return run(function () { return mod.openGameScene(node.dataset.scene); }, function () { close(true); });
+      close(true);
+      var sceneRequest = mod.openGameScene(node.dataset.scene);
+      return Promise.resolve(sceneRequest).catch(function (error) {
+        console.error("Could not open Pokémon game scene", error);
+      });
     }
     if (action === "set-exp-multiplier" || action === "set-drop-multiplier" || action === "set-ev-multiplier") {
       var rewardName = action === "set-exp-multiplier" ? "expMultiplier" : action === "set-ev-multiplier" ? "evMultiplier" : "dropMultiplier";
@@ -1430,13 +1488,13 @@
       if (!capabilitiesResolved || !hasValue("gold")) return toast(unavailableReason(), true);
       var amount = action === "max-gold" ? 99999999 : Number(value("tm-pokemon-gold"));
       if (!Number.isFinite(amount) || amount < 0) return toast(tr("请输入有效金额"), true);
-      return run(function () { return mod.setGold(amount); }, function () { toast(tr("金钱已修改")); renderQuick(panel.querySelector(".tm-content")); });
+      return run(function () { return mod.setGold(amount); }, function () { quickCurrencyCache.gold = amount; toast(tr("金钱已修改")); renderQuick(panel.querySelector(".tm-content")); });
     }
     if (action === "set-coins" || action === "max-coins") {
       if (!capabilitiesResolved || !hasValue("coins")) return toast(unavailableReason(), true);
       var coinAmount = action === "max-coins" ? 999999 : Number(value("tm-pokemon-coins"));
       if (!Number.isFinite(coinAmount) || coinAmount < 0) return toast(tr("请输入有效金额"), true);
-      return run(function () { return mod.setCoins(coinAmount); }, function () { toast(tr("游戏币已修改")); renderQuick(panel.querySelector(".tm-content")); });
+      return run(function () { return mod.setCoins(coinAmount); }, function () { quickCurrencyCache.coins = coinAmount; toast(tr("游戏币已修改")); renderQuick(panel.querySelector(".tm-content")); });
     }
     if (action === "recover-pokemon") return run(function () { return mod.recoverPokemon(Number(node.dataset.index)); }, function () { toast(tr("宝可梦已恢复")); renderTeam(panel.querySelector(".tm-content")); });
     if (action === "recover-party") return run(function () { return mod.recoverParty(); }, function () { toast(tr("宝可梦队伍已恢复")); if (tab === "team") renderTeam(panel.querySelector(".tm-content")); });
@@ -1622,19 +1680,19 @@
     if (action === "set-enemy-hp") {
       var enemyHp = Number(value(node.dataset.input));
       if (!Number.isInteger(enemyHp) || enemyHp < 0) return toast(tr("请输入有效的非负整数"), true);
-      return run(function () { return mod.setEnemyHp(Number(node.dataset.index), enemyHp); }, function () { toast(tr("宝可梦 HP 已修改")); renderBattle(panel.querySelector(".tm-content")); });
+      return run(function () { return mod.setEnemyHp(Number(node.dataset.index), enemyHp); }, function () { toast(tr("宝可梦 HP 已修改")); refreshBattleUnitLists(); });
     }
     if (action === "set-battle-unit-hp") {
       var battleHp = Number(value(node.dataset.input));
       if (!Number.isInteger(battleHp) || battleHp < 0) return toast(tr("请输入有效的非负整数"), true);
       return run(function () { return mod.setBattleUnitHp(node.dataset.side, Number(node.dataset.index), battleHp); }, function () {
-        toast(tr("宝可梦 HP 已修改")); renderBattle(panel.querySelector(".tm-content"));
+        toast(tr("宝可梦 HP 已修改")); refreshBattleUnitLists();
       });
     }
     if (action === "battle-side-action" || action === "battle-unit-action") {
       var unitIndex = node.dataset.index === undefined ? null : Number(node.dataset.index);
       return run(function () { return mod.battleAction(node.dataset.side, node.dataset.operation, unitIndex); }, function () {
-        toast(tr("战斗操作已执行")); renderBattle(panel.querySelector(".tm-content"));
+        toast(tr("战斗操作已执行")); refreshBattleUnitLists();
       });
     }
     if (action === "kill-enemies" || action === "force-victory" || action === "force-defeat" || action === "force-escape") {
@@ -1663,6 +1721,7 @@
       if (!Number.isFinite(currency) || currency < 0) return toast(tr("请输入有效金额"), true);
       var settingCoins = node.dataset.currencyKind === "coins";
       return run(function () { return settingCoins ? mod.setCoins(currency) : mod.setGold(currency); }, function () {
+        quickCurrencyCache[settingCoins ? "coins" : "gold"] = currency;
         toast(tr(settingCoins ? "游戏币已修改" : "金钱已修改")); renderQuick(panel.querySelector(".tm-content"));
       });
     }
@@ -1804,6 +1863,12 @@
   function isOpen() { return !!(panel || probe || rpgUI.isOpen()); }
   function refreshPanelFromAsyncData(changes, unknown) {
     if (!panel) return;
+    if (!unknown && changes && changes.length && changes.every(function (change) {
+      return change && change.method === "battleSnapshot";
+    })) {
+      if (tab === "battle") refreshBattleUnitLists();
+      return;
+    }
     if (!unknown && changes && changes.some(function (change) { return change && change.method === "listPokemonStorage"; }) &&
         tab === "team" && teamView === "storage" &&
         panel.querySelector("#tm-pokemon-storage-body")) {

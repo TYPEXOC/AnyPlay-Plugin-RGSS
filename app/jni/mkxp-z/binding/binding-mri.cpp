@@ -3552,6 +3552,23 @@ module TyranorCheats
       false
     end
 
+    def open_essentials_debug_screen
+      scene = defined?($scene) ? $scene : nil
+      if scene && class_method?(scene.class, :call_debug)
+        scene.send(:call_debug)
+        return
+      end
+      $game_temp.debug_calling = false if defined?($game_temp) && $game_temp && $game_temp.respond_to?(:debug_calling=)
+      receiver = scene || Object.new
+      receiver.send(:pbPlayDecisionSE) if class_method?(receiver.class, :pbPlayDecisionSE)
+      $game_player.straighten if defined?($game_player) && $game_player && $game_player.respond_to?(:straighten)
+      if class_method?(receiver.class, :pbFadeOutIn)
+        receiver.send(:pbFadeOutIn) { receiver.send(:pbDebugMenu) }
+      else
+        receiver.send(:pbDebugMenu)
+      end
+    end
+
     def essentials_scene_supported?(name)
       case name
       when 'status' then essentials_summary_screen_supported?
@@ -3593,7 +3610,7 @@ module TyranorCheats
         screen_class = essentials_class('PokemonPauseMenu', 'PokemonMenu')
         screen_class.new(scene_class.new).pbStartPokemonMenu
       when 'debug'
-        Object.new.send(:pbDebugMenu)
+        open_essentials_debug_screen
       else
         return NOPE
       end
@@ -7361,11 +7378,22 @@ module TyranorCheats
       "正常"
     end
 
+    def battle_battler_present?(battler)
+      return false unless battler
+      if ess?
+        return false unless battler.respond_to?(:pokemon) && battler.pokemon
+      end
+      maximum = battle_max_hp(battler)
+      maximum.nil? || maximum > 0
+    rescue Exception
+      false
+    end
+
     def battle_side_units(side)
       opposing = side.to_s == 'enemy'
       if ess? && @battle
         battlers = @battle.respond_to?(:battlers) ? @battle.battlers : []
-        return battlers.compact.select { |battler| foe?(@battle, battler.index) == opposing }.map { |battler| [battler.index.to_i, battler] }
+        return battlers.compact.select { |battler| battle_battler_present?(battler) && foe?(@battle, battler.index) == opposing }.map { |battler| [battler.index.to_i, battler] }
       end
       if opposing
         list = $game_troop && ($game_troop.respond_to?(:enemies) ? $game_troop.enemies : ($game_troop.respond_to?(:members) ? $game_troop.members : []))
@@ -7496,7 +7524,7 @@ module TyranorCheats
     def battle_enemies
       if ess? && @battle
         battlers = @battle.respond_to?(:battlers) ? @battle.battlers : []
-        return battlers.compact.select { |b| foe?(@battle, b.index) }.map do |battler|
+        return battlers.compact.select { |b| battle_battler_present?(b) && foe?(@battle, b.index) }.map do |battler|
           mp, max_mp = battle_mp_values(battler)
           tp, max_tp = battle_tp_values(battler)
           [battler.index.to_i, battler.name.to_s, battler.hp.to_i,
@@ -7525,7 +7553,7 @@ module TyranorCheats
     def list_battle_actors
       return NEED_BATTLE unless in_battle?
       rows = if ess? && @battle
-               @battle.battlers.compact.reject { |battler| foe?(@battle, battler.index) }.map do |battler|
+               @battle.battlers.compact.select { |battler| battle_battler_present?(battler) && !foe?(@battle, battler.index) }.map do |battler|
                  mp, max_mp = battle_mp_values(battler)
                  tp, max_tp = battle_tp_values(battler)
                  actor_id = battler.respond_to?(:id) ? battler.id.to_i : -1
@@ -7554,7 +7582,7 @@ module TyranorCheats
       index = index_text.to_i
       value = hp_text.to_i
       if ess? && @battle
-        enemy = @battle.battlers.compact.find { |b| b.index.to_i == index && foe?(@battle, b.index) }
+        enemy = @battle.battlers.compact.find { |b| battle_battler_present?(b) && b.index.to_i == index && foe?(@battle, b.index) }
         return "That enemy isn't in the current battle." unless enemy
         max = enemy.respond_to?(:totalhp) ? enemy.totalhp.to_i : enemy.hp.to_i
         target = [[value, 0].max, max].min
@@ -8473,7 +8501,7 @@ module TyranorCheats
       when :essentials
         b = @battle
         return NEED_BATTLE unless b
-        foes = b.battlers.compact.select { |x| foe?(b, x.index) && !x.fainted? }
+        foes = b.battlers.compact.select { |x| battle_battler_present?(x) && foe?(b, x.index) && !x.fainted? }
         foes.each do |f|
           f.pbReduceHP(f.hp, false)
           f.pbFaint(true)
@@ -8500,7 +8528,7 @@ module TyranorCheats
     def kill_enemies
       return NEED_BATTLE unless in_battle?
       foes = if ess? && @battle
-               @battle.battlers.compact.select { |battler| foe?(@battle, battler.index) && !battler.fainted? }
+               @battle.battlers.compact.select { |battler| battle_battler_present?(battler) && foe?(@battle, battler.index) && !battler.fainted? }
              elsif $game_troop && $game_troop.respond_to?(:enemies)
                $game_troop.enemies
              elsif $game_troop

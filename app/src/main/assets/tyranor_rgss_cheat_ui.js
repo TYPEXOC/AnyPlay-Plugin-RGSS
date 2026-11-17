@@ -1126,7 +1126,11 @@
         toast(translated("当前游戏不支持此场景"), true);
         return;
       }
-      return run(function () { return mod.openGameScene(node.dataset.scene); }, function () { close(); });
+      close();
+      var sceneRequest = mod.openGameScene(node.dataset.scene);
+      return Promise.resolve(sceneRequest).catch(function (error) {
+        console.error("Could not open RPG Maker scene", error);
+      });
     }
     if (action === "flag") {
       var flagOn = node.type === "checkbox" ? node.checked : !mod.getState()[node.dataset.flag];

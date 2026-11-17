@@ -212,6 +212,8 @@ html[data-theme="dark"] .tm-pokemon-toggle{border-color:#343c37}html[data-theme=
 .tm-battle-stat>span>small{color:#748079;font-size:10px}
 .tm-battle-stat>.tm-input{height:36px;padding:5px 8px;background:#f2f6f3;border-color:#d5e0d9}
 .tm-pokemon-battle-side-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.tm-pokemon-battle-unit-list{gap:10px;padding:3px 4px 12px}
+.tm-battle-unit.tm-pokemon-battle-unit{border-radius:12px;border-color:#d5e1d9;background:#f7faf8;box-shadow:0 2px 5px rgba(24,48,36,.08)}
 .tm-pokemon-battle-hp-control{display:flex;align-items:center;gap:6px;min-width:0}
 .tm-pokemon-battle-hp-control>.tm-input{flex:1 1 auto;width:1%;min-width:0;height:36px;padding:5px 8px;background:#f2f6f3;border-color:#d5e0d9}
 .tm-pokemon-battle-hp-control>.tm-btn{flex:0 0 auto;min-height:36px;padding:6px 9px}
@@ -223,6 +225,7 @@ html[data-theme="dark"] .tm-battle-outcome-defeat,html[data-theme="dark"] .tm-ba
 html[data-theme="dark"] .tm-battle-outcome-escape{background:#29332e;color:#c3d0c8;border-color:#3d4a42}
 html[data-theme="dark"] .tm-battle-side-toolbar{border-color:#343c37}
 html[data-theme="dark"] .tm-battle-unit{background:#292f2b;border-color:#3b4740}
+html[data-theme="dark"] .tm-battle-unit.tm-pokemon-battle-unit{background:#252c28;border-color:#46534b;box-shadow:0 2px 5px rgba(0,0,0,.2)}
 html[data-theme="dark"] .tm-battle-stat{background:#202522;border-color:#3b4740}
 html[data-theme="dark"] .tm-battle-stat>.tm-input{background:#171b19;border-color:#4a554f}
 html[data-theme="dark"] .tm-pokemon-battle-hp-control>.tm-input{background:#171b19;border-color:#4a554f}

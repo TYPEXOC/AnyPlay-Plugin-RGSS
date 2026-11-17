@@ -461,6 +461,7 @@ class TyranorCheatController(
         val timeout = when {
             name == "saveScreen" || name == "loadScreen" -> 0L
             name.startsWith("saveSlot:") || name.startsWith("loadSlot:") -> 0L
+            name.startsWith("scene:") -> 0L
             name.startsWith("warp:") -> 30_000L
             else -> 8000L
         }
