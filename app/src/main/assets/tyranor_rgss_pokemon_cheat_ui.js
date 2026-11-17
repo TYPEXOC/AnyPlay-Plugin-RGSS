@@ -1234,7 +1234,7 @@
     try { refreshCapabilitiesCache(); }
     catch (error) { console.warn("Essentials capability load failed", error); }
     panel = document.createElement("div"); panel.id = "tyranor-mod-root";
-    panel.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>' + esc(tr("宝可梦修改器")) +
+    panel.innerHTML = '<div class="tm-panel tm-pokemon-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>' + esc(tr("宝可梦修改器")) +
       '</strong><button class="tm-refresh" data-action="refresh" title="' + esc(tr("刷新面板")) + '" aria-label="' + esc(tr("刷新面板")) + '">↻</button>' +
       '<button class="tm-close" data-action="close" aria-label="' + esc(tr("关闭")) + '">×</button></div><div class="tm-tabs"></div><main class="tm-content"></main></div>';
     document.documentElement.appendChild(panel);
@@ -1907,7 +1907,7 @@
   function openProbe() {
     if (probe) return;
     probe = document.createElement("div"); probe.id = "tyranor-mod-root";
-    probe.innerHTML = '<div class="tm-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>' + esc(tr("RGSS 游戏修改器")) +
+    probe.innerHTML = '<div class="tm-panel tm-pokemon-panel" role="dialog" aria-modal="true"><div class="tm-head"><strong>' + esc(tr("RGSS 游戏修改器")) +
       '</strong><button class="tm-close" data-action="close" aria-label="' + esc(tr("关闭")) + '">×</button></div><main class="tm-content"><div class="tm-note">' + esc(tr("正在识别当前游戏类型…")) + '</div></main></div>';
     document.documentElement.appendChild(probe);
     probe.addEventListener("click", function (event) { if (event.target.closest("[data-action='close']")) close(true); event.stopPropagation(); });
