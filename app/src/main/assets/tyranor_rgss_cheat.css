@@ -490,13 +490,13 @@ html[data-theme="dark"] .tm-system-kind-trigger{background:#171b19;color:#eef3f0
 .tm-panel.tm-quick-fit>.tm-content{display:flex;flex-direction:column;min-height:0;overflow:auto;padding:9px}
 .tm-panel.tm-quick-fit .tm-quick-layout,.tm-panel.tm-quick-fit .tm-pokemon-quick-layout{height:auto;min-height:0;flex:1 1 auto}
 
-/* RPG quick preview styling matches build 203. */
-.tm-panel.tm-rpg-panel.tm-quick-fit>.tm-head{min-height:58px;flex:0 0 58px;padding:8px 14px}
-.tm-panel.tm-rpg-panel.tm-quick-fit>.tm-head>strong{font-size:18px}
+/* RPG header and navigation keep the build 203 dimensions on every tab. */
+.tm-panel.tm-rpg-panel>.tm-head{min-height:58px;flex:0 0 58px;padding:8px 14px}
+.tm-panel.tm-rpg-panel>.tm-head>strong{font-size:18px}
 .tm-panel.tm-rpg-panel.tm-quick-fit{border-radius:18px}
-.tm-panel.tm-rpg-panel.tm-quick-fit>.tm-head>.tm-refresh,.tm-panel.tm-rpg-panel.tm-quick-fit>.tm-head>.tm-close{width:38px;height:38px;border-radius:12px}
-.tm-panel.tm-rpg-panel.tm-quick-fit>.tm-tabs{min-height:48px;height:48px;flex:0 0 48px;gap:2px;padding:0 8px}
-.tm-panel.tm-rpg-panel.tm-quick-fit>.tm-tabs>.tm-tab{min-height:45px;padding:11px 12px;font-size:14px}
+.tm-panel.tm-rpg-panel>.tm-head>.tm-refresh,.tm-panel.tm-rpg-panel>.tm-head>.tm-close{width:38px;height:38px;border-radius:12px}
+.tm-panel.tm-rpg-panel>.tm-tabs{min-height:48px;height:48px;flex:0 0 48px;gap:2px;padding:0 8px}
+.tm-panel.tm-rpg-panel>.tm-tabs>.tm-tab{min-height:45px;padding:11px 12px;font-size:14px}
 .tm-panel.tm-rpg-panel.tm-quick-fit>.tm-content{padding:12px}
 .tm-panel.tm-rpg-panel.tm-quick-fit .tm-quick-layout{gap:0}
 .tm-panel.tm-rpg-panel.tm-quick-fit .tm-quick-layout>.tm-segmented-tabs{min-height:48px;flex:0 0 48px;margin:0 0 10px;padding:4px}
