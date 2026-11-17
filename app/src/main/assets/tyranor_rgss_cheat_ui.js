@@ -90,6 +90,10 @@
   function textInput(id, value, type, attrs) { return '<input class="tm-input" id="' + id + '" type="' + (type || "text") + '" value="' + escapeHtml(value == null ? "" : value) + '" ' + (attrs || "") + '>'; }
   function fitGoldInput(input) {
     if (!input) return;
+    if (input.closest && input.closest(".tm-quick-gold-row")) {
+      input.style.width = "";
+      return;
+    }
     var baseWidth = 104;
     var maxWidth = 220;
     var textWidth = 0;
