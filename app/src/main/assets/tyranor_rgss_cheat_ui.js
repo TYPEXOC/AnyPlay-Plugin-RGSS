@@ -192,13 +192,15 @@
     });
     var fields = {
       expMultiplier: ["tm-exp-multiplier", 1], dropMultiplier: ["tm-drop-multiplier", 1],
-      speedMultiplier: ["tm-speed", 2], gameSpeedMultiplier: ["tm-game-speed", 1]
+      speedMultiplier: ["tm-speed"], gameSpeedMultiplier: ["tm-game-speed"]
     };
     Object.keys(fields).forEach(function (key) {
       var field = fields[key];
       var input = root.querySelector("#" + field[0]);
       if (!input || document.activeElement === input) return;
-      input.value = String(state[key] == null ? field[1] : state[key]);
+      input.value = state[key] == null
+        ? (field.length > 1 ? String(field[1]) : "")
+        : String(state[key]);
     });
   }
   function refreshQuickGold() {
@@ -388,11 +390,11 @@
       var speedRows = "";
       if (!supported || supported.indexOf("speed") >= 0) {
         speedRows += '<div class="tm-quick-speed-row"><label for="tm-speed">' + escapeHtml(translated("移动速度")) + '</label>' +
-          textInput("tm-speed", state.speedMultiplier == null ? 2 : state.speedMultiplier, "number", 'min="0.25" max="8" step="0.25"') +
+          textInput("tm-speed", state.speedMultiplier, "number", 'min="0.25" max="8" step="0.25"') +
           button(translated("设置"), "set-speed", "primary") + '</div>';
       }
       speedRows += '<div class="tm-quick-speed-row"><label for="tm-game-speed">' + escapeHtml(translated("游戏倍速")) + '</label>' +
-        textInput("tm-game-speed", state.gameSpeedMultiplier == null ? 1 : state.gameSpeedMultiplier, "number", 'min="1" max="9" step="1"') +
+        textInput("tm-game-speed", state.gameSpeedMultiplier, "number", 'min="1" max="8" step="1"') +
         button(translated("设置"), "set-game-speed", "primary") + '</div>';
       var speedControls = '<div class="tm-quick-speed-list">' + speedRows + '</div>';
       var explorationCard = quickCard("探索", "移动与事件",
@@ -1283,8 +1285,26 @@
       return run(function () { return mod.setFlag(node.dataset.flag, flagOn); }, function () { toast("设置已保存"); })
         .then(function (result) { if (result === undefined && node.type === "checkbox") node.checked = !flagOn; });
     }
-    if (action === "set-speed") return run(function () { return mod.setSpeed(inputValue("tm-speed")); }, function () { toast("移动速度已设置"); });
-    if (action === "set-game-speed") return run(function () { return mod.setGameSpeed(inputValue("tm-game-speed")); }, function () { toast("游戏倍速已设置"); });
+    if (action === "set-speed") {
+      var speedText = inputValue("tm-speed");
+      var speedValue = Number(speedText);
+      if (Number.isFinite(speedValue) && speedValue > 8) {
+        speedValue = 8;
+        var speedInput = root.querySelector("#tm-speed");
+        if (speedInput) speedInput.value = "8";
+      }
+      return run(function () { return mod.setSpeed(speedValue); }, function () { toast("移动速度已设置"); });
+    }
+    if (action === "set-game-speed") {
+      var gameSpeedText = inputValue("tm-game-speed");
+      var gameSpeedValue = Number(gameSpeedText);
+      if (Number.isFinite(gameSpeedValue) && gameSpeedValue > 8) {
+        gameSpeedValue = 8;
+        var gameSpeedInput = root.querySelector("#tm-game-speed");
+        if (gameSpeedInput) gameSpeedInput.value = "8";
+      }
+      return run(function () { return mod.setGameSpeed(gameSpeedValue); }, function () { toast("游戏倍速已设置"); });
+    }
     if (action === "set-exp-multiplier") return run(function () { return mod.setRewardMultiplier("expMultiplier", inputValue("tm-exp-multiplier")); }, function () { toast("经验倍率已设置"); });
     if (action === "set-drop-multiplier") return run(function () { return mod.setRewardMultiplier("dropMultiplier", inputValue("tm-drop-multiplier")); }, function () { toast("掉落倍率已设置"); });
     if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () {

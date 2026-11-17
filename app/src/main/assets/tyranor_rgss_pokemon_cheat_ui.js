@@ -330,11 +330,11 @@
       var speedAvailable = capabilitiesResolved && hasValue("speed");
       var gameSpeedAvailable = capabilitiesResolved && hasFeature("pokemonGameSpeed");
       var speedRows = '<div class="tm-pokemon-quick-speed-row' + (speedAvailable ? "" : " unsupported") + '"><label>' + esc(tr("移动速度")) + '</label>' +
-        input("tm-pokemon-speed", state.speedMultiplier || 2, "number", 'min="0.25" max="8" step="0.25"' + (speedAvailable ? "" : ' disabled aria-disabled="true"')) +
+        input("tm-pokemon-speed", state.speedMultiplier, "number", 'min="0.25" max="8" step="0.25"' + (speedAvailable ? "" : ' disabled aria-disabled="true"')) +
         button("设置", speedAvailable ? "set-speed" : "unsupported-option", speedAvailable ? "primary" : "unsupported",
           speedAvailable ? "" : 'data-reason="' + esc(unavailableReason()) + '" aria-disabled="true"') + '</div>' +
         '<div class="tm-pokemon-quick-speed-row' + (gameSpeedAvailable ? "" : " unsupported") + '"><label>' + esc(tr("游戏倍速")) + '</label>' +
-        input("tm-pokemon-game-speed", state.gameSpeedMultiplier || 1, "number", 'min="1" max="9" step="1"' + (gameSpeedAvailable ? "" : ' disabled aria-disabled="true"')) +
+        input("tm-pokemon-game-speed", state.gameSpeedMultiplier, "number", 'min="1" max="8" step="1"' + (gameSpeedAvailable ? "" : ' disabled aria-disabled="true"')) +
         button("设置", gameSpeedAvailable ? "set-game-speed" : "unsupported-option", gameSpeedAvailable ? "primary" : "unsupported",
           gameSpeedAvailable ? "" : 'data-reason="' + esc(unavailableReason()) + '" aria-disabled="true"') + '</div>';
       var speedControls = '<div class="tm-pokemon-quick-speed-list">' + speedRows + '</div>';
@@ -418,15 +418,17 @@
       expMultiplier: ["tm-pokemon-exp-multiplier", 1],
       evMultiplier: ["tm-pokemon-ev-multiplier", 1],
       dropMultiplier: ["tm-pokemon-drop-multiplier", 1],
-      speedMultiplier: ["tm-pokemon-speed", 2],
-      gameSpeedMultiplier: ["tm-pokemon-game-speed", 1]
+      speedMultiplier: ["tm-pokemon-speed"],
+      gameSpeedMultiplier: ["tm-pokemon-game-speed"]
     };
     Object.keys(fields).forEach(function (key) {
       var field = fields[key];
       var node = panel.querySelector("#" + field[0]);
       if (!node || document.activeElement === node) return;
       var value = quickStateCache[key];
-      node.value = String(value == null ? field[1] : value);
+      node.value = value == null
+        ? (field.length > 1 ? String(field[1]) : "")
+        : String(value);
     });
   }
   function renderTeam(content) {
@@ -1519,7 +1521,9 @@
     }
     if (action === "set-speed") {
       var movementSpeed = Number(value("tm-pokemon-speed"));
-      if (!Number.isFinite(movementSpeed) || movementSpeed < 0.25 || movementSpeed > 8) return toast(tr("移动速度必须在 0.25 到 8 之间"), true);
+      if (!Number.isFinite(movementSpeed) || movementSpeed < 0.25) return toast(tr("移动速度必须在 0.25 到 8 之间"), true);
+      movementSpeed = Math.min(movementSpeed, 8);
+      panel.querySelector("#tm-pokemon-speed").value = String(movementSpeed);
       return run(function () { return mod.setSpeed(movementSpeed); }, function () {
         if (quickStateCache) quickStateCache.speedMultiplier = movementSpeed;
         toast(tr("移动速度已设置"));
@@ -1527,7 +1531,10 @@
     }
     if (action === "set-game-speed") {
       var gameSpeed = Number(value("tm-pokemon-game-speed"));
-      if (!Number.isInteger(gameSpeed) || gameSpeed < 1 || gameSpeed > 9) return toast(tr("游戏倍速必须在 1 到 9 之间"), true);
+      if (!Number.isFinite(gameSpeed) || gameSpeed < 1) return toast(tr("游戏倍速必须在 1 到 8 之间"), true);
+      gameSpeed = Math.min(gameSpeed, 8);
+      if (!Number.isInteger(gameSpeed)) return toast(tr("游戏倍速必须在 1 到 8 之间"), true);
+      panel.querySelector("#tm-pokemon-game-speed").value = String(gameSpeed);
       return run(function () { return mod.setGameSpeed(gameSpeed); }, function () {
         if (quickStateCache) quickStateCache.gameSpeedMultiplier = gameSpeed;
         toast(tr("游戏倍速已设置"));

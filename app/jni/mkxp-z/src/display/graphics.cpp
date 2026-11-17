@@ -1352,11 +1352,15 @@ void Graphics::setFrameRate(int value) {
 }
 
 void Graphics::setFastForwardSpeed(int multiplier) {
-    p->fastForwardSpeed = clamp(multiplier, 1, 9);
+    p->fastForwardSpeed = clamp(multiplier, 1, 8);
     int baseFPS = p->threadData->config.fixedFramerate > 0
         ? p->threadData->config.fixedFramerate : p->frameRate;
     p->fpsLimiter.setDesiredFPS((uint16_t)clamp(baseFPS * p->fastForwardSpeed, 10, 720));
     p->fpsLimiter.resetFrameAdjust();
+}
+
+int Graphics::fastForwardSpeed() const {
+    return p->fastForwardSpeed;
 }
 
 double Graphics::averageFrameRate() {

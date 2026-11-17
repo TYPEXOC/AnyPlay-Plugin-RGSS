@@ -305,7 +305,7 @@ class TyranorCheatController(
     private var ready = false
     private var polling = false
     private var activeToggles: Set<String> = emptySet()
-    private var activeSpeedMultiplier = 2f
+    private var activeSpeedMultiplier = 1f
     private var activeGameSpeedMultiplier = 1
     private var activeExpMultiplier = 1f
     private var activeDropMultiplier = 1f
@@ -359,7 +359,7 @@ class TyranorCheatController(
         replyFile.delete()
         runtimeStateFile.delete()
         // Start every game session with cheats off and neutral multipliers.
-        enqueue("restore\t2.0\t\t1\t1.0\t1.0\t1.0", 0L) { ready = true }
+        enqueue("restore\t1.0\t\t\t1.0\t1.0\t1.0", 0L) { ready = true }
     }
 
     private fun syncRuntimeState() {
@@ -371,7 +371,7 @@ class TyranorCheatController(
         activeToggles = enabled.toSet()
         fields.getOrNull(2)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let { activeExpMultiplier = it }
         fields.getOrNull(3)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let { activeDropMultiplier = it }
-        fields.getOrNull(4)?.toIntOrNull()?.takeIf { it in 1..9 }?.let { activeGameSpeedMultiplier = it }
+        fields.getOrNull(4)?.toIntOrNull()?.let { activeGameSpeedMultiplier = it.coerceIn(1, 8) }
         fields.getOrNull(5)?.toFloatOrNull()?.takeIf { it in 0f..100f }?.let { activeEvMultiplier = it }
     }
 

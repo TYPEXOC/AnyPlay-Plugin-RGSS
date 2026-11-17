@@ -46,6 +46,7 @@ public:
 	                int vague = 40);
 	void frameReset();
 	void setFastForwardSpeed(int multiplier);
+	int fastForwardSpeed() const;
 
 	DECL_ATTR( FrameRate,  int )
 	DECL_ATTR( FrameCount, int )

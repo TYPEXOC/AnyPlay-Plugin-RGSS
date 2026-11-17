@@ -73,6 +73,15 @@ RB_METHOD(graphicsSetFastForwardSpeed)
     return Qnil;
 }
 
+RB_METHOD(graphicsFastForwardSpeed)
+{
+    RB_UNUSED_PARAM;
+    GFX_LOCK;
+    VALUE ret = INT2NUM(shState->graphics().fastForwardSpeed());
+    GFX_UNLOCK;
+    return ret;
+}
+
 RB_METHOD(graphicsFreeze)
 {
     RB_UNUSED_PARAM;
@@ -392,6 +401,7 @@ void graphicsBindingInit()
     INIT_GRA_PROP_BIND( FrameCount, "frame_count" );
     _rb_define_module_function(module, "average_frame_rate", graphicsAverageFrameRate);
     _rb_define_module_function(module, "set_fast_forward_speed", graphicsSetFastForwardSpeed);
+    _rb_define_module_function(module, "fast_forward_speed", graphicsFastForwardSpeed);
 
     _rb_define_module_function(module, "width", graphicsWidth);
     _rb_define_module_function(module, "height", graphicsHeight);

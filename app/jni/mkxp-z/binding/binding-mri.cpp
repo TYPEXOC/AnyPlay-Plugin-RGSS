@@ -3180,7 +3180,7 @@ module TyranorCheats
   NEED_BATTLE = "You are not in a battle right now."
 
   @on = {}
-  @speed = 2.0
+  @speed = 1.0
   @game_speed = 1
   @exp_multiplier = 1.0
   @drop_multiplier = 1.0
@@ -3330,14 +3330,26 @@ module TyranorCheats
 
     def on?(name); @on[name] ? true : false; end
     def speed_on?; @on['speed'] ? true : false; end
+    def effective_speed_multiplier; speed_on? ? @speed.to_f : 1.0; end
     def exp_multiplier; @exp_multiplier.to_f; end
     def drop_multiplier; @drop_multiplier.to_f; end
     def ev_multiplier; @ev_multiplier.to_f; end
     def write_state
+      @game_speed = Graphics.fast_forward_speed.to_i if defined?(Graphics) && Graphics.respond_to?(:fast_forward_speed)
+      @game_speed = [[@game_speed.to_i, 1].max, 8].min
       File.open(STATE + ".tmp", "wb") do |file|
-        file.write("#{@speed}\t#{@on.keys.join(',')}\t#{@exp_multiplier}\t#{@drop_multiplier}\t#{@game_speed}\t#{@ev_multiplier}")
+        file.write("#{effective_speed_multiplier}\t#{@on.keys.join(',')}\t#{@exp_multiplier}\t#{@drop_multiplier}\t#{@game_speed}\t#{@ev_multiplier}")
       end
       File.rename(STATE + ".tmp", STATE)
+    rescue Exception
+    end
+    def sync_game_speed
+      return unless defined?(Graphics) && Graphics.respond_to?(:fast_forward_speed)
+      speed = Graphics.fast_forward_speed.to_i
+      speed = [[speed, 1].max, 8].min
+      return if speed == @game_speed
+      @game_speed = speed
+      write_state
     rescue Exception
     end
     def restored_multiplier(value, fallback)
@@ -4393,9 +4405,10 @@ module TyranorCheats
       end
       if name == 'gameSpeed'
         value = v.to_s.strip
-        return "Enter a whole number from 1 to 9." unless value =~ /\A\d+\z/
+        return "Enter a whole number from 1 to 8." unless value =~ /\A\d+\z/
         speed = value.to_i
-        return "Enter a whole number from 1 to 9." unless speed >= 1 && speed <= 9
+        return "Enter a whole number from 1 to 8." unless speed >= 1
+        speed = 8 if speed > 8
         return "Global game speed is unavailable." unless defined?(Graphics) && Graphics.respond_to?(:set_fast_forward_speed)
         Graphics.set_fast_forward_speed(speed)
         @game_speed = speed
@@ -4434,10 +4447,17 @@ module TyranorCheats
 
     def restore_game_speed(value)
       speed_text = value.to_s.strip
-      speed = (speed_text =~ /\A\d+\z/) ? speed_text.to_i : 1
-      speed = 1 if speed < 1 || speed > 9
+      speed = if speed_text.empty? && defined?(Graphics) && Graphics.respond_to?(:fast_forward_speed)
+                Graphics.fast_forward_speed.to_i
+              else
+                (speed_text =~ /\A\d+\z/) ? speed_text.to_i : 1
+              end
+      speed = 1 if speed < 1
+      speed = 8 if speed > 8
       @game_speed = speed
-      Graphics.set_fast_forward_speed(speed) if defined?(Graphics) && Graphics.respond_to?(:set_fast_forward_speed)
+      if !speed_text.empty? && defined?(Graphics) && Graphics.respond_to?(:set_fast_forward_speed)
+        Graphics.set_fast_forward_speed(speed)
+      end
     rescue Exception
       @game_speed = 1
     end
@@ -8594,6 +8614,7 @@ module TyranorCheats
     # ---------------------------------------------------------- per frame
     def frame
       @tick += 1
+      sync_game_speed
       poll if (@tick % 6) == 0
       install_hooks
       apply if !@on.empty? || has_runtime_locks?
