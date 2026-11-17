@@ -1155,7 +1155,8 @@
     var actions = '<div class="tm-battle-outcomes">' +
       button(translated("胜利"), "victory", "tm-battle-outcome-victory", actionDisabled) +
       button(translated("战败"), "defeat", "tm-battle-outcome-defeat", actionDisabled) +
-      button(translated("逃跑"), "escape", "tm-battle-outcome-escape", actionDisabled) + '</div>';
+      button(translated("逃跑"), "escape", "tm-battle-outcome-escape", actionDisabled) + '</div>' +
+      (snapshot.inBattle ? "" : '<div class="tm-note">' + escapeHtml(translated("当前不在战斗中")) + '</div>');
     function battleValueRow(side, unit, field, label, current, maximum) {
       var actorId = unit.actorId == null ? "" : ' data-actor-id="' + escapeHtml(unit.actorId) + '"';
       var attrs = 'min="0" max="' + escapeHtml(maximum) + '" inputmode="numeric" aria-label="' + escapeHtml(translated(label) + " " + unit.name) + '" data-battle-vital="1" data-side="' + side + '" data-index="' + escapeHtml(unit.index) + '" data-field="' + field + '"' + actorId + (snapshot.inBattle ? "" : " disabled");
@@ -1179,13 +1180,12 @@
         button(translated("完全恢复"), "battle-side-action", "", 'data-side="' + side + '" data-operation="recover" ' + noUnits) + mpButton + tpButton +
         button(translated("战斗清除状态"), "battle-side-action", "", 'data-side="' + side + '" data-operation="clear" ' + noUnits) +
         button(translated("HP 设为 1"), "battle-side-action", "tm-battle-side-danger", 'data-side="' + side + '" data-operation="hp-one" ' + noUnits) + '</div>';
-      var sideBody = unitRows;
-      return card(translated(title), '<div class="tm-battle-side-toolbar">' + bulkActions + '</div><div class="tm-list tm-battle-unit-list">' + sideBody + '</div>', "tm-battle-side-card" + (snapshot.inBattle ? "" : " tm-battle-side-idle"), '<span class="tm-battle-count">' + escapeHtml(translated("数量：")) + ' ' + (snapshot.inBattle ? units.length : 0) + '</span>');
+      var sideBody = unitRows || '<div class="tm-note">' + escapeHtml(translated("当前不在战斗中")) + '</div>';
+      return card(translated(title), '<div class="tm-battle-side-toolbar">' + bulkActions + '</div><div class="tm-list tm-battle-unit-list">' + sideBody + '</div>', "tm-battle-side-card", '<span class="tm-battle-count">' + escapeHtml(translated("数量：")) + ' ' + (snapshot.inBattle ? units.length : 0) + '</span>');
     }
-    var idle = snapshot.inBattle ? "" : '<div class="tm-note tm-battle-idle-status">' + escapeHtml(translated("当前不在战斗中")) + '</div>';
     var sides = '<div class="tm-grid tm-battle-grid">' + sideCard("队伍", "actor", snapshot.actors || []) + sideCard("敌方", "enemy", snapshot.enemies || []) + '</div>';
     content.innerHTML = '<div class="tm-battle-page">' +
-      card("快捷操作", actions, "tm-battle-outcome-card") + idle + sides + '</div>';
+      card("快捷操作", actions, "tm-battle-outcome-card") + sides + '</div>';
     ensureCapabilities();
   }
   function refreshBattleUnitLists() {
