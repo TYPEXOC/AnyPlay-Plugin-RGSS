@@ -6985,14 +6985,34 @@ module TyranorCheats
       0
     end
 
+    def map_info_order(info)
+      value = if info.respond_to?(:order)
+                (info.order rescue nil)
+              else
+                (info.instance_variable_get(:@order) rescue nil)
+              end
+      value.nil? ? nil : value.to_i
+    rescue Exception
+      nil
+    end
+
+    def map_info_lookup(table, id)
+      return nil unless table
+      return table[id] || table[id.to_s] if table.is_a?(Hash)
+      return table[id] if table.is_a?(Array)
+      nil
+    rescue Exception
+      nil
+    end
+
     def map_info_depth(id, table)
       depth = 0
       seen = {}
-      info = table.is_a?(Hash) ? table[id] : (table.is_a?(Array) ? table[id] : nil)
+      info = map_info_lookup(table, id)
       parent = map_info_parent(info)
       while parent > 0 && !seen[parent]
         seen[parent] = true
-        ancestor = table.is_a?(Hash) ? table[parent] : (table.is_a?(Array) ? table[parent] : nil)
+        ancestor = map_info_lookup(table, parent)
         break unless ancestor
         depth += 1
         parent = map_info_parent(ancestor)
@@ -7002,6 +7022,18 @@ module TyranorCheats
       0
     end
 
+    def map_info_tree_walk(entry, children, visited, ordered)
+      id = entry[0]
+      return if visited[id]
+      visited[id] = true
+      ordered << [id, entry[1]]
+      (children[id] || []).each do |child|
+        map_info_tree_walk(child, children, visited, ordered)
+      end
+    rescue Exception
+      nil
+    end
+
     def map_info_entries
       table = map_info_table
       return [] unless table
@@ -7009,14 +7041,32 @@ module TyranorCheats
       if table.is_a?(Hash)
         table.each do |id, info|
           next unless id.to_s =~ /\A\d+\z/
-          out << [id.to_i, map_info_name(info)] if info
+          out << [id.to_i, map_info_name(info), map_info_parent(info), map_info_order(info)] if info
         end
       elsif table.is_a?(Array)
         table.each_with_index do |info, id|
-          out << [id, map_info_name(info)] if id > 0 && info
+          out << [id, map_info_name(info), map_info_parent(info), map_info_order(info)] if id > 0 && info
         end
       end
-      out.sort_by { |entry| entry[0] }
+      out.sort_by! { |entry| [entry[3].nil? ? entry[0] : entry[3], entry[0]] }
+      by_id = {}
+      out.each { |entry| by_id[entry[0]] = entry }
+      children = {}
+      out.each do |entry|
+        parent = entry[2].to_i
+        parent = 0 unless parent > 0 && parent != entry[0] && by_id[parent]
+        (children[parent] ||= []) << entry
+      end
+      ordered = []
+      visited = {}
+      out.each do |entry|
+        parent = entry[2].to_i
+        if parent <= 0 || parent == entry[0] || !by_id[parent]
+          map_info_tree_walk(entry, children, visited, ordered)
+        end
+      end
+      out.each { |entry| map_info_tree_walk(entry, children, visited, ordered) }
+      ordered
     rescue Exception
       []
     end
