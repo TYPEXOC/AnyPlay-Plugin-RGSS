@@ -442,10 +442,10 @@
     var actions = '<div class="tm-row">' +
       featureButton("获得宝可梦", "open-add-pokemon", "pokemonObtain", "primary") +
       featureButton("恢复全队", "recover-party", "pokemonRecover") + '</div>';
-    content.innerHTML = segmentedTabs(views, teamView, "team-view", "view") +
+    content.innerHTML = '<div class="tm-pokemon-team-page">' + segmentedTabs(views, teamView, "team-view", "view") +
       '<div class="tm-grid tm-actor-layout tm-pokemon-team-layout">' +
       card("队伍管理", search + actions + '<div id="tm-pokemon-roster" class="tm-list tm-actor-list"></div>', "tm-actor-roster") +
-      '<section class="tm-card tm-actor-detail" id="tm-pokemon-detail"></section></div>';
+      '<section class="tm-card tm-actor-detail" id="tm-pokemon-detail"></section></div></div>';
     renderTeamRoster();
   }
   function renderTeamRoster() {
@@ -519,7 +519,7 @@
       fields.push(valueEditor(index, "hp", "当前 HP", pokemon.hp, "pokemonHp"));
       fields.push(valueEditor(index, "exp", "经验", pokemon.exp, "pokemonExp"));
       fields.push(valueEditor(index, "happiness", "亲密度", pokemon.happiness, "pokemonHappiness"));
-      section.innerHTML = card("属性", fields.length ? '<div class="tm-list">' + fields.join("") + '</div>' :
+      section.innerHTML = card("属性", fields.length ? '<div class="tm-list tm-pokemon-attribute-list">' + fields.join("") + '</div>' :
         '<div class="tm-note">' + esc(tr("当前游戏没有可修改的宝可梦属性接口")) + '</div>');
     } else if (teamSection === "moves") {
       if (!hasFeature("pokemonMoves")) { section.innerHTML = card("招式", '<div class="tm-note">' + esc(unavailableReason()) + '</div>'); return; }
