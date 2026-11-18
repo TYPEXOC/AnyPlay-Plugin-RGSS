@@ -89,6 +89,7 @@ LOCAL_SRC_FILES := \
 	$(LOCAL_PATH)/src/net/LUrlParser.cpp \
 	$(LOCAL_PATH)/src/crypto/rgssad.cpp \
 	$(LOCAL_PATH)/binding/binding-mri.cpp \
+	$(LOCAL_PATH)/binding/translation-table.cpp \
 	$(LOCAL_PATH)/binding/binding-util.cpp \
 	$(LOCAL_PATH)/binding/etc-binding.cpp \
 	$(LOCAL_PATH)/binding/table-binding.cpp \

@@ -36,12 +36,18 @@
 
 #include "binding-util.h"
 #include "binding.h"
+#include "translation-table.h"
 
 #include "sharedstate.h"
 #include "eventthread.h"
 
 #include <vector>
 #include <cstdlib>
+
+#ifdef __ANDROID__
+#include <SDL.h>
+#include <jni.h>
+#endif
 
 extern "C" {
 #include <ruby.h>
@@ -145,6 +151,8 @@ RB_METHOD(mkxpSettingsMenu);
 RB_METHOD(mkxpCpuCount);
 RB_METHOD(mkxpSystemMemory);
 RB_METHOD(mkxpNativeBitmapTextTranslation);
+RB_METHOD(mkxpTranslateText);
+RB_METHOD(mkxpTranslationTableRevision);
 RB_METHOD(mkxpReloadPathCache);
 RB_METHOD(mkxpAddPath);
 RB_METHOD(mkxpRemovePath);
@@ -260,6 +268,8 @@ static void mriBindingInit()
 	_rb_define_module_function(mod, "nproc", mkxpCpuCount);
 	_rb_define_module_function(mod, "memory", mkxpSystemMemory);
 	_rb_define_module_function(mod, "native_bitmap_text_translation?", mkxpNativeBitmapTextTranslation);
+	_rb_define_module_function(mod, "translate_text", mkxpTranslateText);
+	_rb_define_module_function(mod, "translation_table_revision", mkxpTranslationTableRevision);
 
 	_rb_define_module_function(mod, "reload_cache", mkxpReloadPathCache);
 	_rb_define_module_function(mod, "mount", mkxpAddPath);
@@ -554,6 +564,33 @@ RB_METHOD(mkxpSystemMemory) {
 RB_METHOD(mkxpNativeBitmapTextTranslation) {
     RB_UNUSED_PARAM;
     return Qtrue;
+}
+
+RB_METHOD(mkxpTranslateText) {
+    if (argc < 1) return Qnil;
+    VALUE text = rb_obj_as_string(argv[0]);
+    std::string translated;
+    int encoding = 0;
+    if (!tynTranslationLookup(RSTRING_PTR(text), static_cast<size_t>(RSTRING_LEN(text)),
+                              translated, encoding))
+        return Qnil;
+
+#if RAPI_FULL > 187
+    static const char *encodingNames[] = {
+        "UTF-8", "Shift_JIS", "Windows-1252", "Windows-1250", "Windows-1251", "GB18030"
+    };
+    const int count = static_cast<int>(sizeof(encodingNames) / sizeof(encodingNames[0]));
+    if (encoding < 0 || encoding >= count) encoding = 0;
+    return rb_enc_str_new(translated.data(), static_cast<long>(translated.size()),
+                          rb_enc_find(encodingNames[encoding]));
+#else
+    return rb_str_new(translated.data(), static_cast<long>(translated.size()));
+#endif
+}
+
+RB_METHOD(mkxpTranslationTableRevision) {
+    RB_UNUSED_PARAM;
+    return LONG2NUM(static_cast<long>(tynTranslationRevision()));
 }
 
 RB_METHOD(mkxpReloadPathCache) {
@@ -979,6 +1016,48 @@ static void reportRubyStartupFailure(const char *phase, const std::string &name,
     showMsg(dialog);
 }
 
+#ifdef __ANDROID__
+static bool readBundledRuntimeAsset(const std::string &name, std::string &contents) {
+    JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+    jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+    if (!env || !activity) return false;
+
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID reader = activityClass ? env->GetStaticMethodID(
+        activityClass, "readBundledRuntimeAsset", "(Ljava/lang/String;)[B") : 0;
+    if (!reader) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (activityClass) env->DeleteLocalRef(activityClass);
+        env->DeleteLocalRef(activity);
+        return false;
+    }
+
+    jstring assetName = env->NewStringUTF(name.c_str());
+    jbyteArray bytes = assetName ? static_cast<jbyteArray>(
+        env->CallStaticObjectMethod(activityClass, reader, assetName)) : 0;
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        bytes = 0;
+    }
+    if (bytes) {
+        const jsize length = env->GetArrayLength(bytes);
+        contents.resize(static_cast<size_t>(length));
+        if (length > 0) env->GetByteArrayRegion(bytes, 0, length,
+            reinterpret_cast<jbyte *>(&contents[0]));
+    }
+    if (bytes) env->DeleteLocalRef(bytes);
+    if (assetName) env->DeleteLocalRef(assetName);
+    env->DeleteLocalRef(activityClass);
+    env->DeleteLocalRef(activity);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        contents.clear();
+        return false;
+    }
+    return bytes != 0;
+}
+#endif
+
 static void abortRubyStartup(const char *phase, const std::string &name, int state) {
     reportRubyStartupFailure(phase, name, state);
     clearCurrentRubyException();
@@ -991,7 +1070,15 @@ static bool runCustomScript(const std::string &filename, const char *phase) {
     if (tynVerboseRuntimeLogs())
         Debug() << "[ruby] begin" << phase << "script:" << filename;
     
-    if (!readFileSDL(filename.c_str(), scriptData)) {
+    bool loaded = false;
+#ifdef __ANDROID__
+    static const std::string assetPrefix("asset://");
+    if (filename.compare(0, assetPrefix.size(), assetPrefix) == 0)
+        loaded = readBundledRuntimeAsset(filename.substr(assetPrefix.size()), scriptData);
+    else
+#endif
+        loaded = readFileSDL(filename.c_str(), scriptData);
+    if (!loaded) {
         Debug() << "[ruby] could not read" << phase << "script:" << filename;
         showMsg(std::string("Unable to open '") + filename + "'");
         return false;

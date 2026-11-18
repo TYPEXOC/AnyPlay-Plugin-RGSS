@@ -6,28 +6,28 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import android.system.Os;
+import android.util.JsonReader;
+import android.util.JsonToken;
 import android.util.Log;
 
 import com.tyranor.runtime.diagnostics.TynRuntimeDiagnostics;
 
-import org.json.JSONObject;
-
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PushbackReader;
+import java.io.Reader;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
@@ -36,7 +36,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-/** Keeps the Ruby translation table in sync with one TYN-granted URI. */
+/** Streams a granted translation JSON URI into mkxp-z's native in-memory index. */
 final class RgssTranslationSession implements AutoCloseable {
     private static final String TAG = "mkxp-z[Translation]";
     private static final String REVISION_COLUMN = "revision";
@@ -44,11 +44,19 @@ final class RgssTranslationSession implements AutoCloseable {
     private static final long NOTIFICATION_COALESCE_MS = 120;
     private static final long INITIAL_RETRY_MS = 1_000;
     private static final long MAX_RETRY_MS = TimeUnit.SECONDS.toMillis(10);
-    private static final int MAX_TRANSLATION_BYTES = 16 * 1024 * 1024;
+    private static final int MAX_TRANSLATION_BYTES = 64 * 1024 * 1024;
+    private static final int CHUNK_TARGET_BYTES = 256 * 1024;
+    private static final Charset[] CHARSETS = {
+        StandardCharsets.UTF_8,
+        Charset.forName("Shift_JIS"),
+        Charset.forName("windows-1252"),
+        Charset.forName("windows-1250"),
+        Charset.forName("windows-1251"),
+        Charset.forName("GB18030")
+    };
 
     private final ContentResolver resolver;
     private final Uri uri;
-    private final File destination;
     private final File sessionDir;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -63,7 +71,7 @@ final class RgssTranslationSession implements AutoCloseable {
     private final Runnable notificationRefresh = () -> {
         if (closed) return;
         cancelRetry();
-        append("Coalesced translation URI notification; re-reading the map");
+        append("Coalesced translation URI notification; streaming the map into the native index");
         try {
             worker.execute(() -> refreshTable("URI notification"));
         } catch (RejectedExecutionException ignored) {
@@ -89,10 +97,9 @@ final class RgssTranslationSession implements AutoCloseable {
     private ScheduledFuture<?> retryFuture;
     private ScheduledFuture<?> heartbeatFuture;
 
-    RgssTranslationSession(ContentResolver resolver, Uri uri, File destination, File sessionDir) {
+    RgssTranslationSession(ContentResolver resolver, Uri uri, File sessionDir) {
         this.resolver = resolver;
         this.uri = uri;
-        this.destination = destination;
         this.sessionDir = sessionDir;
     }
 
@@ -105,7 +112,7 @@ final class RgssTranslationSession implements AutoCloseable {
         try {
             resolver.registerContentObserver(uri, false, observer);
             observerRegistered = true;
-            append("Translation URI observer registered before the initial table read");
+            append("Translation URI observer registered before the initial native table load");
         } catch (Exception error) {
             Log.w(TAG, "Could not register the translation URI observer", error);
             append("Translation URI observer registration failed; revision heartbeat remains enabled", error);
@@ -120,8 +127,7 @@ final class RgssTranslationSession implements AutoCloseable {
                     hasRevision = true;
                     append("Initial translation revision recorded before table load: " + revision);
                 }
-                boolean result = refreshTable("initial load");
-                return result;
+                return refreshTable("initial load");
             });
             loaded = initialLoad.get();
         } catch (InterruptedException error) {
@@ -175,7 +181,7 @@ final class RgssTranslationSession implements AutoCloseable {
         lastRevision = revision;
         hasRevision = true;
         append("Translation revision changed: " + previousRevision + " -> " + revision
-            + "; re-reading the map");
+            + "; streaming the updated map");
         refreshTable("revision change");
     }
 
@@ -193,49 +199,110 @@ final class RgssTranslationSession implements AutoCloseable {
         }
     }
 
-    /** Runs only on the single worker so map reads, comparisons, and writes stay ordered. */
+    /** Builds a replacement table off-thread; native lookups keep using the old table until commit. */
     private boolean refreshTable(String trigger) {
         if (closed) return false;
-        try (InputStream input = resolver.openInputStream(uri)) {
-            if (input == null) throw new IOException("Translation provider returned no input stream");
-            byte[] jsonBytes = readBounded(input);
-            JSONObject map = new JSONObject(new String(jsonBytes, StandardCharsets.UTF_8).replace("\uFEFF", ""));
-            String encoded = encodeTranslationMap(map);
-            String current = destination.isFile()
-                ? new String(readBytes(destination), StandardCharsets.US_ASCII)
-                : null;
-
-            if (!encoded.equals(current)) {
-                writeAtomically(destination, encoded);
-                append("Translation table updated from " + trigger + "; entries=" + map.length()
-                    + ", encodedBytes=" + encoded.length());
-            } else {
-                append("Translation table unchanged after " + trigger + "; entries=" + map.length());
+        boolean staging = false;
+        try {
+            if (!MainActivity.nativeBeginTranslationUpdate()) {
+                throw new IOException("Native translation index could not begin an update");
             }
-
+            staging = true;
+            ChunkWriter chunks = new ChunkWriter();
+            VariantWorkspace variants = new VariantWorkspace();
+            long recordCount = 0;
+            try (InputStream raw = resolver.openInputStream(uri)) {
+                if (raw == null) throw new IOException("Translation provider returned no input stream");
+                BoundedInputStream bounded = new BoundedInputStream(raw, MAX_TRANSLATION_BYTES);
+                try (JsonReader json = new JsonReader(stripOptionalBom(bounded))) {
+                    json.setLenient(false);
+                    if (json.peek() != JsonToken.BEGIN_OBJECT) {
+                        throw new IOException("Translation map root must be a JSON object");
+                    }
+                    json.beginObject();
+                    while (json.hasNext()) {
+                        String source = json.nextName();
+                        if (json.peek() == JsonToken.STRING) {
+                            String target = json.nextString();
+                            recordCount += appendTranslation(source, target, chunks, variants);
+                        } else {
+                            json.skipValue();
+                        }
+                    }
+                    json.endObject();
+                    if (json.peek() != JsonToken.END_DOCUMENT) {
+                        throw new IOException("Unexpected content after the translation map");
+                    }
+                }
+            }
+            chunks.flush();
+            if (!MainActivity.nativeCommitTranslationUpdate()) {
+                throw new IOException("Native translation index rejected the completed update (memory cap or allocation failure)");
+            }
+            staging = false;
             hasSuccessfulLoad = true;
             nextRetryMs = INITIAL_RETRY_MS;
             cancelRetry();
+            append("Translation table committed from " + trigger + "; byteLimit="
+                + MAX_TRANSLATION_BYTES + ", nativeRecords=" + recordCount
+                + ", revision=" + MainActivity.nativeTranslationTableRevision());
             return true;
         } catch (Exception error) {
-            Log.w(TAG, "Translation table read or publish failed (" + trigger + ")", error);
+            if (staging) MainActivity.nativeAbortTranslationUpdate();
+            Log.w(TAG, "Translation table stream or native publish failed (" + trigger + ")", error);
+            append("Translation table update failed; the previous in-memory table remains active", error);
             scheduleRetry();
             return false;
         }
     }
 
-    private byte[] readBounded(InputStream input) throws IOException {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        byte[] buffer = new byte[8192];
-        int count;
-        while ((count = input.read(buffer)) != -1) {
-            if (count == 0) continue;
-            if (output.size() + count > MAX_TRANSLATION_BYTES) {
-                throw new IOException("Translation table exceeds " + MAX_TRANSLATION_BYTES + " bytes");
+    private static Reader stripOptionalBom(InputStream input) throws IOException {
+        PushbackReader reader = new PushbackReader(new InputStreamReader(input, StandardCharsets.UTF_8), 1);
+        int first = reader.read();
+        if (first != -1 && first != '\uFEFF') reader.unread(first);
+        return reader;
+    }
+
+    private static long appendTranslation(
+        String source,
+        String target,
+        ChunkWriter chunks,
+        VariantWorkspace variants
+    ) throws IOException {
+        if (source.isEmpty() || target.isEmpty()) return 0;
+        variants.clear();
+        for (int encoding = 0; encoding < CHARSETS.length; encoding++) {
+            Charset charset = CHARSETS[encoding];
+            byte[] sourceBytes = encodeStrict(source, charset);
+            if (sourceBytes == null || sourceBytes.length == 0) continue;
+            byte[] targetBytes = encodeStrict(target, charset);
+            int targetEncoding = encoding;
+            if (targetBytes == null) {
+                targetEncoding = 0;
+                targetBytes = target.getBytes(StandardCharsets.UTF_8);
             }
-            output.write(buffer, 0, count);
+
+            variants.add(sourceBytes, targetBytes, targetEncoding);
         }
-        return output.toByteArray();
+
+        for (int i = 0; i < variants.size; i++) {
+            chunks.write(variants.keys[i], variants.values[i], variants.encodings[i]);
+        }
+        return variants.size;
+    }
+
+    private static byte[] encodeStrict(String value, Charset charset) {
+        try {
+            CharsetEncoder encoder = charset.newEncoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+            ByteBuffer bytes = encoder.encode(CharBuffer.wrap(value));
+            byte[] result = new byte[bytes.remaining()];
+            bytes.get(result);
+            return result;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private void scheduleRetry() {
@@ -244,7 +311,7 @@ final class RgssTranslationSession implements AutoCloseable {
             if (retryFuture != null && !retryFuture.isDone()) return;
             long delay = nextRetryMs;
             nextRetryMs = Math.min(nextRetryMs * 2, MAX_RETRY_MS);
-            append("Translation table read failed; keeping the previous file and retrying in " + delay + "ms");
+            append("Translation table stream failed; keeping the previous in-memory table and retrying in " + delay + "ms");
             try {
                 retryFuture = worker.schedule(() -> {
                     synchronized (taskLock) {
@@ -264,92 +331,6 @@ final class RgssTranslationSession implements AutoCloseable {
                 retryFuture.cancel(false);
                 retryFuture = null;
             }
-        }
-    }
-
-    private static String encodeTranslationMap(JSONObject map) throws Exception {
-        StringBuilder output = new StringBuilder();
-        Iterator<String> keys = map.keys();
-        ArrayList<Charset> charsets = new ArrayList<>(Arrays.asList(
-            StandardCharsets.UTF_8,
-            Charset.forName("Shift_JIS"),
-            Charset.forName("windows-1252"),
-            Charset.forName("windows-1250"),
-            Charset.forName("windows-1251"),
-            Charset.forName("GB18030")
-        ));
-        while (keys.hasNext()) {
-            String source = keys.next();
-            Object rawTarget = map.opt(source);
-            if (!(rawTarget instanceof String)) continue;
-            String target = (String) rawTarget;
-            if (source.isEmpty() || target.isEmpty()) continue;
-            for (Charset charset : charsets) {
-                byte[] sourceBytes = encodeStrict(source, charset);
-                if (sourceBytes == null || sourceBytes.length == 0) continue;
-                byte[] targetBytes = encodeStrict(target, charset);
-                Charset targetCharset = charset;
-                if (targetBytes == null) {
-                    targetCharset = StandardCharsets.UTF_8;
-                    targetBytes = target.getBytes(StandardCharsets.UTF_8);
-                }
-                output.append(hex(sourceBytes)).append('\t').append(hex(targetBytes)).append('\t')
-                    .append(targetCharset.name()).append('\n');
-            }
-        }
-        return output.toString();
-    }
-
-    private static byte[] encodeStrict(String value, Charset charset) {
-        try {
-            CharsetEncoder encoder = charset.newEncoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT);
-            ByteBuffer bytes = encoder.encode(CharBuffer.wrap(value));
-            byte[] result = new byte[bytes.remaining()];
-            bytes.get(result);
-            return result;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static String hex(byte[] bytes) {
-        StringBuilder output = new StringBuilder(bytes.length * 2);
-        for (byte value : bytes) output.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));
-        return output.toString();
-    }
-
-    private byte[] readBytes(File file) throws IOException {
-        try (InputStream input = new FileInputStream(file); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[8192];
-            int count;
-            while ((count = input.read(buffer)) != -1) {
-                if (count == 0) continue;
-                if (output.size() + count > MAX_TRANSLATION_BYTES) {
-                    throw new IOException("Runtime translation table exceeds " + MAX_TRANSLATION_BYTES + " bytes");
-                }
-                output.write(buffer, 0, count);
-            }
-            return output.toByteArray();
-        }
-    }
-
-    private static void writeAtomically(File destination, String text) throws IOException {
-        File parent = destination.getParentFile();
-        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
-            throw new IOException("Unable to create " + parent);
-        }
-        File temporary = new File(destination.getAbsolutePath() + ".tmp");
-        try {
-            try (FileOutputStream output = new FileOutputStream(temporary)) {
-                output.write(text.getBytes(StandardCharsets.UTF_8));
-                output.getFD().sync();
-            }
-            Os.rename(temporary.getAbsolutePath(), destination.getAbsolutePath());
-        } catch (Exception error) {
-            temporary.delete();
-            throw new IOException("Unable to atomically publish " + destination, error);
         }
     }
 
@@ -383,6 +364,91 @@ final class RgssTranslationSession implements AutoCloseable {
             heartbeatFuture = null;
         }
         worker.shutdownNow();
+    }
+
+    private static final class VariantWorkspace {
+        final byte[][] keys = new byte[CHARSETS.length][];
+        final byte[][] values = new byte[CHARSETS.length][];
+        final int[] encodings = new int[CHARSETS.length];
+        int size;
+
+        void clear() {
+            size = 0;
+        }
+
+        void add(byte[] key, byte[] value, int encoding) {
+            for (int i = 0; i < size; i++) {
+                if (Arrays.equals(keys[i], key)) {
+                    keys[i] = key;
+                    values[i] = value;
+                    encodings[i] = encoding;
+                    return;
+                }
+            }
+            keys[size] = key;
+            values[size] = value;
+            encodings[size] = encoding;
+            size++;
+        }
+    }
+
+    private final class ChunkWriter {
+        private ByteArrayOutputStream bytes = new ByteArrayOutputStream(CHUNK_TARGET_BYTES);
+        private DataOutputStream output = new DataOutputStream(bytes);
+
+        void write(byte[] key, byte[] value, int encoding) throws IOException {
+            output.writeInt(key.length);
+            output.writeInt(value.length);
+            output.writeByte(encoding);
+            output.write(key);
+            output.write(value);
+            if (bytes.size() >= CHUNK_TARGET_BYTES) flush();
+        }
+
+        void flush() throws IOException {
+            if (bytes.size() == 0) return;
+            if (!MainActivity.nativeAppendTranslationChunk(bytes.toByteArray())) {
+                throw new IOException("Native translation index rejected a chunk (64 MiB source cap or 192 MiB index cap)");
+            }
+            bytes = new ByteArrayOutputStream(CHUNK_TARGET_BYTES);
+            output = new DataOutputStream(bytes);
+        }
+    }
+
+    private static final class BoundedInputStream extends FilterInputStream {
+        private final long maxBytes;
+        private long bytesRead;
+
+        BoundedInputStream(InputStream input, long maxBytes) {
+            super(input);
+            this.maxBytes = maxBytes;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (bytesRead >= maxBytes) {
+                int extra = in.read();
+                if (extra == -1) return -1;
+                throw new IOException("Translation JSON exceeds " + maxBytes + " bytes");
+            }
+            int value = in.read();
+            if (value != -1) bytesRead++;
+            return value;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (length == 0) return 0;
+            long remaining = maxBytes - bytesRead;
+            if (remaining <= 0) {
+                int extra = in.read();
+                if (extra == -1) return -1;
+                throw new IOException("Translation JSON exceeds " + maxBytes + " bytes");
+            }
+            int count = in.read(buffer, offset, (int) Math.min(length, remaining));
+            if (count > 0) bytesRead += count;
+            return count;
+        }
     }
 
 }

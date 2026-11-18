@@ -34,6 +34,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -130,8 +132,34 @@ public class MainActivity extends SDLActivity
 
     // TYN virtual pad, cheat panel, startup overlay, and exit confirmation
     private TynRuntimeUi mUi;
-    private static MainActivity sInstance;
+    private static volatile MainActivity sInstance;
     private volatile boolean mGameFirstFrameRendered;
+
+    static native boolean nativeBeginTranslationUpdate();
+    static native boolean nativeAppendTranslationChunk(byte[] chunk);
+    static native boolean nativeCommitTranslationUpdate();
+    static native void nativeAbortTranslationUpdate();
+    static native long nativeTranslationTableRevision();
+
+    /** Called by mkxp-z for asset:// preloadScript entries without materializing a .rb file. */
+    public static byte[] readBundledRuntimeAsset(String assetName)
+    {
+        MainActivity activity = sInstance;
+        if (activity == null || assetName == null || !assetName.matches("tyranor_[A-Za-z0-9_]+\\.rb")) return null;
+        try (InputStream input = activity.getAssets().open(assetName);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                if (output.size() + count > 4 * 1024 * 1024) return null;
+                output.write(buffer, 0, count);
+            }
+            return output.toByteArray();
+        } catch (Exception error) {
+            Log.w(TAG, "Could not read virtual runtime asset " + assetName, error);
+            return null;
+        }
+    }
 
     private void runSDLThread()
     {
@@ -379,10 +407,16 @@ public class MainActivity extends SDLActivity
         try {
             boolean initializeDiagnostics = mSessionDir == null;
             if (initializeDiagnostics) {
-                String suffix = shortHash((mGameId == null ? GAME_FOLDER : mGameId) + System.nanoTime());
-                mSessionDir = new File(getFilesDir(), "tyranor/sessions/" + suffix);
+                mSessionDir = createSessionDirectory();
             }
             if (!mSessionDir.isDirectory() && !mSessionDir.mkdirs()) throw new java.io.IOException("Unable to create session folder");
+            int removedTranslationCopies = removeLegacyTranslationTables(
+                new File(getFilesDir(), "tyranor/sessions"), 0);
+            if (removedTranslationCopies > 0) {
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Removed " + removedTranslationCopies
+                        + " obsolete per-session translation table file(s); the map now lives only in native memory");
+            }
             writeAtomically(new File(mSessionDir, "fast_forward"), "0");
             writeAtomically(new File(mSessionDir, "tyranor_copy_text.txt"), "");
             if (initializeDiagnostics) {
@@ -416,23 +450,19 @@ public class MainActivity extends SDLActivity
             } catch (Exception error) {
                 TynRuntimeDiagnostics.append(mSessionDir, "Could not set TYN runtime environment flags", error);
             }
-            TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: copying TYN Ruby translation bridge");
-
-            File mkxpCompat = new File(mSessionDir, "tyranor_mkxp_compat.rb");
-            File win32Compat = new File(mSessionDir, "tyranor_win32_compat.rb");
-            File inputCompat = new File(mSessionDir, "tyranor_input_compat.rb");
-            copyAssetToFile("tyranor_mkxp_compat.rb", mkxpCompat);
-            copyAssetToFile("tyranor_win32_compat.rb", win32Compat);
-            copyAssetToFile("tyranor_input_compat.rb", inputCompat);
             TynRuntimeDiagnostics.append(mSessionDir,
-                "Runtime setup: copied MKXP, Win32API, and input-update compatibility preloads");
+                "Runtime setup: shared compatibility and translation scripts will be virtually preloaded from APK assets");
 
             File rubyConfigPreload = prepareBundledRubyConfigPreload();
             File discordCompatPreload = prepareWindowsDiscordCompatPreload();
 
-            File bridge = new File(mSessionDir, "tyranor_rgss_translation.rb");
-            copyAssetToFile("tyranor_rgss_translation.rb", bridge);
-            writeAtomically(new File(mSessionDir, "rgss_version"), String.valueOf(detectRgssVersion(GAME_FOLDER)));
+            int rgssVersion = detectRgssVersion(GAME_FOLDER);
+            try {
+                Os.setenv("TYN_RGSS_VERSION", String.valueOf(rgssVersion), true);
+            } catch (Exception error) {
+                TynRuntimeDiagnostics.append(mSessionDir,
+                    "Could not expose RGSS generation to the virtual translation preload", error);
+            }
 
             File profile = new File(mSessionDir, "tyranor_pad_profile.json");
             PAD_PROFILE_PATH = profile.getAbsolutePath();
@@ -446,14 +476,9 @@ public class MainActivity extends SDLActivity
             if (mTranslationMapUri != null) {
                 TynRuntimeDiagnostics.append(mSessionDir,
                     "Runtime setup: subscribing to the selected translation table and loading it before game startup");
-                File table = new File(mSessionDir, "runtime_translations.hex");
                 if (mTranslationSession == null) {
                     mTranslationSession = new RgssTranslationSession(
-                        getContentResolver(), Uri.parse(mTranslationMapUri), table, mSessionDir);
-                }
-                if (!mTranslationSession.start()) {
-                    TynRuntimeDiagnostics.append(mSessionDir,
-                        "Initial translation table read failed; keeping the URI session active for retries");
+                        getContentResolver(), Uri.parse(mTranslationMapUri), mSessionDir);
                 }
             }
 
@@ -468,15 +493,15 @@ public class MainActivity extends SDLActivity
             JSONArray scripts = new JSONArray();
             if (rubyConfigPreload != null) scripts.put(rubyConfigPreload.getAbsolutePath());
             if (discordCompatPreload != null) scripts.put(discordCompatPreload.getAbsolutePath());
-            scripts.put(mkxpCompat.getAbsolutePath());
-            scripts.put(win32Compat.getAbsolutePath());
-            scripts.put(inputCompat.getAbsolutePath());
+            scripts.put("asset://tyranor_mkxp_compat.rb");
+            scripts.put("asset://tyranor_win32_compat.rb");
+            scripts.put("asset://tyranor_input_compat.rb");
             for (int i = 0; i < gameScripts.length(); i++) {
                 String path = gameScripts.optString(i, "");
                 if (!path.isEmpty() && !containsString(scripts, path)) scripts.put(path);
             }
             appendGameRootScript(scripts, "preload.rb", "preload");
-            String bridgePath = bridge.getAbsolutePath();
+            String bridgePath = "asset://tyranor_rgss_translation.rb";
             if (!containsString(scripts, bridgePath)) scripts.put(bridgePath);
             config.put("preloadScript", scripts);
             JSONArray postloadScripts = stringArray(config.opt("postloadScript"));
@@ -492,6 +517,39 @@ public class MainActivity extends SDLActivity
             TynRuntimeDiagnostics.append(mSessionDir, "Private session preparation failed", error);
             GAME_PATH = GAME_FOLDER;
         }
+    }
+
+    private File createSessionDirectory() throws java.io.IOException
+    {
+        String identity = mGameId == null || mGameId.trim().isEmpty()
+            ? new File(GAME_FOLDER).getCanonicalPath()
+            : mGameId.trim();
+        String visible = identity.replaceAll("[^A-Za-z0-9._-]", "_");
+        if (visible.isEmpty()) visible = "game";
+        if (visible.length() > 48) visible = visible.substring(0, 48);
+        String gameKey = visible + "-" + shortHash(identity);
+        String date = new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(new Date());
+        String time = new SimpleDateFormat("HHmmss-SSS", Locale.ROOT).format(new Date());
+        String launch = time + "-" + Long.toHexString(System.nanoTime());
+        return new File(new File(new File(getFilesDir(), "tyranor/sessions"), gameKey),
+            date + File.separator + launch);
+    }
+
+    private static int removeLegacyTranslationTables(File directory, int depth)
+    {
+        if (directory == null || !directory.isDirectory() || depth > 5) return 0;
+        File[] children = directory.listFiles();
+        if (children == null) return 0;
+        int removed = 0;
+        for (File child : children) {
+            if (child.isDirectory()) {
+                removed += removeLegacyTranslationTables(child, depth + 1);
+            } else if ("runtime_translations.hex".equals(child.getName())
+                || "runtime_translations.hex.tmp".equals(child.getName())) {
+                if (child.delete()) removed++;
+            }
+        }
+        return removed;
     }
 
     private JSONObject readStandaloneGameConfig()
@@ -1188,6 +1246,10 @@ public class MainActivity extends SDLActivity
 
         // TYN controls on top of the game surface
         sInstance = this;
+        if (!SDLActivity.mBrokenLibraries && mTranslationSession != null && !mTranslationSession.start()) {
+            TynRuntimeDiagnostics.append(mSessionDir,
+                "Initial translation table read failed; keeping the URI session active for retries");
+        }
         if (mLayout != null) {
             mUi = new TynRuntimeUi(
                 this,

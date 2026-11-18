@@ -98,7 +98,7 @@ public final class TynRuntimeDiagnostics {
                 throw new IOException("Could not create private session directory");
             }
             activeSessionDir = sessionDir;
-            safePruneSessionLogs(sessionDir.getParentFile(), sessionDir);
+            safePruneSessionLogs(sessionsRootFor(sessionDir), sessionDir);
             sessionStartedElapsedRealtime = launchRequestedAtElapsedRealtime > 0
                 ? launchRequestedAtElapsedRealtime
                 : SystemClock.elapsedRealtime();
@@ -195,11 +195,8 @@ public final class TynRuntimeDiagnostics {
     public static File createArchive(Context context) throws IOException {
         File sessionsRoot = new File(context.getFilesDir(), "tyranor/sessions");
         safePruneSessionLogs(sessionsRoot, activeSessionDir);
-        File[] sessionDirs = sessionsRoot.listFiles(File::isDirectory);
-        if (sessionDirs == null || sessionDirs.length == 0) return null;
-
         List<SessionLogs> sessions = new ArrayList<>();
-        for (File sessionDir : sessionDirs) {
+        for (File sessionDir : findSessionDirectories(sessionsRoot)) {
             SessionLogs session = describeSession(sessionDir);
             if (session.hasLogs()) sessions.add(session);
         }
@@ -299,8 +296,39 @@ public final class TynRuntimeDiagnostics {
             now = SystemClock.elapsedRealtime();
             if (now - lastRetentionCheckElapsedRealtime < RETENTION_CHECK_INTERVAL_MILLIS) return;
             lastRetentionCheckElapsedRealtime = now;
-            safePruneSessionLogs(sessionDir.getParentFile(), activeSessionDir);
+            safePruneSessionLogs(sessionsRootFor(sessionDir), activeSessionDir);
         }
+    }
+
+    private static File sessionsRootFor(File sessionDir) {
+        File current = sessionDir;
+        while (current != null && !"sessions".equals(current.getName())) current = current.getParentFile();
+        return current;
+    }
+
+    private static List<File> findSessionDirectories(File sessionsRoot) {
+        List<File> result = new ArrayList<>();
+        collectSessionDirectories(sessionsRoot, result, 0);
+        return result;
+    }
+
+    private static void collectSessionDirectories(File directory, List<File> result, int depth) {
+        if (directory == null || !directory.isDirectory() || depth > 5) return;
+        if (containsSessionFiles(directory)) {
+            result.add(directory);
+            return;
+        }
+        File[] children = directory.listFiles(File::isDirectory);
+        if (children == null) return;
+        for (File child : children) collectSessionDirectories(child, result, depth + 1);
+    }
+
+    private static boolean containsSessionFiles(File directory) {
+        if (directory == null) return false;
+        for (String name : SESSION_LOG_NAMES) {
+            if (new File(directory, name).isFile()) return true;
+        }
+        return new File(directory, "mkxp.json").isFile();
     }
 
     private static void safePruneSessionLogs(File sessionsRoot, File activeDir) {
@@ -317,9 +345,8 @@ public final class TynRuntimeDiagnostics {
             File moduleErrorLog = moduleErrorLog(sessionsRoot);
             trimLogToLimit(moduleErrorLog, MAX_MODULE_ERROR_LOG_BYTES,
                 "[Earlier module error log entries trimmed to keep diagnostics bounded]\n");
-            File[] children = sessionsRoot.listFiles(File::isDirectory);
-            if (children == null || children.length == 0) return;
-            List<File> sessions = new ArrayList<>(Arrays.asList(children));
+            List<File> sessions = findSessionDirectories(sessionsRoot);
+            if (sessions.isEmpty()) return;
             sessions.sort(Comparator.comparingLong(TynRuntimeDiagnostics::sessionLastModified));
             long now = System.currentTimeMillis();
             for (File session : new ArrayList<>(sessions)) {
@@ -328,6 +355,7 @@ public final class TynRuntimeDiagnostics {
                 trimSessionLogs(session);
                 if (now - lastUsed > SESSION_RETENTION_MILLIS && deleteRecursively(session)) {
                     sessions.remove(session);
+                    removeEmptySessionParents(session, sessionsRoot);
                 }
             }
             long totalBytes = moduleErrorLog.isFile() ? moduleErrorLog.length() : 0L;
@@ -341,8 +369,19 @@ public final class TynRuntimeDiagnostics {
                 if (deleteRecursively(session)) {
                     totalBytes = Math.max(0L, totalBytes - bytes);
                     iterator.remove();
+                    removeEmptySessionParents(session, sessionsRoot);
                 }
             }
+        }
+    }
+
+    private static void removeEmptySessionParents(File session, File sessionsRoot) {
+        File parent = session == null ? null : session.getParentFile();
+        while (parent != null && sessionsRoot != null && !parent.equals(sessionsRoot)) {
+            File[] children = parent.listFiles();
+            if (children != null && children.length > 0) break;
+            if (!parent.delete()) break;
+            parent = parent.getParentFile();
         }
     }
 

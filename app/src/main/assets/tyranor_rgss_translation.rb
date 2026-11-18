@@ -1,11 +1,8 @@
 # TYN RGSS runtime translation bridge. Kept Ruby 1.8 compatible for RGSS1/2.
 module TyranorText
-  SESSION_DIR = File.dirname(__FILE__)
-  TABLE_PATH = File.join(SESSION_DIR, 'runtime_translations.hex')
-  VERSION_PATH = File.join(SESSION_DIR, 'rgss_version')
+  SESSION_DIR = ENV['TYN_RGSS_DIAGNOSTICS_DIR'] || File.dirname(__FILE__)
   COPY_PATH = File.join(SESSION_DIR, 'tyranor_copy_text.txt')
   FAST_FORWARD_PATH = File.join(SESSION_DIR, 'fast_forward')
-  @translations = {}
   @signature = nil
   @ticks = 0
   @active_message_pairs = []
@@ -59,7 +56,8 @@ module TyranorText
   def self.rgss_version
     return @rgss_version if @rgss_version
     begin
-      @rgss_version = File.read(VERSION_PATH).to_i
+      @rgss_version = ENV['TYN_RGSS_VERSION'].to_i
+      @rgss_version = 3 if @rgss_version <= 0
     rescue Exception
       @rgss_version = 3
     end
@@ -68,8 +66,9 @@ module TyranorText
 
   def self.translate(value)
     return value unless value.is_a?(String) && !value.empty?
-    translated = @translations[value]
-    translated = @translations[binary_string(value)] unless translated
+    translated = if defined?(System) && System.respond_to?(:translate_text)
+      System.translate_text(value)
+    end
     log_lookup_sample(translated ? 'hit' : 'miss', value, translated)
     translated || value
   rescue Exception
@@ -83,32 +82,14 @@ module TyranorText
   end
 
   def self.reload
-    unless File.file?(TABLE_PATH)
-      log_once(:table_missing, "translation table not found: #{TABLE_PATH}")
+    unless defined?(System) && System.respond_to?(:translation_table_revision)
+      log_once(:native_table_missing, 'native translation-table interface is unavailable')
       return
     end
-    stat = File.stat(TABLE_PATH)
-    signature = [stat.mtime.to_f, stat.size]
+    signature = System.translation_table_revision
     return if signature == @signature
-    updated = {}
-    File.open(TABLE_PATH, 'r') do |file|
-      file.each_line do |line|
-        fields = line.chomp.split("\t")
-        next if fields.length < 2
-        source = [fields[0]].pack('H*')
-        target = [fields[1]].pack('H*')
-        if fields.length >= 3 && target.respond_to?(:force_encoding)
-          begin
-            target.force_encoding(fields[2])
-          rescue Exception
-          end
-        end
-        updated[source] = target unless source.empty? || target.empty?
-      end
-    end
-    @translations = updated
     @signature = signature
-    log("loaded #{updated.length} translation entries")
+    log("native translation table changed to revision #{signature}")
     refresh_active_message
     refresh_windows
     apply_window_title
@@ -163,12 +144,6 @@ module TyranorText
               same_bytes?(pair[0], line) || same_bytes?(pair[1], line)
             end
             source = previous_pair ? previous_pair[0] : line
-            unless previous_pair
-              reverse_pair = @translations.find do |_source_text, target_text|
-                same_bytes?(target_text, line)
-              end
-              source = reverse_pair[0] if reverse_pair
-            end
             [source, line]
           end
           @active_message_pairs = message_pairs
