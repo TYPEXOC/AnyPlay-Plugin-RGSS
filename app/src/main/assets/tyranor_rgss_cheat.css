@@ -61,14 +61,14 @@ html[data-theme="dark"] .tm-pokemon-progress-subheading{border-color:#343c37;col
 .tm-map-grid .tm-item.tm-active{outline:2px solid var(--tm-primary,#237765);outline-offset:-2px}
 .tm-map-grid .tm-map-name{display:flex}
 .tm-map-grid .tm-map-tree-prefix{display:inline-flex;align-items:center;flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#748079;font-size:11px;line-height:1}
-.tm-map-grid .tm-map-tree-guide{box-sizing:border-box;flex:0 0 5px;width:5px;height:1.2em;border-left:1px solid transparent}
+.tm-map-grid .tm-map-tree-guide{box-sizing:border-box;flex:0 0 12px;width:12px;height:1.2em;border-left:1px solid transparent}
 .tm-map-grid .tm-map-tree-guide.tm-guide-continuing{border-left-color:#748079}
 .tm-map-grid .tm-map-tree-branch{flex:0 0 16px;width:16px;white-space:pre}
 .tm-map-grid .tm-map-tree-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tm-map-grid .tm-map-tree-list{gap:4px;padding:3px}
 .tm-map-grid .tm-map-tree-list>.tm-item{gap:5px;min-height:30px;margin:0;padding:3px 5px;border:1px solid #e0e5e2;border-radius:7px}
 .tm-map-grid .tm-map-tree-prefix{white-space:nowrap;font-size:10px}
-.tm-map-grid .tm-map-tree-guide{flex-basis:5px;width:5px}
+.tm-map-grid .tm-map-tree-guide{flex-basis:12px;width:12px}
 .tm-map-grid .tm-map-tree-branch{flex-basis:12px;width:12px;margin-right:3px;font-size:10px}
 .tm-map-grid .tm-map-tree-list .tm-btn{padding:4px 7px;border-radius:7px;font-size:12px;line-height:1.35}
 .tm-map-grid .tm-map-tree-list .tm-badge{padding:2px 5px;white-space:nowrap;font-size:11px}
