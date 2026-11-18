@@ -120,7 +120,7 @@ class TynRuntimeUi(
         box.addView(loadingHint, LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = (12 * density).toInt()
         })
-        loading.addView(box, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+        loading.addView(box, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
         root.addView(loading, FrameLayout.LayoutParams(-1, -1))
 
         actionBar = TyranorRuntimeActionBar(
