@@ -4149,6 +4149,7 @@ module TyranorCheats
       when 'actor_equip' then set_actor_equip(a, b)
       when 'event_switch' then set_event_switch(a, b)
       when 'map_event_switches' then set_map_event_switches(a, b)
+      when 'battle_state' then in_battle? ? '1' : '0'
       when 'battle_enemy_hp' then set_enemy_hp(a, b)
       when 'battle_unit_hp' then set_battle_unit_hp(a, b)
       when 'battle_enemy_mp' then set_enemy_mp(a, b)

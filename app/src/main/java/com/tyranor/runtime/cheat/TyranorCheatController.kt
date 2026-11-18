@@ -563,6 +563,13 @@ class TyranorCheatController(
         send("map_event_switches\t$mapId\t${if (enabled) "1" else "0"}", onResult)
     }
 
+    fun isInBattle(onResult: (Boolean) -> Unit) {
+        send("battle_state") { raw ->
+            val state = raw.trim()
+            onResult(state == "1" || state.equals("true", ignoreCase = true))
+        }
+    }
+
     fun setEnemyHp(index: Int, hp: Int, onResult: (String) -> Unit) {
         send("battle_enemy_hp\t$index\t$hp", onResult)
     }

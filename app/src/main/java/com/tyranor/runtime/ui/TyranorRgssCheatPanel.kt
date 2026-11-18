@@ -771,25 +771,31 @@ class TyranorRgssCheatPanel(
         )
 
         private fun battleSnapshot(done: (Any?) -> Unit) {
-            cheats.listBattleEnemies { enemies ->
-                cheats.listBattleActors { actors ->
-                    val inBattle = enemies.isNotEmpty() || actors.isNotEmpty()
-                    done(mapOf(
-                        "inBattle" to inBattle,
-                        "enemies" to enemies.map { mapOf(
-                            "index" to it.index, "name" to it.name, "hp" to it.hp, "mhp" to it.maxHp,
-                            "mp" to it.mp, "mmp" to it.maxMp, "mpSupported" to (it.mp != null && it.maxMp != null),
-                            "tp" to it.tp, "mtp" to it.maxTp, "tpSupported" to (it.tp != null && it.maxTp != null),
-                            "status" to it.status,
-                        ) },
-                        "actors" to actors.map { mapOf(
-                            "index" to it.index, "actorId" to it.actorId, "name" to it.name,
-                            "hp" to it.hp, "mhp" to it.maxHp, "mp" to it.mp, "mmp" to it.maxMp,
-                            "mpSupported" to (it.mp != null && it.maxMp != null),
-                            "tp" to it.tp, "mtp" to it.maxTp, "tpSupported" to (it.tp != null && it.maxTp != null),
-                            "status" to it.status,
-                        ) },
-                    ))
+            cheats.isInBattle { inBattle ->
+                if (!inBattle) {
+                    done(mapOf("inBattle" to false, "enemies" to emptyList<Any>(), "actors" to emptyList<Any>()))
+                    return@isInBattle
+                }
+
+                cheats.listBattleEnemies { enemies ->
+                    cheats.listBattleActors { actors ->
+                        done(mapOf(
+                            "inBattle" to true,
+                            "enemies" to enemies.map { mapOf(
+                                "index" to it.index, "name" to it.name, "hp" to it.hp, "mhp" to it.maxHp,
+                                "mp" to it.mp, "mmp" to it.maxMp, "mpSupported" to (it.mp != null && it.maxMp != null),
+                                "tp" to it.tp, "mtp" to it.maxTp, "tpSupported" to (it.tp != null && it.maxTp != null),
+                                "status" to it.status,
+                            ) },
+                            "actors" to actors.map { mapOf(
+                                "index" to it.index, "actorId" to it.actorId, "name" to it.name,
+                                "hp" to it.hp, "mhp" to it.maxHp, "mp" to it.mp, "mmp" to it.maxMp,
+                                "mpSupported" to (it.mp != null && it.maxMp != null),
+                                "tp" to it.tp, "mtp" to it.maxTp, "tpSupported" to (it.tp != null && it.maxTp != null),
+                                "status" to it.status,
+                            ) },
+                        ))
+                    }
                 }
             }
         }
