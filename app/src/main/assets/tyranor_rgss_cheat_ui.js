@@ -700,14 +700,17 @@
     else context.actorStateEntries = entries || [];
     renderActorCollectionList(kind);
   }
-  function renderSystem(content) {
+  function systemKindOptionsMarkup() {
     var kinds = [["switch", "开关"], ["variable", "变量"]];
-    var selectedKind = translated(context.systemKind === "switch" ? "开关" : "变量");
-    var options = kinds.map(function (entry) {
-      return '<button type="button" class="tm-system-kind-option' + (context.systemKind === entry[0] ? ' active' : '') + '" role="option" aria-selected="' + (context.systemKind === entry[0] ? 'true' : 'false') + '" data-action="select-system-kind" data-kind="' + entry[0] + '">' + escapeHtml(translated(entry[1])) + '</button>';
+    return kinds.map(function (entry) {
+      var selected = context.systemKind === entry[0];
+      return '<button type="button" class="tm-system-kind-option' + (selected ? ' active' : '') + '" role="option" aria-selected="' + (selected ? 'true' : 'false') + '" data-action="select-system-kind" data-kind="' + entry[0] + '">' + escapeHtml(translated(entry[1])) + '</button>';
     }).join("");
+  }
+  function renderSystem(content) {
+    var selectedKind = translated(context.systemKind === "switch" ? "开关" : "变量");
     var kind = '<div class="tm-system-kind-picker"><button type="button" class="tm-system-kind-trigger" data-action="toggle-system-kind" aria-haspopup="listbox" aria-expanded="' + (context.systemKindExpanded ? 'true' : 'false') + '"><span>' + escapeHtml(selectedKind) + '</span><span class="tm-system-kind-arrow" aria-hidden="true">▾</span></button>' +
-      (context.systemKindExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + options + '</div>' : '') + '</div>';
+      (context.systemKindExpanded ? '<div class="tm-system-kind-menu" role="listbox">' + systemKindOptionsMarkup() + '</div>' : '') + '</div>';
     var header = '<div class="tm-lock-list-header tm-system-lock-header"><span>锁定</span><span>名称</span><span>当前值</span></div>';
     content.innerHTML = card("开关与变量", '<div class="tm-row">' + kind + textInput("tm-system-query", context.systemQuery, "search", 'placeholder="名称或 ID"') + '</div>' + header + '<div id="tm-system-list" class="tm-list"></div>', "tm-fill-card", hideEmptyToggle("toggle-hide-empty-system", context.hideEmptySystemEntries));
     loadSystem();
@@ -733,17 +736,31 @@
   }
   function renderMap(content) {
     var pos = mod.currentPosition();
-    if (pos && !pos.loading) {
-      context.currentMapId = Number(pos.mapId) || 0;
+    var maps = { values: [], loading: true };
+    try { maps = mod.listMaps("", 0, 300); } catch (_) {}
+    var currentPosition = pos && !pos.loading && Number(pos.mapId) > 0 ? pos : null;
+    if (!currentPosition && maps && !maps.loading) {
+      var currentMap = (maps.values || []).filter(function (entry) { return entry.current; })[0];
+      if (currentMap) {
+        currentPosition = {
+          mapId: Number(currentMap.id) || 0,
+          x: coordinateOrZero(currentMap.currentX),
+          y: coordinateOrZero(currentMap.currentY),
+          direction: Number(currentMap.currentDirection) || 2
+        };
+      }
+    }
+    if (currentPosition) {
+      context.currentMapId = Number(currentPosition.mapId) || 0;
       if (!context.mapViewInitialized) {
         context.selectedMapId = context.currentMapId;
         context.eventId = 0;
         context.mapListExpanded = false;
-        context.teleportDestination = { mapId: pos.mapId, x: pos.x, y: pos.y };
+        context.teleportDestination = { mapId: currentPosition.mapId, x: currentPosition.x, y: currentPosition.y };
         context.mapViewInitialized = true;
       }
     }
-    var destination = context.teleportDestination || pos || { mapId: 0, x: 0, y: 0 };
+    var destination = context.teleportDestination || currentPosition || { mapId: 0, x: 0, y: 0 };
     var currentMapLabel = mapLabel(context.selectedMapId);
     var mapPicker = '<button class="tm-btn tm-map-picker" data-action="toggle-map-list" title="' + escapeHtml(currentMapLabel) + '"><span class="tm-map-picker-label">' + escapeHtml(currentMapLabel) + '</span><span class="tm-map-picker-arrow" aria-hidden="true">▾</span></button>';
     var browseRow = '<div class="tm-map-picker-row">' + mapPicker + '</div><div class="tm-row">' + textInput("tm-browse-query", context.mapQuery, "search", 'placeholder="搜索"') + button("搜索", "render-browse", "primary") + '</div>';
@@ -770,7 +787,6 @@
   function loadEventsForMap(mapId) {
     context.eventAll = [];
     context.eventLoading = false;
-    if (!context.mapViewInitialized) { context.eventLoading = true; return; }
     try {
       var result = mod.listEvents(Number(mapId) || 0);
       context.eventAll = result.values || [];
@@ -1447,7 +1463,19 @@
     }
     if (action === "toggle-system-kind") {
       context.systemKindExpanded = !context.systemKindExpanded;
-      return renderSystem(root.querySelector(".tm-content"));
+      var systemPicker = root.querySelector(".tm-system-kind-picker");
+      var systemTrigger = systemPicker && systemPicker.querySelector(".tm-system-kind-trigger");
+      var systemMenu = systemPicker && systemPicker.querySelector(".tm-system-kind-menu");
+      if (systemTrigger) systemTrigger.setAttribute("aria-expanded", context.systemKindExpanded ? "true" : "false");
+      if (systemMenu) systemMenu.remove();
+      if (context.systemKindExpanded && systemPicker) {
+        systemMenu = document.createElement("div");
+        systemMenu.className = "tm-system-kind-menu";
+        systemMenu.setAttribute("role", "listbox");
+        systemMenu.innerHTML = systemKindOptionsMarkup();
+        systemPicker.appendChild(systemMenu);
+      }
+      return;
     }
     if (action === "select-system-kind") {
       context.systemKind = node.dataset.kind === "variable" ? "variable" : "switch";
@@ -1488,6 +1516,7 @@
       var selectedMap = (context.mapEntries || []).filter(function (entry) { return Number(entry.id) === mapId; })[0];
       fillTeleport(mapId, coordinateOrZero(selectedMap && selectedMap.currentX), coordinateOrZero(selectedMap && selectedMap.currentY));
       context.selectedMapId = mapId;
+      context.mapViewInitialized = true;
       context.eventId = 0;
       context.mapListExpanded = false;
       context.mapQuery = "";
