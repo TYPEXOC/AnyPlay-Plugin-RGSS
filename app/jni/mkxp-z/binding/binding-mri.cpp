@@ -3888,6 +3888,25 @@ module TyranorCheats
       false
     end
 
+    def pokemon_badge_name(index)
+      names = if defined?(Settings) && Settings.respond_to?(:badge_names)
+                Settings.badge_names
+              elsif defined?(Settings) && Settings.const_defined?(:BADGE_NAMES)
+                Settings.const_get(:BADGE_NAMES)
+              end
+      entry = names[index] if names.respond_to?(:[])
+      entry = entry[0] if entry.is_a?(Array)
+      return wire_text(entry) unless entry.to_s.strip.empty?
+
+      if defined?(PBBadges) && PBBadges.respond_to?(:getName)
+        name = PBBadges.getName(index)
+        return wire_text(name) unless name.to_s.strip.empty?
+      end
+      "Badge #{index + 1}"
+    rescue Exception
+      "Badge #{index + 1}"
+    end
+
     def pokemon_move_class
       return Pokemon::Move if defined?(Pokemon::Move)
       return PokeBattle_Move if defined?(PokeBattle_Move)
@@ -5179,7 +5198,7 @@ module TyranorCheats
       end
       if pokemon_badges_supported?
         trainer.badges.each_with_index do |value, index|
-          out << "B\t#{index}\t#{wire_text("Badge #{index + 1}")}\t#{value ? 1 : 0}"
+          out << "B\t#{index}\t#{pokemon_badge_name(index)}\t#{value ? 1 : 0}"
         end
       end
       out.join("\n")
@@ -5276,7 +5295,7 @@ module TyranorCheats
         return NOPE unless pokemon_badges_supported?
         return "Choose a valid badge." unless index_text.to_s =~ /\A\d+\z/ && index_text.to_i < trainer.badges.length
         trainer.badges[index_text.to_i] = enabled
-        "Badge #{index_text.to_i + 1} updated."
+        "#{pokemon_badge_name(index_text.to_i)} updated."
       when "pokedex"
         return NOPE unless pokemon_dex_supported?
         trainer.has_pokedex = enabled

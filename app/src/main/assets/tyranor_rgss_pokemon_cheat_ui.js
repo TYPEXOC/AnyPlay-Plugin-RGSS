@@ -186,6 +186,7 @@
     if (panelFrame) panelFrame.classList.toggle("tm-quick-fit", tab === "quick");
     renderTabs();
     var content = panel.querySelector(".tm-content");
+    content.classList.remove("tm-pokemon-progress-page");
     var readySnapshot = typeof mod.isReadySnapshot === "function" ? mod.isReadySnapshot() : { value: mod.isReady(), loading: false };
     if (readySnapshot && !readySnapshot.loading) runtimeReady = !!readySnapshot.value;
     if (runtimeReady === false) {
@@ -602,6 +603,7 @@
     body.innerHTML = navigation + deposit + '<div class="tm-list">' + rows + '</div>';
   }
   function renderProgress(content) {
+    content.classList.add("tm-pokemon-progress-page");
     var progress = mod.listPokemonProgress() || { badges: [], dexes: [] };
     if (progress.loading) { content.innerHTML = '<div class="tm-note">' + esc(tr("加载中…")) + '</div>'; return; }
     var rows = [];
@@ -612,7 +614,7 @@
         (dex.unlocked ? "checked" : "") + '></label>');
     });
     (progress.badges || []).forEach(function (badge) {
-      rows.push('<label class="tm-pokemon-toggle"><span>' + esc(tr("徽章") + " " + (Number(badge.index) + 1)) + '</span><input class="tm-switch" type="checkbox" data-action="pokemon-progress" data-kind="badge" data-index="' + badge.index + '" ' +
+      rows.push('<label class="tm-pokemon-toggle"><span>' + esc(badge.name || (tr("徽章") + " " + (Number(badge.index) + 1))) + '</span><input class="tm-switch" type="checkbox" data-action="pokemon-progress" data-kind="badge" data-index="' + badge.index + '" ' +
         (badge.obtained ? "checked" : "") + '></label>');
     });
     if (progress.hasPokedex == null && !hasFeature("pokemonDex")) {
@@ -624,8 +626,8 @@
     if (!(progress.badges || []).length && !hasFeature("pokemonBadges")) {
       rows.push('<div class="tm-pokemon-toggle unsupported"><span>' + esc(tr("徽章")) + '</span>' + button("设置", "unsupported-option", "unsupported", 'data-reason="此功能对当前宝可梦游戏不可用" aria-disabled="true"') + '</div>');
     }
-    var html = rows.length ? card("徽章与图鉴", (progress.badges && progress.badges.length ? '<div class="tm-row">' + button("获得全部徽章", "all-badges", "primary", 'data-obtained="1"') +
-      button("移除全部徽章", "all-badges", "", 'data-obtained="0"') + '</div>' : "") + rows.join("")) :
+    var html = rows.length ? card("徽章与图鉴", (progress.badges && progress.badges.length ? '<div class="tm-row tm-pokemon-progress-actions">' + button("获得全部徽章", "all-badges", "primary", 'data-obtained="1"') +
+      button("移除全部徽章", "all-badges", "", 'data-obtained="0"') + '</div>' : "") + '<div class="tm-list tm-pokemon-progress-list">' + rows.join("") + '</div>', "tm-fill-card tm-pokemon-progress-card") :
       '<div class="tm-note">' + esc(tr("当前游戏没有公开徽章或图鉴接口")) + '</div>';
     content.innerHTML = html;
   }
