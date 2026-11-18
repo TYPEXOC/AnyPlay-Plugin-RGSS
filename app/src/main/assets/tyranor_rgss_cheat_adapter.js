@@ -191,6 +191,7 @@
     var affected = {
       setFlag: ["getState"], setSpeed: ["getState"], setGameSpeed: ["getState"], setRewardMultiplier: ["getState"],
       setGold: ["getGold"], setCoins: ["getCoins"],
+      maximizeGold: ["getGold"], maximizeCoins: ["getCoins"],
       give: ["listDatabase", "itemCount", "listBagCategories"],
       setItemCount: ["listDatabase", "itemCount"], setItemLock: ["listDatabase"],
       setActorStat: ["listActors", "battleSnapshot"], setActorClass: ["listActors", "actorClasses"],
@@ -278,6 +279,8 @@
     getCoinsSnapshot: function () { return cachedReadSnapshot("getCoins", [], 0, 1000); },
     setGold: function (value) { return invoke("setGold", [value]); },
     setCoins: function (value) { return invoke("setCoins", [value]); },
+    maximizeGold: function () { return invoke("maximizeGold"); },
+    maximizeCoins: function () { return invoke("maximizeCoins"); },
     listDatabase: function (kind, query, offset, limit, category) {
       var values = cachedRead("listDatabase", [kind, query, offset, limit, category || ""], { total: 0, values: [] }, 2000);
       return values || { total: 0, values: [] };

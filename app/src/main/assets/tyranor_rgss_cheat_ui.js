@@ -125,12 +125,14 @@
     value = Math.floor(value);
     if ((context.gold != null && Number(context.gold) === value) || goldCommitPending === value) return;
     goldCommitPending = value;
-    return run(function () { return mod.setGold(value); }, function () {
-      context.gold = value;
+    return run(function () { return mod.setGold(value); }, function (actualValue) {
+      var appliedValue = Number(actualValue);
+      if (!Number.isFinite(appliedValue)) appliedValue = value;
+      context.gold = appliedValue;
       var current = root && root.querySelector("#tm-gold-current");
-      if (current) current.textContent = String(value);
+      if (current) current.textContent = String(appliedValue);
       if (input.isConnected) {
-        input.value = String(value);
+        input.value = String(appliedValue);
         fitGoldInput(input);
       }
       toast("金币已修改");
@@ -1322,8 +1324,10 @@
     }
     if (action === "set-exp-multiplier") return run(function () { return mod.setRewardMultiplier("expMultiplier", inputValue("tm-exp-multiplier")); }, function () { toast("经验倍率已设置"); });
     if (action === "set-drop-multiplier") return run(function () { return mod.setRewardMultiplier("dropMultiplier", inputValue("tm-drop-multiplier")); }, function () { toast("掉落倍率已设置"); });
-    if (action === "max-gold") return run(function () { mod.setGold(99999999); }, function () {
-      context.gold = 99999999;
+    if (action === "max-gold") return run(function () { return mod.maximizeGold(); }, function (actualValue) {
+      var appliedValue = Number(actualValue);
+      if (!Number.isFinite(appliedValue)) appliedValue = context.gold || 0;
+      context.gold = appliedValue;
       var current = root.querySelector("#tm-gold-current");
       var input = root.querySelector("#tm-gold");
       if (current) current.textContent = String(context.gold);

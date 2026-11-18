@@ -1585,22 +1585,28 @@
     if (action === "pokemon-progress") return;
     if (action === "set-gold" || action === "max-gold") {
       if (!capabilitiesResolved || !hasValue("gold")) return toast(unavailableReason(), true);
-      var amount = action === "max-gold" ? 99999999 : Number(value("tm-pokemon-gold"));
-      if (!Number.isFinite(amount) || amount < 0) return toast(tr("请输入有效金额"), true);
-      return run(function () { return mod.setGold(amount); }, function () {
-        quickCurrencyCache.gold = amount;
-        updateQuickCurrencyDisplay("gold", amount);
-        toast(tr("金钱已修改"));
+      var maximizingGold = action === "max-gold";
+      var amount = Number(value("tm-pokemon-gold"));
+      if (!maximizingGold && (!Number.isFinite(amount) || amount < 0)) return toast(tr("请输入有效金额"), true);
+      return run(function () { return maximizingGold ? mod.maximizeGold() : mod.setGold(amount); }, function (actualValue) {
+        var appliedValue = Number(actualValue);
+        if (!Number.isFinite(appliedValue)) appliedValue = maximizingGold ? (quickCurrencyCache.gold || 0) : amount;
+        quickCurrencyCache.gold = appliedValue;
+        updateQuickCurrencyDisplay("gold", appliedValue);
+        toast(tr(maximizingGold ? "金钱已拉满" : "金钱已修改"));
       });
     }
     if (action === "set-coins" || action === "max-coins") {
       if (!capabilitiesResolved || !hasValue("coins")) return toast(unavailableReason(), true);
-      var coinAmount = action === "max-coins" ? 999999 : Number(value("tm-pokemon-coins"));
-      if (!Number.isFinite(coinAmount) || coinAmount < 0) return toast(tr("请输入有效金额"), true);
-      return run(function () { return mod.setCoins(coinAmount); }, function () {
-        quickCurrencyCache.coins = coinAmount;
-        updateQuickCurrencyDisplay("coins", coinAmount);
-        toast(tr("游戏币已修改"));
+      var maximizingCoins = action === "max-coins";
+      var coinAmount = Number(value("tm-pokemon-coins"));
+      if (!maximizingCoins && (!Number.isFinite(coinAmount) || coinAmount < 0)) return toast(tr("请输入有效金额"), true);
+      return run(function () { return maximizingCoins ? mod.maximizeCoins() : mod.setCoins(coinAmount); }, function (actualValue) {
+        var appliedValue = Number(actualValue);
+        if (!Number.isFinite(appliedValue)) appliedValue = maximizingCoins ? (quickCurrencyCache.coins || 0) : coinAmount;
+        quickCurrencyCache.coins = appliedValue;
+        updateQuickCurrencyDisplay("coins", appliedValue);
+        toast(tr(maximizingCoins ? "游戏币已拉满" : "游戏币已修改"));
       });
     }
     if (action === "recover-pokemon") return run(function () { return mod.recoverPokemon(Number(node.dataset.index)); }, function () { toast(tr("宝可梦已恢复")); renderTeam(panel.querySelector(".tm-content")); });
@@ -1827,9 +1833,11 @@
       var currency = Number(node.value);
       if (!Number.isFinite(currency) || currency < 0) return toast(tr("请输入有效金额"), true);
       var settingCoins = node.dataset.currencyKind === "coins";
-      return run(function () { return settingCoins ? mod.setCoins(currency) : mod.setGold(currency); }, function () {
-        quickCurrencyCache[settingCoins ? "coins" : "gold"] = currency;
-        updateQuickCurrencyDisplay(settingCoins ? "coins" : "gold", currency);
+      return run(function () { return settingCoins ? mod.setCoins(currency) : mod.setGold(currency); }, function (actualValue) {
+        var appliedValue = Number(actualValue);
+        if (!Number.isFinite(appliedValue)) appliedValue = currency;
+        quickCurrencyCache[settingCoins ? "coins" : "gold"] = appliedValue;
+        updateQuickCurrencyDisplay(settingCoins ? "coins" : "gold", appliedValue);
         toast(tr(settingCoins ? "游戏币已修改" : "金钱已修改"));
       });
     }

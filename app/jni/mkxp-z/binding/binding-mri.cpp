@@ -7946,6 +7946,7 @@ module TyranorCheats
       when 'fullInventory' then full_inventory
       when 'recoverParty'  then recover_party
       when 'maxGold'       then max_gold
+      when 'maxCoins'      then max_coins
       when 'forceVictory'  then force_victory
       when 'forceDefeat'   then force_defeat
       when 'forceEscape'   then force_escape
@@ -8314,6 +8315,17 @@ module TyranorCheats
       end
     rescue Exception => e
       "Couldn't maximize gold: #{e.class}: #{e.message}"
+    end
+
+    def max_coins
+      resource = coin_resource
+      return NOPE unless resource
+      maximum = if defined?(MAXCOINS) then MAXCOINS.to_i else 999_999 end
+      actual = set_coins(maximum)
+      return NOPE if actual.nil?
+      "Coins set to #{actual}"
+    rescue Exception => e
+      "Couldn't maximize coins: #{e.class}: #{e.message}"
     end
 
     def force_victory

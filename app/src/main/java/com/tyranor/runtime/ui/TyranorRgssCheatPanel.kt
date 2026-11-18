@@ -323,6 +323,12 @@ class TyranorRgssCheatPanel(
                 }
                 "getGold" -> cheats.getGold { done(it ?: 0) }
                 "getCoins" -> cheats.getCoins { done(it ?: 0) }
+                "maximizeGold" -> cheats.runAction("maxGold") { message ->
+                    completeMessage(message, done) { cheats.getGold { done(it ?: 0) } }
+                }
+                "maximizeCoins" -> cheats.runAction("maxCoins") { message ->
+                    completeMessage(message, done) { cheats.getCoins { done(it ?: 0) } }
+                }
                 "setGold" -> cheats.setValue("gold", argString(a, 0)) { message ->
                     completeMessage(message, done) {
                         cheats.getGold { done(it ?: 0) }
