@@ -1176,8 +1176,8 @@
     function sideCard(title, side, units) {
       var unitRows = units.map(function (unit) { return battleUnitHtml(unit, side); }).join("");
       var noUnits = snapshot.inBattle && units.length ? "" : "disabled";
-      var mpButton = units.some(function (unit) { return !!unit.mpSupported; })
-        ? button(translated("MP 补满"), "battle-side-action", "", 'data-side="' + side + '" data-operation="mp" ' + noUnits) : "";
+      var mpDisabled = noUnits || !units.some(function (unit) { return !!unit.mpSupported; }) ? "disabled" : "";
+      var mpButton = button(translated("MP 补满"), "battle-side-action", "", 'data-side="' + side + '" data-operation="mp" ' + mpDisabled);
       var tpButton = units.some(function (unit) { return !!unit.tpSupported; })
         ? button(translated("TP 补满"), "battle-side-action", "", 'data-side="' + side + '" data-operation="tp" ' + noUnits) : "";
       var bulkActions = '<div class="tm-battle-side-actions">' +
