@@ -48,10 +48,12 @@ html[data-theme="dark"] #tyranor-mod-root{color:#eef3f0}html[data-theme="dark"] 
 .tm-fill-card{height:100%;display:flex;flex-direction:column;min-height:0}
 .tm-fill-card h3{flex:0 0 auto}
 .tm-fill-card .tm-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
-.tm-content.tm-pokemon-progress-page{display:flex;min-height:0;overflow:hidden;overscroll-behavior:contain}
-.tm-pokemon-progress-card{flex:1 1 auto;min-height:0}
+.tm-content.tm-pokemon-progress-page{display:flex;flex-direction:column;min-height:0;overflow:hidden;overscroll-behavior:contain}
+.tm-pokemon-progress-card{height:auto;flex:1 1 0;min-height:0}
 .tm-pokemon-progress-actions{flex:0 0 auto}
 .tm-pokemon-progress-card .tm-pokemon-progress-list{overscroll-behavior:contain}
+.tm-pokemon-progress-subheading{flex:0 0 auto;margin-top:5px;padding:9px 2px 2px;border-top:1px solid #e0e5e2;font-weight:700;color:#53605a}
+html[data-theme="dark"] .tm-pokemon-progress-subheading{border-color:#343c37;color:#c9d2cc}
 .tm-actor-collection-list{max-height:min(52vh,420px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .tm-row>.tm-row{flex:1 1 0;width:1%}
 .tm-actor-collection-list .tm-item .tm-name{white-space:normal;overflow-wrap:anywhere}
