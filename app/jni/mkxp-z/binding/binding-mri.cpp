@@ -3213,13 +3213,19 @@ module TyranorCheats
     # :essentials = Pokemon Essentials (v17-v19 style, and v20/v21 style),
     # :xp / :vx / :ace = plain RPG Maker XP / VX / VX Ace games.
     def engine
+      # Prefer the modern Essentials API even when a game also loads legacy
+      # PokeBattle compatibility classes. The latter can otherwise make the
+      # editor use PBExperience and integer IDs in a GameData-based game.
+      if defined?(Battle) && defined?(Pokemon) && defined?(PokemonBag) && defined?(GameData)
+        @gd = nil unless @engine == :essentials && @ess21
+        @engine = :essentials
+        @ess21 = true
+        return @engine
+      end
       return @engine if @engine
       if defined?(PokeBattle_Battle) && defined?(PokemonBag) && (defined?(PokeBattle_Pokemon) || defined?(Pokemon))
         @engine = :essentials
         @ess21 = false
-      elsif defined?(Battle) && defined?(Pokemon) && defined?(PokemonBag) && defined?(GameData)
-        @engine = :essentials
-        @ess21 = true
       elsif defined?(Game_Actor) && defined?(Game_Party)
         m = Game_Actor.instance_methods
         @engine = if m.include?(:tp) && m.include?(:mp) then :ace
@@ -3322,7 +3328,11 @@ module TyranorCheats
     # newer, and by number (PBItems / PBSpecies) in v17 and older.
     def gd?
       return @gd unless @gd.nil?
-      @gd = (ess? && defined?(GameData::Item) && GameData::Item.respond_to?(:each)) ? true : false
+      @gd = ess? && (
+        (defined?(GameData::Item) && (GameData::Item.respond_to?(:each) || GameData::Item.respond_to?(:get))) ||
+        (defined?(GameData::Species) && (GameData::Species.respond_to?(:each) || GameData::Species.respond_to?(:get))) ||
+        (defined?(GameData::Nature) && (GameData::Nature.respond_to?(:each) || GameData::Nature.respond_to?(:get)))
+      ) ? true : false
     rescue Exception
       false
     end
@@ -4098,22 +4108,33 @@ module TyranorCheats
     end
 
     def max_level
-      if gd?
-        (GameData::GrowthRate.max_level rescue Settings::MAXIMUM_LEVEL)
-      else
-        PBExperience::MAXLEVEL
-      end
+      maximum = if defined?(GameData::GrowthRate) && GameData::GrowthRate.respond_to?(:max_level)
+                  (GameData::GrowthRate.max_level rescue nil)
+                end
+      maximum = Settings::MAXIMUM_LEVEL if (!maximum || maximum.to_i <= 0) && defined?(Settings::MAXIMUM_LEVEL)
+      maximum = PBExperience::MAXLEVEL if (!maximum || maximum.to_i <= 0) && defined?(PBExperience::MAXLEVEL)
+      maximum = 100 if !maximum || maximum.to_i <= 0
+      maximum.to_i
     end
 
     def max_exp_of(p)
-      if gd?
-        growth_rate = p.growth_rate
+      growth_rate = if p.respond_to?(:growth_rate)
+                      p.growth_rate
+                    elsif gd? && p.respond_to?(:growthrate) && defined?(GameData::GrowthRate) && GameData::GrowthRate.respond_to?(:get)
+                      (GameData::GrowthRate.get(p.growthrate) rescue nil)
+                    end
+      if growth_rate && !growth_rate.respond_to?(:maximum_exp) && !growth_rate.respond_to?(:minimum_exp_for_level) &&
+         defined?(GameData::GrowthRate) && GameData::GrowthRate.respond_to?(:get)
+        growth_rate = (GameData::GrowthRate.get(growth_rate) rescue growth_rate)
+      end
+      if growth_rate
         return growth_rate.maximum_exp if growth_rate.respond_to?(:maximum_exp)
         return growth_rate.minimum_exp_for_level(max_level) if growth_rate.respond_to?(:minimum_exp_for_level)
-        raise NoMethodError, "growth rate doesn't expose an experience limit"
-      else
-        PBExperience.pbGetMaxExperience(p.growthrate)
       end
+      if defined?(PBExperience) && PBExperience.respond_to?(:pbGetMaxExperience) && p.respond_to?(:growthrate)
+        return PBExperience.pbGetMaxExperience(p.growthrate)
+      end
+      raise NoMethodError, "growth rate doesn't expose an experience limit"
     end
 
     # ------------------------------------------------------------- commands
@@ -5479,10 +5500,14 @@ module TyranorCheats
       return NOPE unless candidate
       case field
       when 'nature'
-        pokemon.nature = gd? ? key.to_sym : key.to_i
+        value = candidate[0]
+        value = value.to_sym if gd? && value.is_a?(String)
+        pokemon.nature = value
         mon_calc(pokemon)
       when 'ability'
-        pokemon.ability = gd? ? key.to_sym : key.to_i
+        value = candidate[0]
+        value = value.to_sym if gd? && value.is_a?(String)
+        pokemon.ability = value
       when 'form'
         pokemon.form = key.to_i
         mon_calc(pokemon)
@@ -5496,6 +5521,8 @@ module TyranorCheats
       else
         return NOPE
       end
+      actual = pokemon_trait_value(pokemon, field)
+      return "Couldn't change Pokemon property: the game kept the previous value." if actual.to_s != candidate[0].to_s
       "#{wire_text(pokemon_display_name(pokemon))} #{field} set to #{wire_text(candidate[1])}"
     rescue Exception => e
       "Couldn't change Pokemon property: #{e.class}: #{e.message}"
@@ -5596,19 +5623,23 @@ module TyranorCheats
         value = [[value, 1].max, max_level].min
         pokemon.level = value
         mon_calc(pokemon)
+        value = pokemon.level.to_i if pokemon.respond_to?(:level)
       when 'exp'
         return NOPE unless pokemon.respond_to?(:exp=)
         value = [value, max_exp_of(pokemon)].min
         pokemon.exp = value
         mon_calc(pokemon)
+        value = pokemon.exp.to_i if pokemon.respond_to?(:exp)
       when 'hp'
         return NOPE unless pokemon.respond_to?(:hp=) && pokemon.respond_to?(:totalhp)
         value = [[value, 0].max, pokemon.totalhp.to_i].min
         pokemon.hp = value
+        value = pokemon.hp.to_i if pokemon.respond_to?(:hp)
       when 'happiness'
         return NOPE unless pokemon.respond_to?(:happiness=)
         value = [[value, 0].max, 255].min
         pokemon.happiness = value
+        value = pokemon.happiness.to_i if pokemon.respond_to?(:happiness)
       when /\Aiv_([0-5])\z/
         return NOPE unless pokemon.respond_to?(:iv=)
         slot = field[3, 1].to_i
@@ -5619,7 +5650,8 @@ module TyranorCheats
         return NOPE unless set_pokemon_stat_value(stats, slot, value)
         pokemon.iv = stats
         mon_calc(pokemon)
-        value = pokemon_stat_value(stats, slot)
+        actual_stats = pokemon_stat_data(pokemon, :iv)
+        value = pokemon_stat_value(actual_stats, slot)
       when /\Aev_([0-5])\z/
         return NOPE unless pokemon.respond_to?(:ev=)
         slot = field[3, 1].to_i
@@ -5633,7 +5665,8 @@ module TyranorCheats
         return NOPE unless set_pokemon_stat_value(stats, slot, value)
         pokemon.ev = stats
         mon_calc(pokemon)
-        value = pokemon_stat_value(stats, slot)
+        actual_stats = pokemon_stat_data(pokemon, :ev)
+        value = pokemon_stat_value(actual_stats, slot)
       else
         return NOPE
       end
