@@ -203,7 +203,7 @@ data class PadProfile(
             }
 
         /**
-         * 出厂默认方案：右侧动作键列 + 右下 QWZX 菱形 + 左下方向摇杆。
+         * 出厂默认方案：右侧动作键列 + 右下 QWZX 菱形 + 与其水平对齐的左下方向摇杆。
          *
          * 名称与按钮文字为语言中立的 ASCII（方案名/按钮文字是随方案持久化的用户数据，
          * 不参与界面文案本地化；默认方案的展示名在设置页按 id 映射到字符串资源）。
@@ -239,10 +239,10 @@ data class PadProfile(
                     action("pageup", "PageUp", 0.415f, listOf(pageUp)),
                     action("pagedown", "PageDn", 0.33f, listOf(pageDown)),
                     action("tab", "Tab", 0.245f, listOf(tab)),
-                    qwzx("q", "Q", 0.695f, 0.885f, KeyEvent.KEYCODE_Q),
-                    qwzx("w", "W", 0.78f, 0.80f, KeyEvent.KEYCODE_W),
-                    qwzx("z", "Z", 0.78f, 0.97f, KeyEvent.KEYCODE_Z),
-                    qwzx("x", "X", 0.865f, 0.885f, KeyEvent.KEYCODE_X),
+                    qwzx("q", "Q", 0.695f, PadDirection().y, KeyEvent.KEYCODE_Q),
+                    qwzx("w", "W", 0.78f, PadDirection().y - 0.085f, KeyEvent.KEYCODE_W),
+                    qwzx("z", "Z", 0.78f, PadDirection().y + 0.085f, KeyEvent.KEYCODE_Z),
+                    qwzx("x", "X", 0.865f, PadDirection().y, KeyEvent.KEYCODE_X),
                 ),
                 direction = PadDirection(),
             )
@@ -394,7 +394,7 @@ data class PadProfile(
                 buttonsObj.optJSONObject("qwzx")?.let { legacy ->
                     touched = true
                     val cx = legacyCoord(legacy, "x", 0.78f, viewport.width)
-                    val cy = legacyCoord(legacy, "y", 0.885f, viewport.height)
+                    val cy = legacyCoord(legacy, "y", defaults.direction.y, viewport.height)
                     val visible = legacy.optBoolean("visible", true)
                     migrated.removeAll { it.id in setOf("q", "w", "z", "x") }
                     LEGACY_QWZX.forEach { (btnId, keyCode, offset) ->

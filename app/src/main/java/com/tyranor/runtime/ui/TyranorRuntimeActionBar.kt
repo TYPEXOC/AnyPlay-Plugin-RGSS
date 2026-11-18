@@ -67,7 +67,7 @@ class TyranorRuntimeActionBar(
                 action.view,
                 FrameLayout.LayoutParams(dp(BUTTON_SIZE_DP, density), dp(BUTTON_SIZE_DP, density), Gravity.TOP or Gravity.LEFT),
             )
-            positionAction(activity, parent, action, density)
+            positionAction(activity, parent, action, density, actions.size)
             bindMoveGesture(activity, parent, action, density)
         }
         refresh()
@@ -93,6 +93,7 @@ class TyranorRuntimeActionBar(
         parent: FrameLayout,
         action: RuntimeAction,
         density: Float,
+        actionCount: Int,
     ) {
         action.view.post {
             val params = action.view.layoutParams as? FrameLayout.LayoutParams ?: return@post
@@ -105,9 +106,11 @@ class TyranorRuntimeActionBar(
                 params.topMargin = (saved.second * maxTop).roundToInt()
             } else {
                 params.leftMargin = dp(DEFAULT_LEFT_DP, density).coerceIn(0, maxLeft)
-                params.topMargin = (parent.height * DEFAULT_CENTER_Y[action.defaultIndex] - action.view.height / 2f)
-                    .roundToInt()
-                    .coerceIn(0, maxTop)
+                val buttonHeight = action.view.height
+                val gap = dp(DEFAULT_GAP_DP, density)
+                val groupHeight = buttonHeight * actionCount + gap * (actionCount - 1).coerceAtLeast(0)
+                val groupTop = ((parent.height - groupHeight) / 2).coerceAtLeast(0)
+                params.topMargin = (groupTop + action.defaultIndex * (buttonHeight + gap)).coerceIn(0, maxTop)
             }
             action.view.layoutParams = params
         }
@@ -190,7 +193,7 @@ class TyranorRuntimeActionBar(
     private companion object {
         const val BUTTON_SIZE_DP = 48
         const val DEFAULT_LEFT_DP = 16
-        val DEFAULT_CENTER_Y = floatArrayOf(0.18f, 0.50f, 0.82f)
+        const val DEFAULT_GAP_DP = 10
     }
 
     private class ActionIcon(

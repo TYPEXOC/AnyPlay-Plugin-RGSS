@@ -42,8 +42,6 @@ class TynRuntimeUi(
     private val activity: Activity,
     parent: ViewGroup,
     private val initialCheatEngine: String,
-    padProfilePath: String?,
-    padProfileUri: android.net.Uri?,
     padEnabled: Boolean,
     private val primaryColor: Int,
     private val onPrimaryColor: Int,
@@ -75,10 +73,10 @@ class TynRuntimeUi(
     init {
         parent.addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        val padProfile = padProfilePath
-            ?.let { path -> runCatching { PadProfile.parse(File(path).readText()) }.getOrNull() }
+        val padProfile = activity.filesDir.resolve("rgss-pad-profile.json")
+            .let { file -> runCatching { if (file.isFile) PadProfile.parse(file.readText()) else null }.getOrNull() }
             ?: PadProfile.defaultProfile()
-        controller = TyranorPadController(activity, root, padProfile, padProfileUri, padEnabled, primaryColor, onPrimaryColor)
+        controller = TyranorPadController(activity, root, padProfile, padEnabled, primaryColor, onPrimaryColor)
         controller.pad.floatingButtonVisible = false
         mouseController = TyranorMouseController(activity, root)
         // Keep the configured virtual-pad hit targets above the transparent mouse layer. Unclaimed

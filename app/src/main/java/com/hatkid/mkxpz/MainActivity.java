@@ -58,7 +58,6 @@ public class MainActivity extends SDLActivity
     private static final String GAME_PATH_DEFAULT = Environment.getExternalStorageDirectory() + "/mkxp-z";
     private static String GAME_PATH = GAME_PATH_DEFAULT;
     private static String GAME_FOLDER = GAME_PATH_DEFAULT;
-    private static String PAD_PROFILE_PATH;
     private static String OBB_MAIN_FILENAME;
     private static boolean DEBUG = false;
 
@@ -76,8 +75,6 @@ public class MainActivity extends SDLActivity
     private static final String TYN_EXTRA_GAME_ID = "com.tyranor.runtime.extra.GAME_ID";
     private static final String TYN_EXTRA_TRANSLATION_MAP_URI = "com.tyranor.runtime.extra.TRANSLATION_MAP_URI";
     private static final String TYN_EXTRA_PAD_ENABLED = "com.tyranor.runtime.extra.PAD_ENABLED";
-    private static final String TYN_EXTRA_PAD_PROFILE_URI = "com.tyranor.runtime.extra.PAD_PROFILE_URI";
-    private static final String TYN_EXTRA_PAD_PROFILE_ID = "com.tyranor.runtime.extra.PAD_PROFILE_ID";
     private static final String TYN_EXTRA_RUBY_RUNTIME = "com.tyranor.runtime.extra.RUBY_RUNTIME";
     private static final String TYN_EXTRA_RGSS_OPTIONS = "com.tyranor.runtime.extra.RGSS_OPTIONS";
     private static final String TYN_EXTRA_RTP_ROOT = "com.tyranor.runtime.extra.RTP_ROOT";
@@ -106,7 +103,6 @@ public class MainActivity extends SDLActivity
     private int mThemePrimaryColor = 0xFF18B978;
     private int mThemeOnPrimaryColor = 0xFFFFFFFF;
     private boolean mThemeDarkMode;
-    private String mPadProfileUri;
     private String mTranslationMapUri;
     private String mGameId;
     private String mTynRtpRoot;
@@ -322,7 +318,6 @@ public class MainActivity extends SDLActivity
                 Log.w(TAG, "Ignoring invalid TYN RGSS options", error);
                 mTynRgssOptions = null;
             }
-            mPadProfileUri = intent.getStringExtra(TYN_EXTRA_PAD_PROFILE_URI);
             mTynRtpRoot = intent.getStringExtra(TYN_EXTRA_RTP_ROOT);
             mThemePrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_PRIMARY_COLOR, mThemePrimaryColor);
             mThemeOnPrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_ON_PRIMARY_COLOR, mThemeOnPrimaryColor);
@@ -462,15 +457,6 @@ public class MainActivity extends SDLActivity
             } catch (Exception error) {
                 TynRuntimeDiagnostics.append(mSessionDir,
                     "Could not expose RGSS generation to the virtual translation preload", error);
-            }
-
-            File profile = new File(mSessionDir, "tyranor_pad_profile.json");
-            PAD_PROFILE_PATH = profile.getAbsolutePath();
-            if (mPadProfileUri != null) {
-                TynRuntimeDiagnostics.append(mSessionDir, "Runtime setup: importing virtual-pad profile");
-                boolean copied = copyUriToFile(mPadProfileUri, profile, 1024 * 1024);
-                TynRuntimeDiagnostics.append(mSessionDir,
-                    copied ? "Virtual-pad profile imported" : "Virtual-pad profile import failed");
             }
 
             if (mTranslationMapUri != null) {
@@ -1109,25 +1095,6 @@ public class MainActivity extends SDLActivity
         }
     }
 
-    private boolean copyUriToFile(String uriText, File destination, int maxBytes)
-    {
-        try (InputStream input = getContentResolver().openInputStream(Uri.parse(uriText)); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
-            if (input == null) return false;
-            byte[] buffer = new byte[8192];
-            int count;
-            while ((count = input.read(buffer)) >= 0) {
-                if (bytes.size() + count > maxBytes) return false;
-                bytes.write(buffer, 0, count);
-            }
-            writeAtomically(destination, bytes.toString("UTF-8"));
-            return true;
-        } catch (Exception error) {
-            Log.w(TAG, "Could not read granted content URI", error);
-            TynRuntimeDiagnostics.append(mSessionDir, "Could not read a granted runtime content URI", error);
-            return false;
-        }
-    }
-
     private static void writeAtomically(File destination, String text) throws java.io.IOException
     {
         File parent = destination.getParentFile();
@@ -1255,8 +1222,6 @@ public class MainActivity extends SDLActivity
                 this,
                 mLayout,
                 mLaunchDetectedCheatEngine,
-                PAD_PROFILE_PATH,
-                mPadProfileUri == null ? null : Uri.parse(mPadProfileUri),
                 mPadEnabled,
                 mThemePrimaryColor,
                 mThemeOnPrimaryColor,

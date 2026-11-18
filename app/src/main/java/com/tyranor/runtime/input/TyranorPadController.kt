@@ -1,7 +1,6 @@
 package com.tyranor.runtime.input
 
 import android.app.Activity
-import android.net.Uri
 import android.view.ViewGroup
 import android.widget.FrameLayout
 
@@ -10,7 +9,6 @@ class TyranorPadController(
     private val activity: Activity,
     private val parent: FrameLayout,
     profile: PadProfile,
-    private val profileUri: Uri?,
     enabled: Boolean,
     primaryColor: Int,
     onPrimaryColor: Int,
@@ -109,13 +107,7 @@ class TyranorPadController(
     private fun persistProfile(profile: PadProfile) {
         val json = profile.toJson()
         runCatching {
-            activity.filesDir.resolve("tyranor-pad-profile.json").writeText(json)
-        }
-        val uri = profileUri ?: return
-        runCatching {
-            activity.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter(Charsets.UTF_8)?.use {
-                it.write(json)
-            }
+            activity.filesDir.resolve("rgss-pad-profile.json").writeText(json)
         }
     }
 }
