@@ -128,9 +128,10 @@ public class MainActivity extends SDLActivity
 
     private StorageManager mStorageManager;
 
-    // TYN virtual pad, cheat panel, loading indicator, and close-game dialog
+    // TYN virtual pad, cheat panel, startup overlay, and exit confirmation
     private TynRuntimeUi mUi;
     private static MainActivity sInstance;
+    private volatile boolean mGameFirstFrameRendered;
 
     private void runSDLThread()
     {
@@ -1275,9 +1276,20 @@ public class MainActivity extends SDLActivity
     {
         MainActivity a = sInstance;
         if (a != null) {
+            a.mGameFirstFrameRendered = true;
             TynRuntimeDiagnostics.append(a.mSessionDir, "First game frame rendered; runtime reached the game screen");
             if (a.mUi != null) a.mUi.onFirstFrame();
         }
+    }
+
+    @Override
+    protected boolean onNativeMainFinished(int exitCode)
+    {
+        if (exitCode == 0 || mGameFirstFrameRendered || isFinishing() || mUi == null) return false;
+        TynRuntimeDiagnostics.append(mSessionDir,
+            "Native runtime exited with code " + exitCode + " before the first frame; showing startup failure state");
+        mUi.onStartupFailed(null);
+        return true;
     }
 
     /**
@@ -1395,7 +1407,7 @@ public class MainActivity extends SDLActivity
     @Override
     public boolean dispatchKeyEvent(KeyEvent evt)
     {
-        // Back button: show the module's close-game dialog.
+        // Back button: show the module's close-game confirmation dialog.
         if (evt.getKeyCode() == KeyEvent.KEYCODE_BACK) {
             if (evt.getAction() == KeyEvent.ACTION_UP && mUi != null) {
                 mUi.onBack();

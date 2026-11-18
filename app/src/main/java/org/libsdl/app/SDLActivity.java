@@ -937,6 +937,11 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     public static native void nativePermissionResult(int requestCode, boolean result);
     public static native void onNativeLocaleChanged();
 
+    /** Allows a runtime host to keep the Activity open when startup fails before its first frame. */
+    protected boolean onNativeMainFinished(int exitCode) {
+        return false;
+    }
+
     /**
      * This method is called by SDL using JNI.
      */
@@ -1928,13 +1933,16 @@ class SDLMain implements Runnable {
 
         Log.v("SDL", "Running main function " + function + " from library " + library);
 
-        SDLActivity.nativeRunMain(library, function, arguments);
+        int exitCode = SDLActivity.nativeRunMain(library, function, arguments);
 
         Log.v("SDL", "Finished main function");
 
         if (SDLActivity.mSingleton != null && !SDLActivity.mSingleton.isFinishing()) {
-            // Let's finish the Activity
             SDLActivity.mSDLThread = null;
+            if (SDLActivity.mSingleton.onNativeMainFinished(exitCode)) {
+                return;
+            }
+            // Let's finish the Activity
             SDLActivity.mSingleton.finish();
         }  // else: Activity is already being destroyed
 

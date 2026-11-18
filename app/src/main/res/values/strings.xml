@@ -22,7 +22,10 @@
     <string name="runtime_diagnostics_export_failed">导出运行日志失败</string>
     <string name="runtime_diagnostics_share_title">分享 TYN RGSS 完整诊断日志</string>
     <string name="runtime_info_source">基于 GPL v2 开源项目 mkxp-z\nhttps://github.com/TYPEXOC/AnyPlay-Plugin-RGSS</string>
-    <string name="tyn_runtime_loading">正在启动游戏…</string>
+    <string name="tyn_runtime_loading">正在启动游戏</string>
+    <string name="tyn_runtime_preparing_game">请稍候，正在准备游戏内容</string>
+    <string name="tyn_runtime_launch_failed">启动失败</string>
+    <string name="tyn_runtime_return_and_retry">请返回后重试</string>
     <string name="tyn_runtime_missing_resource_hint">找不到游戏资源。请检查游戏文件；如果缺少的是 RPG Maker RTP 自带资源，请在 TYN 的 RPG Maker 设置中导入对应版本 RTP 后重试。</string>
     <string name="tyn_runtime_cheat_button">作弊面板</string>
     <string name="tyn_runtime_pad_button">显示或隐藏虚拟按键</string>

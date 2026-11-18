@@ -8,7 +8,6 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -32,10 +31,10 @@ import kotlin.math.abs
 
 /**
  * TYN-owned controls drawn over the RGSS game:
- *  - a loading spinner (until the game draws its first frame),
+ *  - TYN's startup overlay (until the game draws its first frame),
  *  - TYN's configurable virtual pad and edit mode,
  *  - TYN's cheat panel,
- *  - a close-game dialog for the Back button.
+ *  - an explicit close-game confirmation.
  *
  * MainActivity only creates one of these and forwards a few calls.
  */
@@ -59,14 +58,19 @@ class TynRuntimeUi(
     private val density = activity.resources.displayMetrics.density
     private val root = FrameLayout(activity)
     private val loading = FrameLayout(activity)
+    private lateinit var loadingTitle: TextView
+    private lateinit var loadingHint: TextView
+    private lateinit var loadingSpinner: ProgressBar
     private val controller: TyranorPadController
     private val mouseController: TyranorMouseController
     private val cheats = if (cheatsEnabled) TyranorCheatController(activity) else null
     private var cheatMenu: TyranorRgssCheatPanel? = null
     private var actionBar: TyranorRuntimeActionBar? = null
     private var dialog: Dialog? = null
-    private var loadingGone = false
+    private var loadingState = LoadingState.LOADING
     private var fastForwardEnabled = false
+
+    private enum class LoadingState { LOADING, REVEALED, FAILED, DISPOSED }
 
     init {
         parent.addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -86,17 +90,35 @@ class TynRuntimeUi(
         val box = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (20 * density).toInt())
         }
-        box.addView(ProgressBar(activity).apply {
-            isIndeterminate = true
-            indeterminateTintList = ColorStateList.valueOf(Color.WHITE)
-        }, LinearLayout.LayoutParams((56 * density).toInt(), (56 * density).toInt()))
-        box.addView(TextView(activity).apply {
+        loadingTitle = TextView(activity).apply {
             text = activity.getString(R.string.tyn_runtime_loading)
-            setTextColor(0xCCFFFFFF.toInt())
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            if (android.os.Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true
+        }
+        box.addView(loadingTitle, LinearLayout.LayoutParams(-1, -2))
+        loadingSpinner = ProgressBar(activity).apply {
+            isIndeterminate = true
+            indeterminateTintList = ColorStateList.valueOf(primaryColor)
+            contentDescription = activity.getString(R.string.tyn_runtime_loading)
+        }
+        box.addView(loadingSpinner, LinearLayout.LayoutParams((34 * density).toInt(), (34 * density).toInt()).apply {
+            topMargin = (14 * density).toInt()
+        })
+        loadingHint = TextView(activity).apply {
+            text = activity.getString(R.string.tyn_runtime_preparing_game)
+            setTextColor(0xFFBDBDBD.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             gravity = Gravity.CENTER
-            setPadding(0, (14 * density).toInt(), 0, 0)
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        box.addView(loadingHint, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = (12 * density).toInt()
         })
         loading.addView(box, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         root.addView(loading, FrameLayout.LayoutParams(-1, -1))
@@ -143,6 +165,9 @@ class TynRuntimeUi(
             )
         }
 
+        // Keep the startup mask above all runtime controls until the first frame is rendered.
+        loading.bringToFront()
+
         // Load the local cheat WebView under the startup screen so the first tap does not
         // pay WebView startup and asset parsing costs.
         if (cheats != null) {
@@ -157,15 +182,34 @@ class TynRuntimeUi(
     /** Called (from any thread) when the game has drawn its first frame. */
     fun onFirstFrame() {
         activity.runOnUiThread {
-            if (loadingGone) return@runOnUiThread
-            loadingGone = true
-            loading.animate().alpha(0f).setDuration(250).withEndAction {
-                root.removeView(loading)
+            if (loadingState != LoadingState.LOADING) return@runOnUiThread
+            loadingState = LoadingState.REVEALED
+            loading.animate().alpha(0f).setDuration(150).withEndAction {
+                if (loadingState == LoadingState.REVEALED) {
+                    loading.alpha = 1f
+                    loading.visibility = View.GONE
+                }
             }.start()
         }
     }
 
-    /** Back button. Returns true when handled (closes edit mode, or asks "Close game?"). */
+    /** Shows the same retry state as TYN's native startup overlay. */
+    fun onStartupFailed(message: CharSequence? = null) {
+        activity.runOnUiThread {
+            if (loadingState == LoadingState.FAILED || loadingState == LoadingState.DISPOSED) return@runOnUiThread
+            loadingState = LoadingState.FAILED
+            loading.animate().cancel()
+            loading.alpha = 1f
+            loadingTitle.text = activity.getString(R.string.tyn_runtime_launch_failed)
+            loadingHint.text = message?.takeIf { it.isNotBlank() }
+                ?: activity.getString(R.string.tyn_runtime_return_and_retry)
+            loadingSpinner.visibility = View.GONE
+            loading.visibility = View.VISIBLE
+            loading.bringToFront()
+        }
+    }
+
+    /** Back button. Returns true when handled (closes edit mode or asks before exiting). */
     fun onBack(): Boolean {
         if (cheatMenu?.handleBack() == true) return true
         if (controller.handleBack()) return true
@@ -209,9 +253,11 @@ class TynRuntimeUi(
     }
 
     fun onDestroy() {
+        loadingState = LoadingState.DISPOSED
         fastForwardEnabled = false
         writeFastForwardState()
         dialog?.dismiss()
+        loading.animate().cancel()
         cheatMenu?.destroy()
         cheats?.shutdown()
         mouseController.shutdown()
@@ -261,7 +307,7 @@ class TynRuntimeUi(
         }
     }
 
-    // ---- Close-game dialog -------------------------------------------------
+    // ---- Close-game confirmation -----------------------------------------
 
     private fun showCloseDialog() {
         if (dialog?.isShowing == true) return
@@ -327,4 +373,5 @@ class TynRuntimeUi(
             clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         }
     }
+
 }
