@@ -8521,15 +8521,11 @@ module TyranorCheats
       when :essentials
         b = @battle
         return NEED_BATTLE unless b
-        foes = b.battlers.compact.select { |x| battle_battler_present?(x) && foe?(b, x.index) && !x.fainted? }
-        foes.each do |f|
-          f.pbReduceHP(f.hp, false)
-          f.pbFaint(true)
-        end
-        foe_party = b.respond_to?(:party2) ? b.party2 : b.pbParty(1)
-        (foe_party || []).each { |p| p.hp = 0 if p }
-        b.pbJudge
-        "Foes defeated. Choose any command to finish the battle."
+        # Let Essentials' battle loop perform the victory cleanup on its next
+        # update. Calling pbFaint/pbJudge directly from the cheat command path
+        # can run scene transitions re-entrantly in some game forks.
+        b.instance_variable_set(:@decision, 1)
+        "Victory requested"
       when :xp, :vx, :ace
         return NEED_BATTLE unless in_battle?
         foes = if $game_troop.respond_to?(:enemies) then $game_troop.enemies
