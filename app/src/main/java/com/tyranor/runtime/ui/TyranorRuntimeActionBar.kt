@@ -38,6 +38,7 @@ class TyranorRuntimeActionBar(
 
     init {
         val density = activity.resources.displayMetrics.density
+        PadOverlayPrefs.migrateRuntimeActionLayout(activity)
         // Keep the pad control visible even when the pad starts hidden, so the player can
         // enable it without leaving the game.
         cheatButton = if (showCheats) {
@@ -104,7 +105,8 @@ class TyranorRuntimeActionBar(
                 params.topMargin = (saved.second * maxTop).roundToInt()
             } else {
                 params.leftMargin = dp(DEFAULT_LEFT_DP, density).coerceIn(0, maxLeft)
-                params.topMargin = dp(DEFAULT_TOP_DP + action.defaultIndex * ACTION_GAP_DP, density)
+                params.topMargin = (parent.height * DEFAULT_CENTER_Y[action.defaultIndex] - action.view.height / 2f)
+                    .roundToInt()
                     .coerceIn(0, maxTop)
             }
             action.view.layoutParams = params
@@ -188,8 +190,7 @@ class TyranorRuntimeActionBar(
     private companion object {
         const val BUTTON_SIZE_DP = 48
         const val DEFAULT_LEFT_DP = 16
-        const val DEFAULT_TOP_DP = 16
-        const val ACTION_GAP_DP = 58
+        val DEFAULT_CENTER_Y = floatArrayOf(0.18f, 0.50f, 0.82f)
     }
 
     private class ActionIcon(

@@ -8,6 +8,8 @@ object PadOverlayPrefs {
     private const val KEY_X = "fab_x"
     private const val KEY_Y = "fab_y"
     private const val KEY_VISIBLE = "pad_visible"
+    private const val KEY_RUNTIME_ACTION_LAYOUT = "runtime_action_layout"
+    private const val RUNTIME_ACTION_LAYOUT = "left-center-v1"
 
     private fun actionKey(actionId: String, axis: String) = "runtime_action_${actionId}_${axis}"
 
@@ -41,6 +43,21 @@ object PadOverlayPrefs {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putFloat(actionKey(actionId, "x"), x.coerceIn(0f, 1f))
             .putFloat(actionKey(actionId, "y"), y.coerceIn(0f, 1f))
+            .apply()
+    }
+
+    /** Move existing installations from the old top-left stack to the centered left layout once. */
+    fun migrateRuntimeActionLayout(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getString(KEY_RUNTIME_ACTION_LAYOUT, null) == RUNTIME_ACTION_LAYOUT) return
+        prefs.edit()
+            .remove(actionKey("pad", "x"))
+            .remove(actionKey("pad", "y"))
+            .remove(actionKey("mouse", "x"))
+            .remove(actionKey("mouse", "y"))
+            .remove(actionKey("cheat", "x"))
+            .remove(actionKey("cheat", "y"))
+            .putString(KEY_RUNTIME_ACTION_LAYOUT, RUNTIME_ACTION_LAYOUT)
             .apply()
     }
 }
