@@ -1,6 +1,6 @@
 :root{color-scheme:light;--tm-primary:#18b978;--tm-on-primary:#fff}
 :root[data-theme="dark"]{color-scheme:dark}
-#tyranor-mod-launcher{position:fixed;right:10px;top:42%;z-index:2147483644;width:46px;height:46px;padding:9px;border:0;border-radius:50%;background:var(--tm-primary,#2e7d6e);color:var(--tm-on-primary,#fff);box-shadow:0 3px 14px #0008;opacity:.9;touch-action:none;transition:none}
+#tyranor-mod-launcher{position:fixed;left:calc(5.5% - 23px);right:auto;top:calc(82% - 23px);z-index:2147483644;width:46px;height:46px;padding:9px;border:0;border-radius:50%;background:var(--tm-primary,#2e7d6e);color:var(--tm-on-primary,#fff);box-shadow:0 3px 14px #0008;opacity:.9;touch-action:none;transition:none}
 #tyranor-mod-launcher .tm-launcher-icon{display:block;width:100%;height:100%;background:currentColor;-webkit-mask:url('/__tyranor__/rpgmaker_mod_icon.png') center/contain no-repeat;mask:url('/__tyranor__/rpgmaker_mod_icon.png') center/contain no-repeat}
 #tyranor-mod-root{position:fixed;inset:0;z-index:2147483645;background:#0009;color:#17211d;font:14px/1.45 system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
 #tyranor-mod-root *{box-sizing:border-box}
@@ -210,6 +210,7 @@ html[data-theme="dark"] .tm-pokemon-toggle{border-color:#343c37}html[data-theme=
 .tm-battle-stat>span{display:flex;flex-direction:column;min-width:0;font-size:11px;line-height:1.15}
 .tm-battle-stat>span>strong{font-size:12px}
 .tm-battle-stat>span>small{color:#748079;font-size:10px}
+.tm-battle-stat.unsupported{opacity:.58}
 .tm-battle-stat>.tm-input{height:36px;padding:5px 8px;background:#f2f6f3;border-color:#d5e0d9}
 .tm-pokemon-battle-side-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
 .tm-pokemon-battle-unit-list{gap:10px;padding:3px 4px 12px}
@@ -256,6 +257,10 @@ html[data-theme="dark"] .tm-pokemon-battle-hp-control>.tm-input{background:#171b
 .tm-quick-toggle{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:0;min-height:34px;margin:0;padding:0 8px;border-radius:8px;background:#f4f7f5;font-size:11px;white-space:nowrap}
 .tm-quick-toggle>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .tm-quick-toggle>.tm-switch{flex:0 0 15px;width:15px;height:15px;margin:0}
+.tm-quick-toggle.unsupported,.tm-quick-growth-row.unsupported,.tm-quick-speed-row.unsupported{background:#ecefed;color:#929b95}
+.tm-quick-toggle.unsupported>.tm-switch{opacity:.48}
+.tm-quick-growth-row.unsupported>.tm-input,.tm-quick-speed-row.unsupported>.tm-input{background:#edf1ee;color:#929b95}
+.tm-quick-growth-row.unsupported>.tm-btn,.tm-quick-speed-row.unsupported>.tm-btn{border:1px solid #dfe5e1;background:#ecefed;color:#929b95;opacity:1}
 .tm-quick-growth-rows{display:grid;gap:8px}
 .tm-quick-growth-row{display:grid;grid-template-columns:minmax(52px,1fr) 104px 46px;gap:5px;align-items:center;min-height:38px}
 .tm-quick-growth-row>label,.tm-quick-speed-row>label{min-width:0;font-size:12px;font-weight:600;white-space:nowrap}
@@ -275,6 +280,10 @@ html[data-theme="dark"] .tm-quick-note,html[data-theme="dark"] .tm-quick-empty{c
 html[data-theme="dark"] .tm-quick-scene-button.tm-btn{background:#2b453b;color:#9be0ca}
 html[data-theme="dark"] .tm-quick-scene-button.unsupported{border-color:#343c36;background:#282e2a;color:#77827a}
 html[data-theme="dark"] .tm-quick-toggle{background:#29312c}
+html[data-theme="dark"] .tm-quick-toggle.unsupported,html[data-theme="dark"] .tm-quick-growth-row.unsupported,html[data-theme="dark"] .tm-quick-speed-row.unsupported{background:#282e2a;color:#77827a}
+html[data-theme="dark"] .tm-quick-toggle.unsupported>.tm-switch{opacity:.42}
+html[data-theme="dark"] .tm-quick-growth-row.unsupported>.tm-input,html[data-theme="dark"] .tm-quick-speed-row.unsupported>.tm-input{background:#282e2a;color:#77827a}
+html[data-theme="dark"] .tm-quick-growth-row.unsupported>.tm-btn,html[data-theme="dark"] .tm-quick-speed-row.unsupported>.tm-btn{border-color:#343c36;background:#282e2a;color:#77827a}
 html[data-theme="dark"] .tm-quick-speed-list{border-color:#343c37}html[data-theme="dark"] .tm-quick-resource-divider{background:#343c37}
 .tm-pokemon-quick-layout{display:flex;flex-direction:column;width:100%;height:100%;min-height:360px}
 .tm-pokemon-quick-layout>.tm-segmented-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;flex:0 0 auto;margin:0 0 9px;padding:4px;border-radius:12px;overflow:hidden}

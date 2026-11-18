@@ -11,6 +11,7 @@
   var justDragged = false; // pointerup 设 true，click 消费后复位
   var userDragged = false; // 用户手动拖拽过，positionLauncher 不再覆盖
   var LAUNCHER_POS_KEY = "tyranor_mod_fab_pos";
+  var LAUNCHER_LAYOUT_VERSION_KEY = "tyranor_mod_fab_layout";
   var activeTab = "quick";
   var goldCommitPending = null;
   var pendingEquipScroll = null;
@@ -333,21 +334,25 @@
     var supported = capabilities && capabilities.toggles;
     var supportedValues = capabilities && capabilities.values;
     var sceneFeatures = capabilities && capabilities.features;
+    var knownCapabilities = !!(capabilities && capabilities.engine !== "unknown" && Array.isArray(supported));
+    var knownValues = !!(capabilities && capabilities.engine !== "unknown" && Array.isArray(supportedValues));
     var knownScenes = !!(capabilities && capabilities.engine !== "unknown" && Array.isArray(sceneFeatures));
     var sections = [
       { id: "角色与资源", label: translated("角色与资源") },
       { id: "探索与战斗", label: translated("探索与战斗") }
     ];
     if (!sections.some(function (section) { return section.id === context.quickSection; })) context.quickSection = sections[0].id;
-    function availableFlags(entries) {
-      return entries.filter(function (entry) {
-        var capability = entry[0] === "godMode" ? "invincible" : entry[0] === "alwaysCrit" ? "crit" : entry[0];
-        return !supported || supported.indexOf(capability) >= 0;
-      });
+    function flagSupported(flag) {
+      if (!knownCapabilities) return null;
+      var capability = flag === "godMode" ? "invincible" : flag === "alwaysCrit" ? "crit" : flag;
+      return supported.indexOf(capability) >= 0;
     }
     function toggleMarkup(entry) {
-      return '<label class="tm-quick-toggle"><span>' + escapeHtml(translated(entry[1])) + '</span>' +
-        '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' + (state[entry[0]] ? "checked" : "") + '></label>';
+      var available = flagSupported(entry[0]);
+      return '<label class="tm-quick-toggle' + (available === false ? " unsupported" : "") + '"' +
+        (available === false ? ' title="' + escapeHtml(translated("当前游戏不支持此功能")) + '"' : "") + '><span>' + escapeHtml(translated(entry[1])) + '</span>' +
+        '<input class="tm-switch" type="checkbox" data-action="flag" data-flag="' + entry[0] + '" ' +
+        (available === false ? 'disabled aria-disabled="true" ' : "") + (state[entry[0]] ? "checked" : "") + '></label>';
     }
     function toggleGrid(entries, emptyMessage) {
       var markup = entries.map(toggleMarkup).join("");
@@ -373,32 +378,28 @@
         '<span id="tm-gold-current">' + escapeHtml(cachedGold) + '</span></label>' +
         textInput("tm-gold", cachedGold, "number", 'min="0"') + button(translated("拉满"), "max-gold") + '</div>';
       var resourceCard = quickCard("角色与资源", "临时作弊开关", gold + '<div class="tm-quick-resource-divider" aria-hidden="true"></div>' +
-        toggleGrid(availableFlags(resourceFlags), "当前游戏没有可用的角色资源开关"), "tm-quick-resource-card");
-      var rewardRows = [];
-      if (!supportedValues || supportedValues.indexOf("expMultiplier") >= 0) {
-        rewardRows.push('<div class="tm-quick-growth-row"><label for="tm-exp-multiplier">' + escapeHtml(translated("经验倍率")) + '</label>' +
-          textInput("tm-exp-multiplier", state.expMultiplier == null ? 1 : state.expMultiplier, "number", 'min="0" max="100" step="0.1"') +
-          button(translated("设置"), "set-exp-multiplier", "primary") + '</div>');
+        toggleGrid(resourceFlags, "当前游戏没有可用的角色资源开关"), "tm-quick-resource-card");
+      function multiplierRow(name, id, label, action, current) {
+        var available = !knownValues || supportedValues.indexOf(name) >= 0;
+        var unsupportedAttrs = available ? "" : ' disabled aria-disabled="true"';
+        return '<div class="tm-quick-growth-row' + (available ? "" : " unsupported") + '"><label for="' + id + '">' + escapeHtml(translated(label)) + '</label>' +
+          textInput(id, current == null ? 1 : current, "number", 'min="0" max="100" step="0.1"' + unsupportedAttrs) +
+          button(translated("设置"), available ? action : "unsupported-option", available ? "primary" : "unsupported",
+            available ? "" : 'disabled aria-disabled="true" title="' + escapeHtml(translated("当前游戏不支持此功能")) + '"') + '</div>';
       }
-      if (!supportedValues || supportedValues.indexOf("dropMultiplier") >= 0) {
-        rewardRows.push('<div class="tm-quick-growth-row"><label for="tm-drop-multiplier">' + escapeHtml(translated("掉落倍率")) + '</label>' +
-          textInput("tm-drop-multiplier", state.dropMultiplier == null ? 1 : state.dropMultiplier, "number", 'min="0" max="100" step="0.1"') +
-          button(translated("设置"), "set-drop-multiplier", "primary") + '</div>');
-      }
-      var growthBody = rewardRows.length
-        ? '<div class="tm-quick-growth-rows">' + rewardRows.join("") + '</div>'
-        : '<div class="tm-quick-empty">' + escapeHtml(translated("当前游戏不支持成长倍率")) + '</div>';
+      var growthBody = '<div class="tm-quick-growth-rows">' +
+        multiplierRow("expMultiplier", "tm-exp-multiplier", "经验倍率", "set-exp-multiplier", state.expMultiplier) +
+        multiplierRow("dropMultiplier", "tm-drop-multiplier", "掉落倍率", "set-drop-multiplier", state.dropMultiplier) + '</div>';
       var growthCard = quickCard("成长倍率", "修改后立即生效", growthBody, "tm-quick-growth-card");
       sectionBody = sceneCard + '<div class="tm-quick-resource-grid">' + resourceCard + growthCard + '</div>';
     } else {
-      var exploration = availableFlags(explorationFlags);
-      var battle = availableFlags(battleFlags);
-      var speedRows = "";
-      if (!supported || supported.indexOf("speed") >= 0) {
-        speedRows += '<div class="tm-quick-speed-row"><label for="tm-speed">' + escapeHtml(translated("移动速度")) + '</label>' +
-          textInput("tm-speed", state.speedMultiplier, "number", 'min="0.25" max="8" step="0.25"') +
-          button(translated("设置"), "set-speed", "primary") + '</div>';
-      }
+      var exploration = explorationFlags;
+      var battle = battleFlags;
+      var speedAvailable = !knownCapabilities || supported.indexOf("speed") >= 0;
+      var speedRows = '<div class="tm-quick-speed-row' + (speedAvailable ? "" : " unsupported") + '"><label for="tm-speed">' + escapeHtml(translated("移动速度")) + '</label>' +
+        textInput("tm-speed", state.speedMultiplier, "number", 'min="0.25" max="8" step="0.25"' + (speedAvailable ? "" : ' disabled aria-disabled="true"')) +
+        button(translated("设置"), speedAvailable ? "set-speed" : "unsupported-option", speedAvailable ? "primary" : "unsupported",
+          speedAvailable ? "" : 'disabled aria-disabled="true" title="' + escapeHtml(translated("当前游戏不支持此功能")) + '"') + '</div>';
       speedRows += '<div class="tm-quick-speed-row"><label for="tm-game-speed">' + escapeHtml(translated("游戏倍速")) + '</label>' +
         textInput("tm-game-speed", state.gameSpeedMultiplier, "number", 'min="1" max="8" step="1"') +
         button(translated("设置"), "set-game-speed", "primary") + '</div>';
@@ -1162,13 +1163,16 @@
       button(translated("逃跑"), "escape", "tm-battle-outcome-escape", actionDisabled) + '</div>' +
       (snapshot.inBattle ? "" : '<div class="tm-note">' + escapeHtml(translated("当前不在战斗中")) + '</div>');
     function battleValueRow(side, unit, field, label, current, maximum) {
+      var fieldSupported = field !== "mp" || !!unit.mpSupported;
       var actorId = unit.actorId == null ? "" : ' data-actor-id="' + escapeHtml(unit.actorId) + '"';
-      var attrs = 'min="0" max="' + escapeHtml(maximum) + '" inputmode="numeric" aria-label="' + escapeHtml(translated(label) + " " + unit.name) + '" data-battle-vital="1" data-side="' + side + '" data-index="' + escapeHtml(unit.index) + '" data-field="' + field + '"' + actorId + (snapshot.inBattle ? "" : " disabled");
-      return '<label class="tm-battle-stat"><span><strong>' + escapeHtml(translated(label)) + '</strong><small>/ ' + escapeHtml(maximum) + '</small></span>' + textInput("", current, "number", attrs) + '</label>';
+      var attrs = 'min="0" max="' + escapeHtml(maximum == null ? "" : maximum) + '" inputmode="numeric" aria-label="' + escapeHtml(translated(label) + " " + unit.name) + '" data-battle-vital="1" data-side="' + side + '" data-index="' + escapeHtml(unit.index) + '" data-field="' + field + '"' + actorId +
+        (snapshot.inBattle && fieldSupported ? "" : ' disabled aria-disabled="true"');
+      return '<label class="tm-battle-stat' + (fieldSupported ? "" : " unsupported") + '"><span><strong>' + escapeHtml(translated(label)) + '</strong><small>' +
+        (maximum == null ? escapeHtml(translated("不支持")) : '/ ' + escapeHtml(maximum)) + '</small></span>' + textInput("", current == null ? "" : current, "number", attrs) + '</label>';
     }
     function battleUnitHtml(unit, side) {
       var stats = battleValueRow(side, unit, "hp", "HP", unit.hp, unit.mhp);
-      if (unit.mpSupported && unit.mp != null && unit.mmp != null) stats += battleValueRow(side, unit, "mp", "MP", unit.mp, unit.mmp);
+      stats += battleValueRow(side, unit, "mp", "MP", unit.mp, unit.mmp);
       var status = unit.status && unit.status !== "正常" ? unit.status : translated("正常");
       return '<div class="tm-item tm-battle-unit"><div class="tm-battle-unit-heading"><div class="tm-battle-unit-name"><strong>' + escapeHtml(unit.name) + '</strong><span>' + escapeHtml(translated("状态：") + status) + '</span></div>' +
         button(translated("战斗单位恢复"), "battle-unit-action", "tm-battle-restore", 'data-side="' + side + '" data-index="' + escapeHtml(unit.index) + '"' + (snapshot.inBattle ? "" : " disabled")) + '</div><div class="tm-battle-vitals">' + stats + '</div></div>';
@@ -1176,10 +1180,12 @@
     function sideCard(title, side, units) {
       var unitRows = units.map(function (unit) { return battleUnitHtml(unit, side); }).join("");
       var noUnits = snapshot.inBattle && units.length ? "" : "disabled";
-      var mpDisabled = noUnits || !units.some(function (unit) { return !!unit.mpSupported; }) ? "disabled" : "";
-      var mpButton = button(translated("MP 补满"), "battle-side-action", "", 'data-side="' + side + '" data-operation="mp" ' + mpDisabled);
-      var tpButton = units.some(function (unit) { return !!unit.tpSupported; })
-        ? button(translated("TP 补满"), "battle-side-action", "", 'data-side="' + side + '" data-operation="tp" ' + noUnits) : "";
+      var hasMp = units.some(function (unit) { return !!unit.mpSupported; });
+      var hasTp = units.some(function (unit) { return !!unit.tpSupported; });
+      var mpDisabled = noUnits || !hasMp ? "disabled" : "";
+      var mpButton = button(translated("MP 补满"), "battle-side-action", hasMp ? "" : "unsupported", 'data-side="' + side + '" data-operation="mp" ' + mpDisabled);
+      var tpDisabled = noUnits || !hasTp ? "disabled" : "";
+      var tpButton = button(translated("TP 补满"), "battle-side-action", hasTp ? "" : "unsupported", 'data-side="' + side + '" data-operation="tp" ' + tpDisabled);
       var bulkActions = '<div class="tm-battle-side-actions">' +
         button(translated("完全恢复"), "battle-side-action", "", 'data-side="' + side + '" data-operation="recover" ' + noUnits) + mpButton + tpButton +
         button(translated("战斗清除状态"), "battle-side-action", "", 'data-side="' + side + '" data-operation="clear" ' + noUnits) +
@@ -1264,9 +1270,13 @@
     var bridge = inputBridge();
     var hasPad = false;
     try { hasPad = !!(bridge && bridge.isAvailable()); } catch (e) { hasPad = false; }
-    content.innerHTML = card("虚拟按键", hasPad
-      ? '<p>按键层由应用原生实现，可自定义按键的位置、文字、大小与输出键位。进入编辑后：</p><ul style="margin:6px 0 10px;padding-left:18px;font-size:12px"><li>点按按键选中，拖拽调整位置</li><li>右侧面板改文字 / 尺寸 / 键位</li><li>可复制、删除按键，或恢复默认</li><li>保存后立即生效</li></ul><div class="tm-row">' + button("进入按键编辑", "enter-keys", "primary") + button("恢复默认", "reset-keys") + '</div>'
-      : '<p>当前未启用虚拟按键。可在应用的引擎设置中开启。</p>');
+    var buttonAttrs = hasPad ? "" : 'disabled aria-disabled="true" title="当前未启用虚拟按键"';
+    var instructions = hasPad
+      ? '<p>按键层由应用原生实现，可自定义按键的位置、文字、大小与输出键位。进入编辑后：</p><ul style="margin:6px 0 10px;padding-left:18px;font-size:12px"><li>点按按键选中，拖拽调整位置</li><li>右侧面板改文字 / 尺寸 / 键位</li><li>可复制、删除按键，或恢复默认</li><li>保存后立即生效</li></ul>'
+      : '<p>当前未启用虚拟按键，以下入口暂不可用。可在应用的引擎设置中开启。</p>';
+    content.innerHTML = card("虚拟按键", instructions + '<div class="tm-row">' +
+      button("进入按键编辑", "enter-keys", hasPad ? "primary" : "unsupported", buttonAttrs) +
+      button("恢复默认", "reset-keys", hasPad ? "" : "unsupported", buttonAttrs) + '</div>');
   }
   function handleAction(action, node) {
     if (action === "close") return close();
@@ -1790,8 +1800,12 @@
     launcher.addEventListener("pointerup", endDrag);
     launcher.addEventListener("pointercancel", function () { dragState = null; });
     document.body.appendChild(launcher);
-    // 恢复上次拖拽位置
+    // 首次升级时将启动钮迁移到左侧竖列底部；之后仍恢复用户拖动保存的位置。
     try {
+      if (localStorage.getItem(LAUNCHER_LAYOUT_VERSION_KEY) !== "left-stack-v1") {
+        localStorage.removeItem(LAUNCHER_POS_KEY);
+        localStorage.setItem(LAUNCHER_LAYOUT_VERSION_KEY, "left-stack-v1");
+      }
       var saved = localStorage.getItem(LAUNCHER_POS_KEY);
       if (saved) {
         var parts = saved.split(",");
@@ -1808,11 +1822,15 @@
     window.addEventListener("resize", positionLauncher);
   }
   // 虚拟按键已改为原生实现（左侧 FAB + 覆盖层），不再发布 __touchPadMetrics；
-  // 悬浮球默认停靠右侧，用户可拖拽到任意位置并持久化。
+  // 启动钮默认位于左侧纵列底部，用户仍可拖拽并持久化新位置。
   function positionLauncher() {
     if (!launcher || userDragged) return;
-    launcher.style.left = "";
-    launcher.style.right = "10px";
+    var size = launcher.offsetWidth || 46;
+    var left = window.innerWidth * 0.055 - size / 2;
+    var top = window.innerHeight * 0.82 - size / 2;
+    launcher.style.left = Math.max(8, Math.min(window.innerWidth - size - 8, left)) + "px";
+    launcher.style.top = Math.max(8, Math.min(window.innerHeight - size - 8, top)) + "px";
+    launcher.style.right = "auto";
   }
   window.TyranorModUI = { open: open, close: close, closeForEngineSwitch: closeForEngineSwitch, toggle: toggle, isOpen: isOpen, onAsyncDataUpdated: onAsyncDataUpdated };
 })();
