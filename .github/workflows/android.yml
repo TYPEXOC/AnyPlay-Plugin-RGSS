@@ -204,34 +204,47 @@ jobs:
             --no-daemon \
             --stacktrace
 
-      # ── 12. Name the diagnostic APK ────────────────────────────────────────────
-      - name: Name the diagnostic APK
+      # ── 12. Name the architecture-specific diagnostic APKs ────────────────────
+      - name: Name the architecture-specific diagnostic APKs
         run: |
           find app/build/outputs/apk/debug -name "*.apk"
-          APK=$(find app/build/outputs/apk/debug -name "*universal*.apk" | head -1)
-          if [ -z "$APK" ]; then APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1); fi
-          cp "$APK" Tyranor-RGSS-Debug.apk
-          echo "DEBUG_APK_PATH=Tyranor-RGSS-Debug.apk" >> "$GITHUB_ENV"
+          ARM64_APK=$(find app/build/outputs/apk/debug -name "*arm64-v8a*.apk" | head -1)
+          ARM32_APK=$(find app/build/outputs/apk/debug -name "*armeabi-v7a*.apk" | head -1)
+          test -n "$ARM64_APK"
+          test -n "$ARM32_APK"
+          cp "$ARM64_APK" Tyranor-RGSS-Debug-arm64-v8a.apk
+          cp "$ARM32_APK" Tyranor-RGSS-Debug-armeabi-v7a.apk
 
-      - name: Verify runtime libraries and MIDI SoundFont in APK
+      - name: Verify runtime libraries and MIDI SoundFont in each APK
         run: |
-          for abi in arm64-v8a armeabi-v7a; do
-            for library in libruby.so libruby187.so libruby193.so libfluidsynth.so; do
-              unzip -Z1 "$DEBUG_APK_PATH" | grep -Fxq "lib/$abi/$library" || {
-                echo "Missing lib/$abi/$library from $DEBUG_APK_PATH"
-                exit 1
-              }
-            done
+          for library in libruby.so libruby187.so libruby193.so libfluidsynth.so; do
+            unzip -Z1 Tyranor-RGSS-Debug-arm64-v8a.apk | grep -Fxq "lib/arm64-v8a/$library" || {
+              echo "Missing lib/arm64-v8a/$library from arm64 APK"
+              exit 1
+            }
+            unzip -Z1 Tyranor-RGSS-Debug-armeabi-v7a.apk | grep -Fxq "lib/armeabi-v7a/$library" || {
+              echo "Missing lib/armeabi-v7a/$library from armeabi-v7a APK"
+              exit 1
+            }
           done
-          unzip -Z1 "$DEBUG_APK_PATH" | grep -Fxq "assets/GMGSx.SF2" || {
-            echo "Missing bundled GMGSx.SF2 from $DEBUG_APK_PATH"
-            exit 1
-          }
+          for apk in Tyranor-RGSS-Debug-arm64-v8a.apk Tyranor-RGSS-Debug-armeabi-v7a.apk; do
+            unzip -Z1 "$apk" | grep -Fxq "assets/GMGSx.SF2" || {
+              echo "Missing bundled GMGSx.SF2 from $apk"
+              exit 1
+            }
+          done
 
-      # ── 13. Upload diagnostic APK artifact ───────────────────────────────────
-      - name: Upload diagnostic APK artifact
+      # ── 13. Upload each ABI-specific APK as its own artifact ─────────────────
+      - name: Upload arm64-v8a diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: Tyranor-RGSS-Debug
-          path: ${{ env.DEBUG_APK_PATH }}
+          name: Tyranor-RGSS-Debug-arm64-v8a
+          path: Tyranor-RGSS-Debug-arm64-v8a.apk
+          retention-days: 30
+
+      - name: Upload armeabi-v7a diagnostic APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tyranor-RGSS-Debug-armeabi-v7a
+          path: Tyranor-RGSS-Debug-armeabi-v7a.apk
           retention-days: 30
