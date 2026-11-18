@@ -76,6 +76,8 @@ data class PadProfile(
      * 不是/不再是迁移主布局（含用户重命名）；`true` = 迁移主布局且未被重命名。
      */
     val legacyMain: Boolean? = null,
+    /** 默认 QWZX 菱形按物理像素保持四向等距，中心半径由摇杆圆直径定标。 */
+    val aspectAwareFaceCluster: Boolean = false,
 ) {
 
     /** 覆盖同 id 按钮；不存在时追加到末尾（编辑模式新增 / 复制的写入路径）。 */
@@ -94,6 +96,7 @@ data class PadProfile(
         root.put("id", id)
         root.put("name", name)
         if (legacyMain != null) root.put("legacyMain", legacyMain)
+        root.put("aspectAwareFaceCluster", aspectAwareFaceCluster)
         root.put("direction", directionToJson(direction))
         val array = JSONArray()
         buttons.forEach { array.put(buttonToJson(it)) }
@@ -133,6 +136,9 @@ data class PadProfile(
          * app 侧（`InputRemapRepository`）按它识别迁移主布局以本地化展示名，两处必须一致。
          */
         const val MAIN_SLUG = "main"
+
+        /** 默认摇杆圆直径与 QWZX 中心半径的比例：0.085 / 0.30。 */
+        private const val FACE_CLUSTER_RADIUS_PER_DIRECTION_DIAMETER = 0.085f / 0.30f
 
         /** `InputConfigStore` 的 id 白名单上限（[A-Za-z0-9_-]{1,32}）。 */
         private const val MAX_MIGRATED_ID_LENGTH = 32
@@ -174,12 +180,18 @@ data class PadProfile(
                         buttons.add(button)
                     }
                 }
+                val direction = directionFromJson(root.optJSONObject("direction"))
                 PadProfile(
                     id = id,
                     name = name,
                     buttons = buttons,
-                    direction = directionFromJson(root.optJSONObject("direction")),
+                    direction = direction,
                     legacyMain = if (root.has("legacyMain")) root.optBoolean("legacyMain") else null,
+                    aspectAwareFaceCluster = if (root.has("aspectAwareFaceCluster")) {
+                        root.optBoolean("aspectAwareFaceCluster")
+                    } else {
+                        hasCanonicalQwzx(buttons, direction)
+                    },
                 )
             }.getOrNull()
         }
@@ -201,6 +213,60 @@ data class PadProfile(
                     size = 0.088f, aspect = 1f, shape = PadButton.SHAPE_ROUND,
                 )
             }
+
+        /**
+         * 默认 QWZX 四个中心的视口归一化坐标。四个中心到菱形中心的物理距离相等，
+         * 半径按方向摇杆圆直径定标；因此超宽视口也不会把左右按键拉远。
+         */
+        fun aspectAwareFacePositions(
+            profile: PadProfile,
+            viewWidth: Int,
+            viewHeight: Int,
+        ): Map<String, Pair<Float, Float>>? {
+            if (!profile.aspectAwareFaceCluster || viewWidth <= 0 || viewHeight <= 0) return null
+            val byId = profile.buttons.associateBy { it.id }
+            val q = byId["q"] ?: return null
+            val x = byId["x"] ?: return null
+            if (byId["w"] == null || byId["z"] == null) return null
+            val centerX = (q.x + x.x) / 2f
+            val centerY = profile.direction.y
+            val minSide = minOf(viewWidth, viewHeight).toFloat()
+            val radiusPx = profile.direction.size * FACE_CLUSTER_RADIUS_PER_DIRECTION_DIAMETER * minSide
+            val radiusX = radiusPx / viewWidth
+            val radiusY = radiusPx / viewHeight
+            return mapOf(
+                "q" to Pair(centerX - radiusX, centerY),
+                "w" to Pair(centerX, centerY - radiusY),
+                "z" to Pair(centerX, centerY + radiusY),
+                "x" to Pair(centerX + radiusX, centerY),
+            )
+        }
+
+        /** 将当前视口中显示的 QWZX 位置转成普通坐标，供用户拖动与持久化使用。 */
+        fun materializeFaceCluster(profile: PadProfile, viewWidth: Int, viewHeight: Int): PadProfile {
+            val positions = aspectAwareFacePositions(profile, viewWidth, viewHeight) ?: return profile
+            return profile.copy(
+                buttons = profile.buttons.map { button ->
+                    val (x, y) = positions[button.id] ?: return@map button
+                    button.copy(x = x, y = y)
+                },
+                aspectAwareFaceCluster = false,
+            )
+        }
+
+        private fun hasCanonicalQwzx(buttons: List<PadButton>, direction: PadDirection): Boolean {
+            val byId = buttons.associateBy { it.id }
+            val q = byId["q"] ?: return false
+            val w = byId["w"] ?: return false
+            val z = byId["z"] ?: return false
+            val x = byId["x"] ?: return false
+            val tolerance = 0.001f
+            fun close(a: Float, b: Float) = kotlin.math.abs(a - b) <= tolerance
+            return close(q.x, 0.695f) && close(w.x, 0.78f) && close(z.x, 0.78f) && close(x.x, 0.865f) &&
+                close(q.y, direction.y) && close(x.y, direction.y) &&
+                close(w.y, direction.y - 0.085f) && close(z.y, direction.y + 0.085f) &&
+                listOf(q, w, z, x).all { close(it.size, 0.088f) && close(it.aspect, 1f) }
+        }
 
         /**
          * 出厂默认方案：右侧动作键列 + 右下 QWZX 菱形 + 与其水平对齐的左下方向摇杆。
@@ -245,6 +311,7 @@ data class PadProfile(
                     qwzx("x", "X", 0.865f, PadDirection().y, KeyEvent.KEYCODE_X),
                 ),
                 direction = PadDirection(),
+                aspectAwareFaceCluster = true,
             )
         }
 

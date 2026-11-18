@@ -219,11 +219,13 @@ class VirtualPadView(
         elements.add(dirElement)
         elementById[DIRECTION_ID] = dirElement
 
+        val facePositions = PadProfile.aspectAwareFacePositions(active, width, height)
         active.buttons.forEach { button ->
             val element = Element(button.id, false)
             val bw = button.size * minSide
             val bh = bw * button.aspect
-            setRectCentered(element.rect, button.x * width, button.y * height, bw, bh)
+            val (buttonX, buttonY) = facePositions?.get(button.id) ?: Pair(button.x, button.y)
+            setRectCentered(element.rect, buttonX * width, buttonY * height, bw, bh)
             element.button = button
             elements.add(element)
             elementById[button.id] = element
@@ -313,7 +315,8 @@ class VirtualPadView(
         canvas.drawText("▶", cx + tickR, cy - (textPaint.descent() + textPaint.ascent()) / 2f, textPaint)
         // 摇杆帽
         fillPaint.color = withAlpha(theme.primary, 0.55f)
-        canvas.drawCircle(cx + dirKnobDx * r * 0.6f, cy + dirKnobDy * r * 0.6f, r * 0.34f, fillPaint)
+        // 摇杆帽中心可到达底盘外圈；帽体本身会自然伸出底盘边缘。
+        canvas.drawCircle(cx + dirKnobDx * r, cy + dirKnobDy * r, r * 0.34f, fillPaint)
     }
 
     private fun drawFab(canvas: Canvas) {
@@ -605,8 +608,12 @@ class VirtualPadView(
             next["down"] = dy > thresholdFor("down")
         }
         val magnitude = hypot(dx.toDouble(), dy.toDouble()).toFloat()
-        dirKnobDx = if (r > 0f) (dx / r).coerceIn(-1f, 1f) else 0f
-        dirKnobDy = if (r > 0f) (dy / r).coerceIn(-1f, 1f) else 0f
+        // 摇杆帽沿圆形活动区跟随手指。逐轴 clamp 会形成方形轨迹，斜向时还会超出外圈；
+        // 这里按向量长度统一缩放，保留角度并把最大行程限制在圆盘半径内。
+        val knobTravel = r
+        val knobScale = if (magnitude > knobTravel && magnitude > 0f) knobTravel / magnitude else 1f
+        dirKnobDx = if (r > 0f) dx * knobScale / r else 0f
+        dirKnobDy = if (r > 0f) dy * knobScale / r else 0f
         if (magnitude < deadzone && dirActiveSet.isEmpty()) {
             dirKnobDx = 0f
             dirKnobDy = 0f
@@ -646,7 +653,17 @@ class VirtualPadView(
             MotionEvent.ACTION_DOWN -> {
                 val x = event.x
                 val y = event.y
-                val element = hitTest(x, y)
+                val hitElement = hitTest(x, y)
+                var element = hitElement
+                if (hitElement != null && !hitElement.isDirection && hitElement.id in FACE_BUTTON_IDS &&
+                    activeProfile().aspectAwareFaceCluster
+                ) {
+                    // 菱形初始绘制使用屏幕像素等距的位置。用户首次拖动其中一个圆键时，
+                    // 先把四个中心一起换算成当前视口坐标，避免拖动一个键时其他三个跳位。
+                    editProfile = PadProfile.materializeFaceCluster(activeProfile(), width, height)
+                    rebuild()
+                    element = elementById[hitElement.id] ?: hitElement
+                }
                 if (element != null) {
                     selectedId = element.id
                     editDragId = element.id
@@ -1144,6 +1161,7 @@ class VirtualPadView(
         private const val PAD_SCOPE = "pad:"
 
         private const val FAB_RADIUS_DP = 22f
+        private val FACE_BUTTON_IDS = setOf("q", "w", "z", "x")
         private const val FAB_LONG_PRESS_MS = 420L
         private const val DIR_DEADZONE_RATIO = 0.30f
         private const val DIR_HYSTERESIS_RATIO = 0.08f
