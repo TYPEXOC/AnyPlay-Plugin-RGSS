@@ -7,6 +7,11 @@
   "translationRule": "mtool-json",
   "scan": {
     "match": "any",
+    "extensions": [
+      ".rgssad",
+      ".rgss2a",
+      ".rgss3a"
+    ],
     "markers": [
       "Data/MapInfos.rxdata",
       "Data/MapInfos.rvdata",
@@ -14,9 +19,134 @@
       "Data/Actors.rxdata",
       "Data/Actors.rvdata",
       "Data/Actors.rvdata2",
+      "Data/*.rxdata",
+      "Data/*.rvdata",
+      "Data/*.rvdata2",
+      "x64-msvcrt-ruby*.dll",
+      "Data/*.rgssad",
+      "Data/*.rgss2a",
+      "Data/*.rgss3a",
+      "Dat/*.rgssad",
+      "Dat/*.rgss2a",
+      "Dat/*.rgss3a",
+      "Tyrano/*.rgssad",
+      "Tyrano/*.rgss2a",
+      "Tyrano/*.rgss3a",
+      "Scenario/*.rgssad",
+      "Scenario/*.rgss2a",
+      "Scenario/*.rgss3a",
+      "System/*.rgssad",
+      "System/*.rgss2a",
+      "System/*.rgss3a",
+      "App/*.rgssad",
+      "App/*.rgss2a",
+      "App/*.rgss3a",
+      "Game/*.rgssad",
+      "Game/*.rgss2a",
+      "Game/*.rgss3a",
+      "Renpy/*.rgssad",
+      "Renpy/*.rgss2a",
+      "Renpy/*.rgss3a",
+      "Resources/*.rgssad",
+      "Resources/*.rgss2a",
+      "Resources/*.rgss3a",
+      "app.asar/*.rgssad",
+      "app.asar/*.rgss2a",
+      "app.asar/*.rgss3a",
+      "www/*.rgssad",
+      "www/*.rgss2a",
+      "www/*.rgss3a",
+      "js/*.rgssad",
+      "js/*.rgss2a",
+      "js/*.rgss3a",
       "Game.rgssad",
       "Game.rgss2a",
       "Game.rgss3a"
+    ]
+  },
+  "settings": {
+    "version": 1,
+    "items": [
+      {
+        "key": "rubyRuntime",
+        "type": "enum",
+        "title": "Ruby 运行时",
+        "default": "auto",
+        "options": [
+          { "value": "auto", "title": "自动" },
+          { "value": "187", "title": "Ruby 1.8.7" },
+          { "value": "193", "title": "Ruby 1.9.3" },
+          { "value": "313", "title": "Ruby 3.1.3" }
+        ]
+      },
+      { "key": "padEnabled", "type": "boolean", "title": "启用虚拟按键", "default": true },
+      { "key": "cheatsEnabled", "type": "boolean", "title": "启用游戏内修改器", "default": true },
+      { "key": "debug", "type": "boolean", "title": "调试模式", "default": false },
+      { "key": "copyText", "type": "boolean", "title": "复制游戏对话", "default": false },
+      { "key": "speedUp", "type": "integer", "title": "游戏倍速", "default": 1, "min": 1, "max": 9 },
+      { "key": "smoothScaling", "type": "boolean", "title": "平滑缩放", "default": false },
+      { "key": "vsync", "type": "boolean", "title": "垂直同步", "default": false },
+      { "key": "frameSkip", "type": "boolean", "title": "允许跳帧", "default": false },
+      { "key": "solidFonts", "type": "boolean", "title": "纯色字体渲染", "default": false },
+      { "key": "pathCache", "type": "boolean", "title": "路径缓存", "default": true },
+      { "key": "prebuiltPathCache", "type": "boolean", "title": "预构建路径缓存", "default": true },
+      { "key": "fastPathEnum", "type": "boolean", "title": "快速资源枚举", "default": true },
+      { "key": "useCJKFont", "type": "boolean", "title": "使用系统中日韩字体", "default": false },
+      { "key": "animateAutotiles", "type": "boolean", "title": "动画自动元件", "default": true },
+      { "key": "enablePostloadScripts", "type": "boolean", "title": "运行 Postload 脚本", "default": false },
+      {
+        "key": "fontScalePercent",
+        "type": "integer",
+        "title": "字体缩放（百分比）",
+        "default": 75,
+        "min": 25,
+        "max": 200
+      },
+      {
+        "key": "screenSize",
+        "type": "enum",
+        "title": "游戏分辨率",
+        "default": "auto",
+        "options": [
+          { "value": "auto", "title": "自动" },
+          { "value": "512x384", "title": "512 × 384" },
+          { "value": "512x768", "title": "512 × 768" },
+          { "value": "544x416", "title": "544 × 416" },
+          { "value": "640x480", "title": "640 × 480" },
+          { "value": "800x600", "title": "800 × 600" },
+          { "value": "1024x768", "title": "1024 × 768" },
+          { "value": "1280x720", "title": "1280 × 720" },
+          { "value": "1280x960", "title": "1280 × 960" },
+          { "value": "1920x1080", "title": "1920 × 1080" }
+        ]
+      },
+      {
+        "key": "verticalScreenAlign",
+        "type": "enum",
+        "title": "画面对齐",
+        "default": "top-center",
+        "options": [
+          { "value": "top", "title": "顶部靠左" },
+          { "value": "top-center", "title": "顶部居中" },
+          { "value": "center", "title": "居中" }
+        ]
+      },
+      {
+        "key": "rtpDirectory",
+        "type": "text",
+        "title": "RTP 目录路径",
+        "description": "选择 RTP 根目录或当前 RGSS 版本的 RTP app 目录。",
+        "default": "",
+        "maxLength": 1024
+      },
+      {
+        "key": "customFont",
+        "type": "text",
+        "title": "自定义字体文件路径",
+        "description": "选择 .ttf、.otf 或 .ttc 字体文件；清空则使用游戏默认字体。",
+        "default": "",
+        "maxLength": 1024
+      }
     ]
   }
 }

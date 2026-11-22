@@ -61,23 +61,20 @@ public class MainActivity extends SDLActivity
     private static String OBB_MAIN_FILENAME;
     private static boolean DEBUG = false;
 
-    // ---- TYN RGSS external launch ---------------------------------------
-    // TYN supplies the v1 launch payload plus optional TYN-specific extensions.
+    // ---- Runtime-module external launch --------------------------------
+    // Tyranor Next supplies the standard v1 launch payload and declared settings.
     public static final String EXTRA_DIAGNOSTIC_GAME_DIR = "com.tyranor.runtime.extra.DIAGNOSTIC_GAME_DIR";
     public static final String EXTRA_STANDALONE_DIAGNOSTIC = "com.tyranor.runtime.extra.STANDALONE_DIAGNOSTIC";
     public static final String EXTRA_DIAGNOSTIC_RUBY_RUNTIME = "com.tyranor.runtime.extra.DIAGNOSTIC_RUBY_RUNTIME";
     public static final String EXTRA_DIAGNOSTIC_GAME_TITLE = "com.tyranor.runtime.extra.DIAGNOSTIC_GAME_TITLE";
-    private static final String TYN_RGSS_ACTION_LAUNCH = "com.tyranor.runtime.rgss.action.LAUNCH";
+    private static final String RUNTIME_MODULE_ACTION_LAUNCH = "com.tyranor.runtime.action.LAUNCH";
     private static final String TYN_EXTRA_PROTOCOL_VERSION = "com.tyranor.runtime.extra.PROTOCOL_VERSION";
     private static final String TYN_EXTRA_UI_LANGUAGE_TAG = "com.tyranor.runtime.extra.UI_LANGUAGE_TAG";
     private static final String TYN_EXTRA_FOLDER = "com.tyranor.runtime.extra.FOLDER_PATH";
     private static final String TYN_EXTRA_TITLE = "com.tyranor.runtime.extra.GAME_TITLE";
+    private static final String RUNTIME_EXTRA_SETTINGS = "com.tyranor.runtime.extra.SETTINGS";
     private static final String TYN_EXTRA_GAME_ID = "com.tyranor.runtime.extra.GAME_ID";
     private static final String TYN_EXTRA_TRANSLATION_MAP_URI = "com.tyranor.runtime.extra.TRANSLATION_MAP_URI";
-    private static final String TYN_EXTRA_PAD_ENABLED = "com.tyranor.runtime.extra.PAD_ENABLED";
-    private static final String TYN_EXTRA_RUBY_RUNTIME = "com.tyranor.runtime.extra.RUBY_RUNTIME";
-    private static final String TYN_EXTRA_RGSS_OPTIONS = "com.tyranor.runtime.extra.RGSS_OPTIONS";
-    private static final String TYN_EXTRA_RTP_ROOT = "com.tyranor.runtime.extra.RTP_ROOT";
     private static final String TYN_EXTRA_THEME_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_PRIMARY_COLOR";
     private static final String TYN_EXTRA_THEME_ON_PRIMARY_COLOR = "com.tyranor.runtime.extra.THEME_ON_PRIMARY_COLOR";
     private static final String TYN_EXTRA_THEME_DARK_MODE = "com.tyranor.runtime.extra.THEME_DARK_MODE";
@@ -99,14 +96,15 @@ public class MainActivity extends SDLActivity
     private boolean mCheatsEnabled = true;
     private boolean mDebugEnabled = false;
     private boolean mCopyTextEnabled = false;
+    private boolean mVersionedSettingsPayload;
     private int mSpeedUp = 1;
     private int mThemePrimaryColor = 0xFF18B978;
     private int mThemeOnPrimaryColor = 0xFFFFFFFF;
     private boolean mThemeDarkMode;
     private String mTranslationMapUri;
     private String mGameId;
-    private String mTynRtpRoot;
-    private JSONObject mTynRgssOptions;
+    private String mConfiguredRtpRoot;
+    private JSONObject mRuntimeSettings;
     private File mSessionDir;
     private boolean mWaitingForStoragePermission;
     private boolean mRtpScanNeedsRefresh;
@@ -273,7 +271,7 @@ public class MainActivity extends SDLActivity
                 intent.getStringExtra(EXTRA_DIAGNOSTIC_RUBY_RUNTIME), GAME_FOLDER);
             mCustomGameDir = true;
             mPadEnabled = true;
-            // Standalone launches have no TYN per-game setting to constrain the module.
+            // Standalone launches have no host per-game setting to constrain the module.
             mCheatsEnabled = true;
             mDebugEnabled = false;
             mCopyTextEnabled = false;
@@ -283,42 +281,36 @@ public class MainActivity extends SDLActivity
             return;
         }
 
-        if (isTynRgssLaunchAction(intent.getAction())) {
+        if (isRuntimeModuleLaunchAction(intent.getAction())) {
             mTynLaunch = true;
             mLaunchRequestedAtMillis = System.currentTimeMillis();
             mLaunchRequestedAtElapsedRealtime = SystemClock.elapsedRealtime();
             // The payload contract remains v1; explicit unknown versions are rejected.
             int protocol = intent.getIntExtra(TYN_EXTRA_PROTOCOL_VERSION, 1);
             if (protocol != 1) {
-                rejectLaunch("Unsupported or missing TYN RGSS protocol version: " + protocol);
+                rejectLaunch("Unsupported or missing runtime-module protocol version: " + protocol);
                 return;
             }
-            Log.i(TAG, "TYN RGSS launch accepted; protocol=" + protocol);
-            String rubyRuntime = intent.getStringExtra(TYN_EXTRA_RUBY_RUNTIME);
+            Log.i(TAG, "Runtime-module launch accepted; protocol=" + protocol);
             String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
             if (!isAbsoluteDirectory(dir)) {
-                rejectLaunch("TYN runtime launch requires an absolute game folder");
+                rejectLaunch("Runtime-module launch requires an absolute game folder");
                 return;
             }
             GAME_FOLDER = new File(dir).getAbsolutePath();
             GAME_PATH = GAME_FOLDER;
-            sRubyRuntime = resolveRubyRuntime(rubyRuntime, GAME_FOLDER);
             mCustomGameDir = true;
-            mPadEnabled = intent.getBooleanExtra(TYN_EXTRA_PAD_ENABLED, true);
-            try {
-                String options = intent.getStringExtra(TYN_EXTRA_RGSS_OPTIONS);
-                mTynRgssOptions = options == null ? null : new JSONObject(options);
-                if (mTynRgssOptions != null) {
-                    mCheatsEnabled = mTynRgssOptions.optBoolean("cheatsEnabled", true);
-                    mDebugEnabled = mTynRgssOptions.optBoolean("debug", false);
-                    mCopyTextEnabled = mTynRgssOptions.optBoolean("copyText", false);
-                    mSpeedUp = Math.max(1, Math.min(9, mTynRgssOptions.optInt("speedUp", 1)));
-                }
-            } catch (Exception error) {
-                Log.w(TAG, "Ignoring invalid TYN RGSS options", error);
-                mTynRgssOptions = null;
-            }
-            mTynRtpRoot = intent.getStringExtra(TYN_EXTRA_RTP_ROOT);
+            mRuntimeSettings = readRuntimeSettings(intent);
+            boolean standardSettings = intent.hasExtra(RUNTIME_EXTRA_SETTINGS);
+            mVersionedSettingsPayload = standardSettings && mRuntimeSettings != null;
+            String rubyRuntime = enumSetting("rubyRuntime", "auto", "auto", "187", "193", "313");
+            sRubyRuntime = resolveRubyRuntime(rubyRuntime, GAME_FOLDER);
+            mPadEnabled = booleanSetting("padEnabled", true);
+            mCheatsEnabled = booleanSetting("cheatsEnabled", true);
+            mDebugEnabled = booleanSetting("debug", false);
+            mCopyTextEnabled = booleanSetting("copyText", false);
+            mSpeedUp = Math.max(1, Math.min(9, integerSetting("speedUp", 1, 1, 9)));
+            mConfiguredRtpRoot = stringSetting("rtpDirectory", "").trim();
             mThemePrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_PRIMARY_COLOR, mThemePrimaryColor);
             mThemeOnPrimaryColor = intent.getIntExtra(TYN_EXTRA_THEME_ON_PRIMARY_COLOR, mThemeOnPrimaryColor);
             mThemeDarkMode = intent.getBooleanExtra(TYN_EXTRA_THEME_DARK_MODE, mThemeDarkMode);
@@ -327,11 +319,11 @@ public class MainActivity extends SDLActivity
             mTynGameTitle = intent.getStringExtra(TYN_EXTRA_TITLE);
             mTynSaveSessionEndedCallback = intent.getParcelableExtra(TYN_EXTRA_SAVE_SESSION_ENDED_CALLBACK);
             preparePrivateSession(mTynGameTitle);
-            Log.i(TAG, "TYN runtime game folder: " + GAME_FOLDER + ", session: " + GAME_PATH);
+            Log.i(TAG, "Runtime-module game folder: " + GAME_FOLDER + ", session: " + GAME_PATH);
             return;
         }
 
-        rejectLaunch("Rejected activity launch outside the TYN RGSS contract");
+        rejectLaunch("Rejected activity launch outside the runtime-module contract");
     }
 
     private static boolean isAbsoluteDirectory(String path)
@@ -341,9 +333,83 @@ public class MainActivity extends SDLActivity
         return folder.isAbsolute() && folder.isDirectory();
     }
 
-    private static boolean isTynRgssLaunchAction(String action)
+    private static boolean isRuntimeModuleLaunchAction(String action)
     {
-        return TYN_RGSS_ACTION_LAUNCH.equals(action);
+        return RUNTIME_MODULE_ACTION_LAUNCH.equals(action);
+    }
+
+    private JSONObject readRuntimeSettings(Intent intent)
+    {
+        if (intent.hasExtra(RUNTIME_EXTRA_SETTINGS)) {
+            String raw = intent.getStringExtra(RUNTIME_EXTRA_SETTINGS);
+            if (raw == null || raw.trim().isEmpty()) return null;
+            try {
+                JSONObject payload = new JSONObject(raw);
+                Object version = payload.opt("version");
+                if ((!(version instanceof Integer) && !(version instanceof Long))
+                    || ((Number) version).longValue() != 1L) {
+                    Log.w(TAG, "Ignoring runtime settings with an unsupported version");
+                    return null;
+                }
+                JSONObject values = payload.optJSONObject("values");
+                if (values == null) {
+                    Log.w(TAG, "Ignoring runtime settings without a values object");
+                    return null;
+                }
+                return values;
+            } catch (Exception error) {
+                Log.w(TAG, "Ignoring invalid runtime settings payload", error);
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private boolean booleanSetting(String key, boolean fallback)
+    {
+        Object value = mRuntimeSettings == null ? null : mRuntimeSettings.opt(key);
+        return value instanceof Boolean ? (Boolean) value : fallback;
+    }
+
+    private int integerSetting(String key, int fallback, int min, int max)
+    {
+        Object value = mRuntimeSettings == null ? null : mRuntimeSettings.opt(key);
+        if (!(value instanceof Integer) && !(value instanceof Long)) return fallback;
+        long integer = ((Number) value).longValue();
+        return integer >= min && integer <= max ? (int) integer : fallback;
+    }
+
+    private String stringSetting(String key, String fallback)
+    {
+        Object value = mRuntimeSettings == null ? null : mRuntimeSettings.opt(key);
+        return value instanceof String ? (String) value : fallback;
+    }
+
+    private String enumSetting(String key, String fallback, String... allowed)
+    {
+        String value = stringSetting(key, fallback);
+        for (String candidate : allowed) {
+            if (candidate.equals(value)) return value;
+        }
+        return fallback;
+    }
+
+    private String settingsForDiagnostics()
+    {
+        if (mRuntimeSettings == null) return "{}";
+        try {
+            JSONObject safe = new JSONObject(mRuntimeSettings.toString());
+            boolean hasRtpPath = !stringSetting("rtpDirectory", "").trim().isEmpty();
+            boolean hasFontPath = !stringSetting("customFont", "").trim().isEmpty();
+            safe.remove("rtpDirectory");
+            safe.remove("customFont");
+            safe.put("rtpDirectoryConfigured", hasRtpPath);
+            safe.put("customFontConfigured", hasFontPath);
+            return safe.toString();
+        } catch (Exception ignored) {
+            return "{}";
+        }
     }
 
     private void rejectLaunch(String reason)
@@ -354,7 +420,7 @@ public class MainActivity extends SDLActivity
 
     private void applyTynUiLanguage(Intent intent)
     {
-        if (intent == null || !isTynRgssLaunchAction(intent.getAction())) return;
+        if (intent == null || !isRuntimeModuleLaunchAction(intent.getAction())) return;
         String requestedTag = intent.getStringExtra(TYN_EXTRA_UI_LANGUAGE_TAG);
         if (requestedTag == null || requestedTag.trim().isEmpty()) return;
 
@@ -424,7 +490,7 @@ public class MainActivity extends SDLActivity
                     detectRgssVersion(GAME_FOLDER),
                     mTranslationMapUri != null,
                     mPadEnabled,
-                    mTynRgssOptions == null ? "{}" : mTynRgssOptions.toString(),
+                    settingsForDiagnostics(),
                     mLaunchRequestedAtMillis,
                     mLaunchRequestedAtElapsedRealtime
                 );
@@ -473,7 +539,7 @@ public class MainActivity extends SDLActivity
             config.put("gameFolder", GAME_FOLDER);
             config.put("rgssVersion", detectRgssVersion(GAME_FOLDER));
             if (title != null && !title.trim().isEmpty()) config.put("windowTitle", title);
-            applyTynRgssOptions(config);
+            applyRuntimeSettings(config);
             configureMidiSoundFont(config);
             JSONArray gameScripts = stringArray(config.opt("preloadScript"));
             JSONArray scripts = new JSONArray();
@@ -651,30 +717,41 @@ public class MainActivity extends SDLActivity
                 + " (" + soundFont.length() + " bytes)");
     }
 
-    /** Applies TYN RPG Maker settings to the private mkxp session, never to the game folder. */
-    private void applyTynRgssOptions(JSONObject config) throws Exception
+    /** Applies declared module settings to the private mkxp session, never to the game folder. */
+    private void applyRuntimeSettings(JSONObject config) throws Exception
     {
-        JSONObject options = mTynRgssOptions;
+        JSONObject options = mRuntimeSettings;
         if (options != null) {
             String[] booleanKeys = {
                 "debug", "smoothScaling", "vsync", "frameSkip", "solidFonts", "pathCache",
                 "prebuiltPathCache", "fastPathEnum", "copyText", "useCJKFont", "animateAutotiles"
             };
-            for (String key : booleanKeys) {
-                if (options.has(key)) {
+            boolean[] booleanDefaults = {
+                false, false, false, false, false, true, true, true, false, false, true
+            };
+            for (int i = 0; i < booleanKeys.length; i++) {
+                String key = booleanKeys[i];
+                if (mVersionedSettingsPayload || options.has(key)) {
                     String configKey = "debug".equals(key) ? "debugMode" : key;
-                    config.put(configKey, options.optBoolean(key));
+                    config.put(configKey, booleanSetting(key, booleanDefaults[i]));
                 }
             }
 
-            config.put("fontScale", parseFloat(options.optString("fontScale", "0.75"), 0.75f));
-            config.put("customFont", options.optString("customFont", ""));
-            config.put("verticalScreenAlign", options.optString("verticalScreenAlign", "top-center"));
+            if (mVersionedSettingsPayload || options.has("fontScalePercent")) {
+                config.put("fontScale", integerSetting("fontScalePercent", 75, 25, 200) / 100.0f);
+            }
+            if (mVersionedSettingsPayload || options.has("customFont")) {
+                config.put("customFont", resolveCustomFontPath(stringSetting("customFont", "")));
+            }
+            if (mVersionedSettingsPayload || options.has("verticalScreenAlign")) {
+                config.put("verticalScreenAlign",
+                    enumSetting("verticalScreenAlign", "top-center", "top", "top-center", "center"));
+            }
             config.put("speedUp", mSpeedUp);
 
             // JoiPlay's postload switch controlled whether configured postload scripts ran.
             // Keep that behavior, with execution implemented by this module's native Ruby host.
-            if (options.optBoolean("enablePostloadScripts", false)) {
+            if (booleanSetting("enablePostloadScripts", false)) {
                 config.put("postloadScript", stringArray(config.opt("postloadScript")));
             } else {
                 config.put("postloadScript", new JSONArray());
@@ -684,7 +761,8 @@ public class MainActivity extends SDLActivity
         configureRtpPaths(config);
 
         if (options == null) return;
-        String screenSize = options.optString("screenSize", "auto");
+        String screenSize = enumSetting("screenSize", "auto", "auto", "512x384", "512x768",
+            "544x416", "640x480", "800x600", "1024x768", "1280x720", "1280x960", "1920x1080");
         if ("auto".equals(screenSize)) return;
         String[] supportedSizes = {
             "512x384", "512x768", "544x416", "640x480", "800x600",
@@ -700,7 +778,7 @@ public class MainActivity extends SDLActivity
         }
     }
 
-    /** Uses the RTP directory supplied by TYN and rejects stale paths from other hosts. */
+    /** Uses the user-selected RTP directory and rejects configured paths outside it or the game. */
     private void configureRtpPaths(JSONObject config) throws JSONException
     {
         mRtpScanNeedsRefresh = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
@@ -709,9 +787,13 @@ public class MainActivity extends SDLActivity
         String versionFolder = rgssVersion == 1 ? "RPGXP" : rgssVersion == 2 ? "RPGVX" : "RPGVXACE";
         JSONArray rtps = new JSONArray();
         JSONArray configured = stringArray(config.opt("RTP"));
-        File rtpRoot = mTynRtpRoot == null || mTynRtpRoot.trim().isEmpty()
-            ? null
-            : new File(mTynRtpRoot);
+        File rtpRoot = null;
+        if (mConfiguredRtpRoot != null && !mConfiguredRtpRoot.trim().isEmpty()) {
+            File selectedRoot = new File(mConfiguredRtpRoot.trim());
+            if (!selectedRoot.isAbsolute()) selectedRoot = new File(GAME_FOLDER, mConfiguredRtpRoot.trim());
+            if (selectedRoot.isDirectory()) rtpRoot = selectedRoot;
+            else TynRuntimeDiagnostics.append(mSessionDir, "Configured RTP directory is unavailable");
+        }
         File gameRoot = new File(GAME_FOLDER);
         int skippedForeign = 0;
         int skippedMissing = 0;
@@ -732,30 +814,53 @@ public class MainActivity extends SDLActivity
             if (!containsString(rtps, resolved)) rtps.put(resolved);
         }
 
-        File versionRtp = rtpRoot == null
-            ? null
-            : new File(new File(rtpRoot, versionFolder), "app");
-        boolean tynRtpAvailable = versionRtp != null && hasRtpFiles(versionRtp);
-        if (tynRtpAvailable) {
+        File versionRtp = findRtpDirectory(rtpRoot, versionFolder);
+        boolean selectedRtpAvailable = versionRtp != null;
+        if (selectedRtpAvailable) {
             String resolved = versionRtp.getAbsolutePath();
             if (!containsString(rtps, resolved)) rtps.put(resolved);
-            TynRuntimeDiagnostics.append(mSessionDir, "RTP source: TYN-managed " + versionFolder + " resources available");
+            TynRuntimeDiagnostics.append(mSessionDir, "RTP source: selected " + versionFolder + " resources available");
         } else {
-            TynRuntimeDiagnostics.append(mSessionDir, "RTP source: no imported TYN " + versionFolder + " resources found");
+            TynRuntimeDiagnostics.append(mSessionDir, "RTP source: no selected " + versionFolder + " resources found");
         }
         if (skippedForeign > 0) {
             TynRuntimeDiagnostics.append(mSessionDir,
-                "Ignored " + skippedForeign + " RTP path(s) outside the game folder and TYN-managed root");
+                "Ignored " + skippedForeign + " RTP path(s) outside the game folder and selected RTP directory");
         }
         if (skippedMissing > 0) {
             TynRuntimeDiagnostics.append(mSessionDir,
                 "Ignored " + skippedMissing + " unavailable RTP path(s) from runtime configuration");
         }
-        if (skippedForeign > 0 && !tynRtpAvailable) {
+        if (skippedForeign > 0 && !selectedRtpAvailable) {
             TynRuntimeDiagnostics.append(mSessionDir,
-                "The game references an external RTP path, but no matching RTP is imported in TYN settings");
+                "The game references an external RTP path, but no matching RTP directory is selected in module settings");
         }
         config.put("RTP", rtps);
+    }
+
+    private static File findRtpDirectory(File selectedRoot, String versionFolder)
+    {
+        if (selectedRoot == null) return null;
+        File[] candidates = {
+            new File(new File(selectedRoot, versionFolder), "app"),
+            new File(selectedRoot, "app"),
+            new File(selectedRoot, versionFolder),
+            selectedRoot
+        };
+        for (File candidate : candidates) {
+            if (hasRtpFiles(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    private String resolveCustomFontPath(String selectedPath)
+    {
+        if (selectedPath == null || selectedPath.trim().isEmpty()) return "";
+        File font = new File(selectedPath.trim());
+        if (!font.isAbsolute()) font = new File(GAME_FOLDER, selectedPath.trim());
+        if (font.isFile() && font.canRead()) return font.getAbsolutePath();
+        TynRuntimeDiagnostics.append(mSessionDir, "Configured custom font file is unavailable");
+        return "";
     }
 
     private static boolean isInsideRoot(File root, File candidate)
@@ -790,7 +895,7 @@ public class MainActivity extends SDLActivity
 
     private boolean isPostloadScriptsEnabled()
     {
-        return mTynRgssOptions == null || mTynRgssOptions.optBoolean("enablePostloadScripts", false);
+        return mRuntimeSettings == null || booleanSetting("enablePostloadScripts", false);
     }
 
     private void appendGameRootScript(JSONArray scripts, String fileName, String phase) throws org.json.JSONException
@@ -1133,15 +1238,15 @@ public class MainActivity extends SDLActivity
     protected void onNewIntent(Intent intent)
     {
         super.onNewIntent(intent);
-        if (!isTynRgssLaunchAction(intent.getAction()) ||
+        if (!isRuntimeModuleLaunchAction(intent.getAction()) ||
             intent.getIntExtra(TYN_EXTRA_PROTOCOL_VERSION, 1) != 1) {
-            Log.e(TAG, "Rejected new activity intent outside the TYN RGSS launch contract");
+            Log.e(TAG, "Rejected new activity intent outside the runtime-module launch contract");
             finish();
             return;
         }
         String dir = intent.getStringExtra(TYN_EXTRA_FOLDER);
         if (!isAbsoluteDirectory(dir)) {
-            Log.e(TAG, "Rejected new TYN RGSS intent with invalid game folder");
+            Log.e(TAG, "Rejected new runtime-module intent with invalid game folder");
             finish();
             return;
         }
